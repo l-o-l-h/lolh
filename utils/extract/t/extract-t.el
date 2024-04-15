@@ -1,5 +1,5 @@
 ;;; extract-t.el --- Extract tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-04-06 23:35:28 minilolh>
+;; Time-stamp: <2024-04-15 08:48:52 minilolh>
 ;; Version: 0.0.0 [2024-04-06 Sat 19:54]
 
 ;; Package-Requires: ((emacs "24.1") extract)
@@ -24,23 +24,27 @@
         (gd-2022 (getenv "GOOGLE_DRIVE_2022"))
         (gd-2023 (getenv "GOOGLE_DRIVE_2023"))
         (gd-2024 (getenv "GOOGLE_DRIVE_2024")))
-    (should (eq
-             (stringp gd)
-             t))
-    (should (eq
-             (numberp (string-match-p "Google Drive/My Drive" (getenv "GOOGLE_DRIVE")))
-             t))
-    (should (eq
-             (and
-              (stringp gd-2022)
-              (stringp gd-2023)
-              (stringp gd-2024))
-             t)))
+    (should (eq (and
+                 (stringp gd)
+                 (stringp gd-2022)
+                 (stringp gd-2023)
+                 (stringp gd-2024))
+                t))
+    (should (eq (and
+                 (numberp (string-match-p "Google Drive/My Drive" gd))
+                 (numberp (string-match-p "Google Drive/My Drive" gd-2022))
+                 (numberp (string-match-p "Google Drive/My Drive" gd-2023))
+                 (numberp (string-match-p "Google Drive/My Drive" gd-2024)))
+                t))
+    (should-error (stringp gd-2025)))
   (should (eq
            (and
             (stringp (lolh/gd-year "2022"))
             (stringp (lolh/gd-year "2023"))
-            (stringp (lolh/gd-year "2024")))
+            (stringp (lolh/gd-year "2024"))
+            (numberp (string-match-p "2022" (lolh/gd-year "2022")))
+            (numberp (string-match-p "2023" (lolh/gd-year "2023")))
+            (numberp (string-match-p "2024" (lolh/gd-year "2024"))))
            t))
 
   (should-error (lolh/gd-year "2025")))
