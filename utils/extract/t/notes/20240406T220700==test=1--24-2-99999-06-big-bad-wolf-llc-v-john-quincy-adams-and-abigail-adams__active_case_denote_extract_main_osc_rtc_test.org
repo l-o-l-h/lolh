@@ -1,0 +1,65 @@
+#+title:      24-2-99999-06 Big Bad Wolf, LLC v. John Quincy Adams and Abigail Adams
+#+date:       [2024-04-06 Sat 22:07]
+#+filetags:   :active:case:denote:extract:main:osc:rtc:test:
+#+identifier: 20240406T220700
+
+* RTC CASE
+:PROPERTIES:
+:O/C:		--
+:CAUSE:	-- 24-2-99999-06
+:DEPT:	--
+:PL-1:	--
+:PL-2:	--
+:APRTMNT:	--
+:DEF-1:	-- John Quincy Adams
+:DEF-2:	-- Abigail Adams
+:LEASE:	--
+:NOTICE:	--
+:SUMMONS:	--
+:COMPLAINT:	--
+:OSC-1:	--
+:OSC-2:	--
+:APPOINT:	--
+:NOA:		--
+:LEDGER:	--
+:END:
+
+** OSC
+
+*** OSC-1
+
+*** OSC-2
+
+** DOCUMENTS
+
+*** APPEARANCE
+
+*** APPOINTMENT
+
+*** COURT FILES
+
+*** EXHIBITS
+:PROPERTIES:
+:EXHIBIT-1:	-- Lease [date]
+:EXHIBIT-2:	-- Notice [date]
+:EXHIBIT-3:	-- Service [date]
+:END:
+
+*** LEDGERS
+:PROPERTIES:
+:LEDGER-1:	-- [DATE]
+:LEDGER-2:	-- [DATE]
+:END:
+
+* CLIENT
+
+* O/C
+
+** O/C INFO
+
+** O/C COMMUNICATION
+
+* PLAN
+
+* ISSUES
+
