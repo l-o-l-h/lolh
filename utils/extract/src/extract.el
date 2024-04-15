@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-15 10:37:24 minilolh>
+;; Time-stamp: <2024-04-15 13:52:11 minilolh>
 ;; Version: 0.1.6 [2024-04-09 14:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -12,6 +12,18 @@
 ;; 1. Attach Court File PDFs to a Case Note
 ;; 2. Extract PDFs from Complaint and attach to Exhibits
 ;; 3. Update PDFs
+
+;;; TODO Items
+;; -[X] [2024-04-15T13:45]-[2024-04-15T1351
+;;      I am always forgetting the :SOURCE: property. Identify this error.
+;; -[X] [2024-04-15T12:22]-[2024-04-15T13:45]
+;;      Fix lolh/update-pleadings in case there is not
+;;      yet an attachment directory.
+;; -[ ] [2024-04-15T10:49] Command to open a ledger while in any note
+;; -[ ] [2024-04-15T12:15] After creating a Word document, and signing its
+;;      PDF form, file in Google Drive and attach under the appropriate headline.
+;; -[ ] [2024-04-15T12:15] After receiving confirmation of filing of NOA,
+;;      attach it to DOCUMENTS
 
 
 ;;; Accessors and Setters from org-element.el
@@ -56,7 +68,7 @@
 (defconst *lolh/first-last-name-re*
   "^\\([^[:space:]]+\\).*[[:space:]]\\([^[:space:]]+\\)$")
 (defconst *lolh/docket-date-re*
-  "^\\([[:digit:]*]+\\))[[:space:]]\\([[:digit:][-]+]\\)\\.pdf$")
+  "^\\([[:digit:]*]+\\))[[:space:]]\\([[:digit:][-]+]\\).*\\.pdf$")
 (defconst *lolh/docket-date-name-re*
   "^\\([[:digit:]*)]\\{3,4\\}[[:space:]]\\)\\{0,1\\}\\(\\[\\([[:digit:]-]\\{10\\}\\)\\]\\)\\{0,1\\}[[:space:]]?\\(.*\\)[.pPdDfF]\\{4\\}$"
   ;;; 1                                   1           2     3                      3     2                       4    4
@@ -133,7 +145,8 @@
   ;; first get data from the note buffer
   (let* ((nps (lolh/extract-properties))
          ;; find the identity of the document to extract from
-         (source (assoc "SOURCE" nps))
+         (source (or (assoc "SOURCE" nps)
+                     (error "No SOURCE property found")))
          ;; find the list of document data to extract
          (exs (assoc-delete-all "SOURCE" (copy-alist nps)))
          (attach-dir (lolh/attach-dir "Notices & Lease")))
@@ -180,7 +193,6 @@
         (lolh/set-note-property-in-headline "EXHIBITS" "DIR"
                                             (lolh/attach-dir "Notices & Lease"))
         ;; Move the extracted documents into their home and then attach them
-        (debug)
         (mapc (lambda (ex)
                 (let ((dest-dir (file-name-concat (lolh/gd-cause-dir "Notices & Lease")
                                                   (file-name-nondirectory ex))))
@@ -231,6 +243,9 @@
                                    ;; but keep only those with equal docket numbers for now
                                    (directory-files *lolh/process-dir* nil
                                                     directory-files-no-dot-files-regexp))))
+    ;; In the situation when the DIR property has not yet been added, add it here
+    (unless (lolh/note-property "DIR" "COURT FILES")
+      (lolh/set-note-property-in-headline "COURT FILES" "DIR" attach-dir))
     ;; Rename files with * to final names without *
     (mapc (lambda (pleading)
             (unless
@@ -258,8 +273,9 @@
           keep-pleadings)
 
     ;; Add new files, with and without *
-    (let* ((new-pleadings (directory-files *lolh/process-dir* nil directory-files-no-dot-files-regexp))
-           (new-pleadings (seq-remove (lambda (f) (string= ".DS_Store" f)) new-pleadings)))
+    (let ((new-pleadings
+           (seq-remove (lambda (f) (string= ".DS_Store" f))
+                       (directory-files *lolh/process-dir* nil directory-files-no-dot-files-regexp))))
       (mapc (lambda (f)
               ;; find the docket number and date of new files
               (unless (string-match *lolh/docket-date-re* f)
@@ -273,6 +289,7 @@
                      (new-full-name-dir (file-name-concat court-file new-full-name)) ; give it a path
                      (attach-dir-file (file-name-concat attach-dir new-full-name))) ; get the symlink name
                 (rename-file f-dir new-full-name-dir)
+                ;;(sleep-for .5) ;; needed this once; will try without it
                 ;; attach new-full-name-dir
                 (make-symbolic-link new-full-name-dir attach-dir-file)))
             new-pleadings))))
