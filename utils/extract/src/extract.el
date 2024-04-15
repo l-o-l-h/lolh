@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-09 19:49:13 minilolh>
+;; Time-stamp: <2024-04-15 10:37:24 minilolh>
 ;; Version: 0.1.6 [2024-04-09 14:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -52,7 +52,7 @@
 (defconst *lolh/process-dir*
   (expand-file-name "~/Downloads/process"))
 (defconst *lolh/pdftk-jar-path*
-  (expand-file-name "~/.local/share/bin/pdftk-all.jar"))
+  (expand-file-name "~/.local/bin/pdftk-all.jar"))
 (defconst *lolh/first-last-name-re*
   "^\\([^[:space:]]+\\).*[[:space:]]\\([^[:space:]]+\\)$")
 (defconst *lolh/docket-date-re*
@@ -142,51 +142,52 @@
       ;; copy the source into ~/Downloads/process directory
       (let ((complaint (file-name-concat *lolh/process-dir* "complaint.pdf"))
             (src (lolh/gd-source-url (cdr source) "Court File")))
-        (copy-file src complaint t))
+        (copy-file src complaint t)
 
-      ;; map over the plist of document data to extract
-      ;; ((EXHIBIT-1 . Lease[date] 1 2) (EXHIBIT-2 . Notice[date] 3 4) ...)
-      (mapc (lambda (ex)
-              (let* ((key (car ex))   ; e.g. EXHIBIT-1
-                     (val (cdr ex))   ; e.g. Lease [date] 1 2
-                     (props (if
-                                (string-match *lolh/props-re* val)
-                                (list (cons :full (match-string 0 val))
-                                      (cons :type (match-string 1 val))
-                                      (cons :date (match-string 2 val))
-                                      (cons :beg (match-string 3 val))
-                                      (cons :end (match-string 4 val)))
-                              (error "Improper format found: %s" val))))
+        ;; map over the plist of document data to extract
+        ;; ((EXHIBIT-1 . Lease[date] 1 2) (EXHIBIT-2 . Notice[date] 3 4) ...)
+        (mapc (lambda (ex)
+                (let* ((key (car ex))   ; e.g. EXHIBIT-1
+                       (val (cdr ex))   ; e.g. Lease [date] 1 2
+                       (props (if
+                                  (string-match *lolh/props-re* val)
+                                  (list (cons :full (match-string 0 val))
+                                        (cons :type (match-string 1 val))
+                                        (cons :date (match-string 2 val))
+                                        (cons :beg (match-string 3 val))
+                                        (cons :end (match-string 4 val)))
+                                (error "Improper format found: %s" val))))
 
-                (let* ((type (cdr (assq :type props))) ; e.g. Lease
-                       (date (cdr (assq :date props)))
-                       (beg-end (format "%s-%s"
-                                        (cdr (assq :beg props))
-                                        (cdr (assq :end props))))
-                       (gd-file-name (lolh/create-gd-file-name nil date (format "%s %s" key type)))
-                       (output-name (expand-file-name
-                                     (file-name-concat
-                                      *lolh/process-dir* gd-file-name))))
-                  ;; pdftk / java -jar pdftk-all.jar
-                  (call-process-shell-command
-                   (combine-and-quote-strings
-                    (list
-                     "java" "-jar" *lolh/pdftk-jar-path*
-                     (file-name-concat *lolh/process-dir* "complaint.pdf")
-                     "cat" beg-end
-                     "output" output-name))))))
-            exs)
+                  (let* ((type (cdr (assq :type props))) ; e.g. Lease
+                         (date (cdr (assq :date props)))
+                         (beg-end (format "%s-%s"
+                                          (cdr (assq :beg props))
+                                          (cdr (assq :end props))))
+                         (gd-file-name (lolh/create-gd-file-name nil date (format "%s %s" key type)))
+                         (output-name (expand-file-name
+                                       (file-name-concat
+                                        *lolh/process-dir* gd-file-name))))
+                    ;; pdftk / java -jar pdftk-all.jar
+                    (call-process-shell-command
+                     (combine-and-quote-strings
+                      (list
+                       "java" "-jar" *lolh/pdftk-jar-path*
+                       (file-name-concat *lolh/process-dir* "complaint.pdf")
+                       "cat" beg-end
+                       "output" output-name))))))
+              exs)
 
-      (lolh/set-note-property-in-headline "EXHIBITS" "DIR"
-                                          (lolh/attach-dir "Notices & Lease"))
-      ;; Move the extracted documents into their home and then attach them
-      (mapc (lambda (ex)
-              (let ((dest-dir (file-name-concat (lolh/gd-cause-dir "Notices & Lease")
-                                                (file-name-nondirectory ex))))
-                (rename-file ex dest-dir t)
-                (org-attach-attach dest-dir nil 'lns)))
-            (directory-files *lolh/process-dir* t "EXHIBIT"))
-      (delete-file complaint))))
+        (lolh/set-note-property-in-headline "EXHIBITS" "DIR"
+                                            (lolh/attach-dir "Notices & Lease"))
+        ;; Move the extracted documents into their home and then attach them
+        (debug)
+        (mapc (lambda (ex)
+                (let ((dest-dir (file-name-concat (lolh/gd-cause-dir "Notices & Lease")
+                                                  (file-name-nondirectory ex))))
+                  (rename-file ex dest-dir t)
+                  (org-attach-attach dest-dir nil 'lns)))
+              (directory-files *lolh/process-dir* t "EXHIBIT"))
+        (delete-file complaint)))))
 
 
 (defun lolh/add-file-to-gd (file dest)
@@ -542,6 +543,7 @@ If FILTER is set to a regexp, attach the matched files."
   (delete-window))
 
 
+;;; TODO: Handle the error when there is no DEF-2 property
 (defun lolh/def-names ()
   "Return the fully parsed and formated defendant names."
 
@@ -594,7 +596,9 @@ If FILTER is set to a regexp, attach the matched files."
 
 
 (defun lolh/extract-date-name (file-name &optional type)
-  "Give a FILE-NAME in *lolh/process-dir*, extract a date and a name."
+  "Given a FILE-NAME in *lolh/process-dir*, extract a date and a name.
+
+TYPE is ..."
 
   (unless (string-match ".*\\[\\([[:digit:]-]+\\)\\][[:space:]]+\\(.*\\)[.pPdDfF]\\{4\\}$" file-name)
     (error "Failed to parse the file-name: %s" file-name))
@@ -618,11 +622,14 @@ Use an empty string for any missing arguments."
          (date (or date "yyyy-mm-dd"))
          (body (or body "Need File Name"))
          (cause (lolh/cause))
-         (def-1 (lolh/note-property "DEF-1"))
-         (def-2 (lolh/note-property "DEF-2"))
-         (last-first-1 (lolh/create-first-last def-1))
-         (last-first-2 (lolh/create-first-last def-2)))
-    (format "%s%s [%s] %s%s -- %s.pdf" docket cause date last-first-1 (format "%s" (if last-first-2 (concat "-" last-first-2) "")) body)))
+         (both-names (lolh/both-def-names))
+         ;; (def-1 (lolh/note-property "DEF-1"))
+         ;; (def-2 (lolh/note-property "DEF-2"))
+         ;; (last-first-1 (lolh/create-first-last def-1))
+         ;; (last-first-2 (lolh/create-first-last def-2)))
+         )
+    ;; (format "%s%s [%s] %s%s -- %s.pdf" docket cause date last-first-1 (format "%s" (if last-first-2 (concat "-" last-first-2) "")) body))
+    (format "%s%s [%s] %s -- %s.pdf" docket cause date both-names body)))
 
 
 ;;;-------------------------------------------------------------------
