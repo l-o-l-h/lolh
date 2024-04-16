@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-06 22:02:20 minilolh>
+;; Time-stamp: <2024-04-15 15:51:44 minilolh>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -68,11 +68,11 @@
    "*** OSC-1\n\n"
    "*** OSC-2\n\n"
    "** DOCUMENTS\n\n"
-   "*** APPEARANCE\n\n"
-   "*** APPOINTMENT\n\n"
+   "*** NOA-APPT\n\n"
    "*** COURT FILES\n\n"
-   "*** EXHIBITS\n"
+   "*** EXHIBITS\t\t:EXTRACT:\n"
    ":PROPERTIES:\n"
+   ":SOURCE:\t-- Complaint\n"
    ":EXHIBIT-1:\t-- Lease [date]\n"
    ":EXHIBIT-2:\t-- Notice [date]\n"
    ":EXHIBIT-3:\t-- Service [date]\n"

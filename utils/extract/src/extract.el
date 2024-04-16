@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-15 13:52:11 minilolh>
+;; Time-stamp: <2024-04-15 15:45:24 minilolh>
 ;; Version: 0.1.6 [2024-04-09 14:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -14,8 +14,15 @@
 ;; 3. Update PDFs
 
 ;;; TODO Items
+;; -[ ] [2024-04-15T15:30]
+;;      When I receive a ledger by email, download it.  Go to the Ledger
+;;      section; hit a key command, process the ledger, file it in the
+;;      Google Drive, and attach it.  Also try to create a link.
+;; -[ ] [2024-04-15T13:54]
+;;  The :ATTACH: tag is not being added to COURT FILES for some reason.
 ;; -[X] [2024-04-15T13:45]-[2024-04-15T1351
 ;;      I am always forgetting the :SOURCE: property. Identify this error.
+;;      I am also forgetting the :EXTRACT: tag; add to Template-func
 ;; -[X] [2024-04-15T12:22]-[2024-04-15T13:45]
 ;;      Fix lolh/update-pleadings in case there is not
 ;;      yet an attachment directory.
