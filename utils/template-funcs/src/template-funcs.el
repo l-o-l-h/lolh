@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-15 15:51:44 minilolh>
+;; Time-stamp: <2024-04-17 18:02:52 minilolh>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -64,15 +64,15 @@
    ":LEDGER:\t--\n"
    ":END:\n\n"
 
-   "** OSC\n\n"
+   "** OSC\n"
    "*** OSC-1\n\n"
    "*** OSC-2\n\n"
-   "** DOCUMENTS\n\n"
+   "** DOCUMENTS\n"
    "*** NOA-APPT\n\n"
    "*** COURT FILES\n\n"
-   "*** EXHIBITS\t\t:EXTRACT:\n"
+   "*** EXHIBITS\t\t\t:EXTRACT:\n"
    ":PROPERTIES:\n"
-   ":SOURCE:\t-- Complaint\n"
+   ":SOURCE:   \t-- Complaint\n"
    ":EXHIBIT-1:\t-- Lease [date]\n"
    ":EXHIBIT-2:\t-- Notice [date]\n"
    ":EXHIBIT-3:\t-- Service [date]\n"
@@ -85,11 +85,33 @@
    ":END:\n\n"
 
    "* CLIENT\n\n"
-   "* O/C\n\n"
+   "* O/C\n"
    "** O/C INFO\n\n"
    "** O/C COMMUNICATION\n\n"
-   "* PLAN\n\n"
-   "* ISSUES\n\n"))
+   "* PLAN [0/7]\n"
+   "
+- [ ] Engagement Agreement
+- [ ] Initial RTC Interview [0/2]
+  - [ ] Proper Notice Service
+  - [ ] Proper Summons/Complaint Service
+- [ ] NOA [0/2]
+  - [ ] Served on O/C
+  - [ ] Filed with Clerk
+- [ ] Appointment [0/1]
+  - [ ] Presented
+- [ ] Lease [0/1]
+  - [ ] Reviewed
+- [ ] Ledger [0/3]
+  - [ ] Requested
+  - [ ] Received
+  - [ ] Reviewed
+- [ ] Checklist [0/3]
+  - [ ] Requested
+  - [ ] Received
+  - [ ] Reviewed
+\n"
+
+   "* ISSUES [0/0]\n\n"))
 
 (defun newcase-with-newclient (case pl def cl info)
   (interactive
