@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-15 15:45:24 minilolh>
-;; Version: 0.1.6 [2024-04-09 14:00]
+;; Time-stamp: <2024-04-17 19:36:32 minilolh>
+;; Version: 0.1.7 [2024-04-17 19:36]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -251,8 +251,11 @@
                                    (directory-files *lolh/process-dir* nil
                                                     directory-files-no-dot-files-regexp))))
     ;; In the situation when the DIR property has not yet been added, add it here
+    ;; and create the data directory if it does not exist
     (unless (lolh/note-property "DIR" "COURT FILES")
-      (lolh/set-note-property-in-headline "COURT FILES" "DIR" attach-dir))
+      (lolh/set-note-property-in-headline "COURT FILES" "DIR" attach-dir "ATTACH")
+      (unless (file-directory-p attach-dir)
+        (make-directory attach-dir t)))
     ;; Rename files with * to final names without *
     (mapc (lambda (pleading)
             (unless
@@ -296,8 +299,6 @@
                      (new-full-name-dir (file-name-concat court-file new-full-name)) ; give it a path
                      (attach-dir-file (file-name-concat attach-dir new-full-name))) ; get the symlink name
                 (rename-file f-dir new-full-name-dir)
-                ;;(sleep-for .5) ;; needed this once; will try without it
-                ;; attach new-full-name-dir
                 (make-symbolic-link new-full-name-dir attach-dir-file)))
             new-pleadings))))
 
@@ -457,7 +458,9 @@ for the user to do and there is no need to try to get the syntax correct."
 
 
 (defun lolh/put-tag-in-headline (tag headline)
-  "Put a TAG into a HEADLINE."
+  "Put a TAG into a HEADLINE.
+
+If optional SKIP is non-NIL, don't run lolh/note-tree."
 
   (let* ((hl (or (lolh/get-headline-element headline)
                  (error "Headline %s does not exist" headline)))
@@ -482,19 +485,23 @@ for the user to do and there is no need to try to get the syntax correct."
   (lolh/note-property "CAUSE"))
 
 
-(defun lolh/set-note-property-in-headline (headline new-property new-value)
-  "Set a NEW-PROPERTY to NEW-VALUE in the property drawer found within HEADLINE."
+(defun lolh/set-note-property-in-headline (headline new-property new-value &optional tag)
+  "Set a NEW-PROPERTY to NEW-VALUE in the property drawer found within HEADLINE.
+
+If TAG, also add the tag to the headline."
 
   (let ((hl (or (lolh/get-headline-element headline)
                 (error "Headline %s does not exist" headline))))
     (let  ((begin (org-element-property :begin hl)))
       (goto-char begin)
-      (org-entry-put begin new-property new-value)))
+      (org-entry-put begin new-property new-value))
+    (when tag
+      (lolh/put-tag-in-headline tag headline)))
   (lolh/note-tree))
 
 
 (defun lolh/note-date-name (date name)
-  "Return a file name with cause-date-name."
+  "Return a file NAME with cause-date-name using DATE."
 
   (let ((cause (lolh/note-property "CAUSE"))
         (def-1 (lolh/note-property "DEF-1")))
