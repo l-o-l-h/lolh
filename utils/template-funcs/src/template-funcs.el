@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-17 18:30:10 minilolh>
+;; Time-stamp: <2024-04-20 17:36:53 minilolh>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -112,6 +112,14 @@
 \n"
 
    "* ISSUES [0/0]\n\n"))
+
+(defun recipe ()
+  "Recipe template"
+  (concat
+   "* Source\n\n"
+   "* Date\n\n"
+   "* Comments\n\n"
+   "* Accompanied\n\n"))
 
 (defun newcase-with-newclient (case pl def cl info)
   (interactive

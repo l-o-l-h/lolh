@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-17 19:36:32 minilolh>
+;; Time-stamp: <2024-04-19 08:46:39 minilolh>
 ;; Version: 0.1.7 [2024-04-17 19:36]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -127,28 +127,48 @@
   (interactive)
   (lolh/pdf-attach "Court File" "COURT FILES"))
 
+
 (defun lolh/pdf-attach (subdir hl)
   "Attach all of the Google documents from a SUBDIR to the current note HL.
 
-  An example would be all documents in the Court File for a case."
+An example would be all documents in the Court File for a case.
+If new files are added, this command can be run to update, and existing
+files will be ignored."
 
   (interactive)
   (lolh/note-tree)
 
-  (let* ((court-file-attach-dir (lolh/attach-dir subdir)) ; e.g. "Court File"
-         (gd-court-file-dir (lolh/gd-cause-dir subdir)) ; e.g. "Court File"
-         (cause (lolh/cause)))        ; e.g. "COURT FILES"
-    (lolh/set-note-property-in-headline hl "DIR" court-file-attach-dir)
-    (mapc (lambda (f) (org-attach-attach f nil 'lns))
-          (seq-remove
-           (lambda (f)
-             (string-match-p ".DS_Store" f))
-           (directory-files gd-court-file-dir :full directory-files-no-dot-files-regexp)))))
+  (let* ((court-file-attach-dir (lolh/attach-dir subdir))
+         (gd-court-file-dir (lolh/gd-cause-dir subdir)))
+
+    ;; Add the DIR property and the ATTACH tag
+    (lolh/set-note-property-in-headline hl "DIR" court-file-attach-dir "ATTACH")
+
+    ;; create the attach-dir if it does not yet exist
+    (unless (file-directory-p court-file-attach-dir)
+      (make-directory court-file-attach-dir t))
+
+    ;; attach all of the files in the gd court files dir but
+    ;; ignore existing attached files
+    (dolist (f (seq-remove ; f is the full filename of the GD Court File
+                (lambda (f)
+                  (string-match-p ".DS_Store" f))
+                (directory-files
+                 gd-court-file-dir
+                 :full directory-files-no-dot-files-regexp)))
+      (make-symbolic-link f
+                          (expand-file-name
+                           (file-name-nondirectory f)
+                           court-file-attach-dir)
+                          t))))
 
 
 (defun lolh/extract-pdfs ()
+  "Extract exhibits from a document and attach them."
+
   (interactive)
   (lolh/note-tree)
+
   ;; first get data from the note buffer
   (let* ((nps (lolh/extract-properties))
          ;; find the identity of the document to extract from
@@ -250,6 +270,10 @@
                                    ;; but keep only those with equal docket numbers for now
                                    (directory-files *lolh/process-dir* nil
                                                     directory-files-no-dot-files-regexp))))
+
+    (split-root-window-right)
+    ;;(dired *lolh/process-dir*)
+
     ;; In the situation when the DIR property has not yet been added, add it here
     ;; and create the data directory if it does not exist
     (unless (lolh/note-property "DIR" "COURT FILES")
