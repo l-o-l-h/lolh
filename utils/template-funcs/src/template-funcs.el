@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-20 17:36:53 minilolh>
+;; Time-stamp: <2024-04-23 12:58:01 minilolh>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -112,6 +112,36 @@
 \n"
 
    "* ISSUES [0/0]\n\n"))
+
+(defun checklist ()
+  "New RTC Case Checklist Note"
+
+  (concat
+   "* New RTC Case Checklist"
+   "
+- [ ] New GMail Label in RTC Active Cases
+- [ ] New GDrive folder in My Drive/Lincoln Harvey 2024
+- [ ] RTC Interview Label in Appointments/Clients
+- [ ] OSC Hearing Label in Appointments/UD Hearings
+- [ ] Add labels to messages for Appointments
+- [ ] Download OnBase documents and place into ~/Downloads/process
+- [ ] Create main Case Note
+  - [ ] Update Properties
+  - [ ] Update and attach Court File documents
+  - [ ] Extract and attach Exhibits
+- [ ] Create or find main Client Note(s);
+  - [ ] Update Properties
+  - [ ] Add backlink to Case
+  - [ ] Cross-link multiple Clients or N/A
+- [ ] Create or find Attorney Note
+  - [ ] Update list of cases
+- [ ] Update Notes
+  - [ ] RTC Cases
+  - [ ] OSC Cases
+- [ ] Draft Documents
+  - [ ] NOA
+  - [ ] Appointment-Fee Waiver
+"))
 
 (defun recipe ()
   "Recipe template"
