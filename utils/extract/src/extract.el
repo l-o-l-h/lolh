@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-19 08:46:39 minilolh>
+;; Time-stamp: <2024-05-04 13:35:48 lolh-mbp-16>
 ;; Version: 0.1.7 [2024-04-17 19:36]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -77,12 +77,32 @@
 (defconst *lolh/docket-date-re*
   "^\\([[:digit:]*]+\\))[[:space:]]\\([[:digit:][-]+]\\).*\\.pdf$")
 (defconst *lolh/docket-date-name-re*
-  "^\\([[:digit:]*)]\\{3,4\\}[[:space:]]\\)\\{0,1\\}\\(\\[\\([[:digit:]-]\\{10\\}\\)\\]\\)\\{0,1\\}[[:space:]]?\\(.*\\)[.pPdDfF]\\{4\\}$"
-  ;;; 1                                   1           2     3                      3     2                       4    4
+  "^\\([[:digit:]*)]\\{3,4\\}[[:space:]]\\)\\{0,1\\}\\(\\[\\([[:digit:]-]\\{10\\}\\)\\]\\)\\{0,1\\}\\([[:space:]-]\\{0,4\\}\\)\\(.*\\)[.pPdDfF]\\{4\\}$"
+  ;;; 1                                   1           2     3                      3     2           4                       4  5    5
   "1: Optional docket: 02*) (needs `string-trim')
    2: Optional date including brackets: [2024-04-01]
    3: Optional date w/out brackets: 2024-04-01
-   4: Optional name: blah")
+   4: Optional \" -- \"
+   5: Optional name: blah")
+
+(defconst *lolh/docket-date-name2-re*
+  (rx bos
+      (group-n 1 (opt (** 3 4 (any digit "*)")))) ; docket no. or ""
+      (opt (0+ space) (group-n 2 (= 13 (any digit "-")))) ; cause no. or nil
+      (opt (0+ space) (group-n 3 ; bracketed date or nil
+                        "["
+                        (group-n 4 (= 10 (any digit "-"))) ; date or nil
+                        "]"))
+      (opt (0+ space) (group-n 5 ; all names combined or nil
+                        (group-n 6 (+ upper) "," upper (+ lower)) ; first name
+                        (0+ "-"
+                            (group-n 7 (0+ upper) "," upper (+ lower))))) ; Opt second name
+      (opt " -- " (group-n 8 (* (any graph space)))) ; document name
+      ;; nil if no " -- "
+      ;; string-empty-p t if " -- " with no document name
+      eos))
+
+
 (defconst *lolh/props-re*
   "^\\(.*\\)[[:space:]]\\[\\([[:digit:]-]+\\)\\][[:space:]]\\([[:digit:]]+\\)[[:space:]]\\([[:digit:]]+\\)$")
 (defconst *lolh/exhibit-or-source-re*
@@ -773,10 +793,10 @@ symlinked."
 
 
 (defun lolh/extract-docket-date-name (file-name)
-  "Extract docket, date, and name from FILE-NAME.
+  "Extract docket, date with brackets, date, sep, and name from FILE-NAME.
 
 FILE-NAME must end with either `.pdf' or `.PDF'.
-Returns a plist: (:docket ... :date ... :name ...)
+Returns a plist: (:docket ... :date-b ... :date ... :set ... :name ...)
 All elements are optional.  Each returns `nil' unless something is
 supplied."
 
@@ -785,11 +805,13 @@ supplied."
   (let* ((docket-space (match-string 1 file-name))
          ;; get rid of spurious space
          (docket (when docket-space (string-trim docket-space)))
+         (date-brackets (match-string 2 file-name))
          (date (match-string 3 file-name)) ; does not include surrounding brackets
-         (name (match-string 4 file-name)) ; returns an empty string if not present
+         (sep (match-string 4 file-name)) ; " -- " if it exists
+         (name (match-string 5 file-name)) ; returns an empty string if not present
          (name (if (string-empty-p name) nil name))) ; return `nil' when not present
     ;; return a plist
-    (list :docket docket :date date :name name)))
+    (list :docket docket :date-b date-brackets :date date :set sep :name name)))
 
 (defun lolh/get-extracted (ex part)
   "Given an extracted file-name EX and a PART, return the part.
