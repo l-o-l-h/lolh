@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-04 13:35:48 lolh-mbp-16>
+;; Time-stamp: <2024-05-04 15:35:14 lolh-mbp-16>
 ;; Version: 0.1.7 [2024-04-17 19:36]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -792,6 +792,32 @@ symlinked."
             (or name ""))))
 
 
+(defun lolh/extract-file-name-parts (file-name)
+  "Given a FILE-NAME, extract and return its parts as a plist.
+
+:full 02) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Document Name
+:docket 02) or 02*) | empty-string
+:cause 24-2-09999-06 | nil
+:date-b [2024-05-04] | nil
+:date 2024-05-04 | nil
+:name-full LASTA,Firsta-LASTB,Firstb | nil
+:name-pri LASTA,Firsta | nil
+:name-sec LASTB,Firstb | nil
+:document Some Document Name | nil if no -- | empty-string if --
+"
+  (unless (string-match *lolh/docket-date-name2-re* file-name)
+    (error "Unable to parse file-name %s" file-name))
+
+  (list :full (match-string 0 file-name)
+        :docket (match-string 1 file-name)
+        :cause (match-string 2 file-name)
+        :date-b (match-string 3 file-name)
+        :date (match-string 4 file-name)
+        :name-full (match-string 5 file-name)
+        :name-pri (match-string 6 file-name)
+        :name-sec (match-string 7 file-name)
+        :document (match-string-8 file-name)))
+
 (defun lolh/extract-docket-date-name (file-name)
   "Extract docket, date with brackets, date, sep, and name from FILE-NAME.
 
@@ -807,7 +833,7 @@ supplied."
          (docket (when docket-space (string-trim docket-space)))
          (date-brackets (match-string 2 file-name))
          (date (match-string 3 file-name)) ; does not include surrounding brackets
-         (sep (match-string 4 file-name)) ; " -- " if it exists
+         (sep (match-string 4 file-name))  ; " -- " if it exists
          (name (match-string 5 file-name)) ; returns an empty string if not present
          (name (if (string-empty-p name) nil name))) ; return `nil' when not present
     ;; return a plist

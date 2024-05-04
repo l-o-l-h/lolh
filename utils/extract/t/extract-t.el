@@ -1,5 +1,5 @@
 ;;; extract-t.el --- Extract tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-05-04 13:39:19 lolh-mbp-16>
+;; Time-stamp: <2024-05-04 15:38:48 lolh-mbp-16>
 ;; Version: 0.0.1 [2024-05-05 Sat 13:40]
 
 ;; Package-Requires: ((emacs "24.1") extract)
@@ -138,6 +138,7 @@
     (should (string= "LASTA,Firsta-LASTB,Firstb" (match-string 5 g3)))
     (should (string= "LASTA,Firsta" (match-string 6 g3)))
     (should (string= "LASTB,Firstb" (match-string 7 g3)))
+    (should (eq 0 (string-match *lolh/docket-date-name2-re* g4)))
     (should (null (match-string 5 g4)))
     ))
 
