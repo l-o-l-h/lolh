@@ -1,5 +1,5 @@
 ;;; extract-t.el --- Extract tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-05-04 15:38:48 lolh-mbp-16>
+;; Time-stamp: <2024-05-04 22:17:25 lolh-mbp-16>
 ;; Version: 0.0.1 [2024-05-05 Sat 13:40]
 
 ;; Package-Requires: ((emacs "24.1") extract)
@@ -65,20 +65,23 @@
              "24-2-99999-06"))))
 
 (ert-deftest extract-t-rx-docket-cause ()
-  (let ((d0 "")
-        (d1 "02)")
-        (d2 "02*)")
-        (d3 "2)")
-        (e1 "02*) 24-2-09999-06")
-        (e2 "02) 24-2-09999-06")
-        (e3 "24-2-09999-06"))
+  (let ((d0 " -- .pdf")
+        (d1 "02).pdf")
+        (d2 "02*).pdf")
+        (d3 "2).pdf")
+        (d4 ".pdf")
+        (e1 "02*) 24-2-09999-06.pdf")
+        (e2 "02) 24-2-09999-06.pdf")
+        (e3 "24-2-09999-06.pdf"))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* d0)))
-    (should (string-empty-p (match-string 1 d0)))
+    (should (null (match-string 1 d0)))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* d1)))
     (should (string= "02)" (match-string 1 d1)))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* d2)))
     (should (string= "02*)" (match-string 1 d2)))
     (should (eq nil (string-match *lolh/docket-date-name2-re* d3)))
+    (should (eq 0 (string-match *lolh/docket-date-name2-re* d4)))
+    (should (string= d4 (match-string 0 d4)))
 
     (should (eq 0 (string-match *lolh/docket-date-name2-re* e1)))
     (should (string= "02*)" (match-string 1 e1)))
@@ -86,16 +89,16 @@
     (should (string= "02)" (match-string 1 e2)))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* e3)))
     (should (string= "24-2-09999-06" (match-string 2 e3)))
-    (should (string-empty-p (match-string 1 e3)))
+    (should (null (match-string 1 e3)))
     ))
 
 (ert-deftest extract-t-rx-date ()
-  (let ((f0 "[2024-05-04]")
-        (f1 "02*) [2024-05-04]")
-        (f2 "02) [2024-05-04]")
-        (f3 "02*) 24-2-09999-06 [2024-05-04]")
-        (f4 "02) 24-2-09999-06 [2024-05-04]")
-        (f5 "02) 24-2-09999-06"))
+  (let ((f0 "[2024-05-04].PDF")
+        (f1 "02*) [2024-05-04].PDF")
+        (f2 "02) [2024-05-04].PDF")
+        (f3 "02*) 24-2-09999-06 [2024-05-04].PDF")
+        (f4 "02) 24-2-09999-06 [2024-05-04].PDF")
+        (f5 "02) 24-2-09999-06.PDF"))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* f0)))
     (should (string= "[2024-05-04]" (match-string 3 f0)))
     (should (string= "2024-05-04" (match-string 4 f0)))
@@ -117,11 +120,11 @@
     ))
 
 (ert-deftest extract-t-rx-names ()
-  (let ((g0 "LAST,First")
-        (g1 "LASTA,Firsta-LASTB,Firstb")
-        (g2 "02) 24-2-09999-06 [2024-05-04] LAST,First")
-        (g3 "02) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb")
-        (g4 "02) 24-2-09999-06 [2024-05-04]"))
+  (let ((g0 "LAST,First.pdf")
+        (g1 "LASTA,Firsta-LASTB,Firstb.pdf")
+        (g2 "02) 24-2-09999-06 [2024-05-04] LAST,First.pdf")
+        (g3 "02) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb.pdf")
+        (g4 "02) 24-2-09999-06 [2024-05-04].pdf"))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* g0)))
     (should (string= "LAST,First" (match-string 5 g0)))
     (should (string= "LAST,First" (match-string 6 g0)))
@@ -143,13 +146,13 @@
     ))
 
 (ert-deftest extract-t-rx-body ()
-  (let ((h0 " -- ")
-        (h1 " -- Some Document Name")
-        (h2 "02) 24-2-09999-06 [2024-05-04] LAST,First -- Some Document Name")
-        (h3 "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Some Document Name")
-        (h4 "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-04")
-        (h5 "02) 24-2-09999-06 [2024-05-04] LAST,First") ; => nil
-        (h6 "02) 24-2-09999-06 [2024-05-04] LAST,First -- ")) ; => ""
+  (let ((h0 "02) -- .pdf")
+        (h1 " -- Some Document Name.pdf")
+        (h2 "02) 24-2-09999-06 [2024-05-04] LAST,First -- Some Document Name.PDF")
+        (h3 "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Some Document Name.pdf")
+        (h4 "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-04.PDF")
+        (h5 "02) 24-2-09999-06 [2024-05-04] LAST,First.pdf") ; => nil
+        (h6 "02) 24-2-09999-06 [2024-05-04] LAST,First -- .PDF")) ; => ""
     (should (eq 0 (string-match *lolh/docket-date-name2-re* h0)))
     (should (string-empty-p (match-string 8 h0)))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* h1)))
@@ -167,9 +170,9 @@
     ))
 
 (ert-deftest extract-t-rx-all ()
-  (let ((x1 "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-04"))
+  (let ((x1 "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-04.pdf"))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* x1)))
-    (should (string= "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-04"
+    (should (string= "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-04.pdf"
                      (match-string 0 x1)))
     (should (string= "02*)" (match-string 1 x1)))
     (should (string= "24-2-09999-06" (match-string 2 x1)))
@@ -182,7 +185,7 @@
     ))
 
 (ert-deftest extract-t-rx-some ()
-  (let ((y1 "02*) [2024-05-04] -- Complaint UD (30-DAY)"))
+  (let ((y1 "02*) [2024-05-04] -- Complaint UD (30-DAY).PDF"))
     (should (eq 0 (string-match *lolh/docket-date-name2-re* y1)))
     (should (string= "02*)" (match-string 1 y1))) ; docket no.
     (should (null (match-string 2 y1))) ; cause no.
@@ -193,6 +196,100 @@
     (should (null (match-string 7 y1)))
     (should (string= "Complaint UD (30-DAY)" (match-string 8 y1)))
     ))
+
+(ert-deftest extract-t-file-name-parts-rx ()
+  "Test the function lolh/extract-fle-name-parts."
+
+  (let* ((f1 "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-05.pdf")
+         (f2 (lolh/extract-file-name-parts f1)))
+    (should (string= f1 (plist-get f2 :full)))
+    (should (string= f1 (lolh/file-name-part f1 :full)))
+    (should (string= "02*)" (plist-get f2 :docket)))
+    (should (string= "02*)" (lolh/file-name-part f1 :docket)))
+    (should (string= "24-2-09999-06" (plist-get f2 :cause)))
+    (should (string= "24-2-09999-06" (lolh/file-name-part f1 :cause)))
+    (should (string= "[2024-05-04]" (plist-get f2 :date-b)))
+    (should (string= "[2024-05-04]" (lolh/file-name-part f1 :date-b)))
+    (should (string= "2024-05-04" (plist-get f2 :date)))
+    (should (string= "2024-05-04" (lolh/file-name-part f1 :date)))
+    (should (string= "LASTA,Firsta-LASTB,Firstb" (plist-get f2 :name-full)))
+    (should (string= "LASTA,Firsta-LASTB,Firstb" (lolh/file-name-part f1 :name-full)))
+    (should (string= "LASTA,Firsta" (plist-get f2 :name-pri)))
+    (should (string= "LASTA,Firsta" (lolh/file-name-part f1 :name-pri)))
+    (should (string= "LASTB,Firstb" (plist-get f2 :name-sec)))
+    (should (string= "LASTB,Firstb" (lolh/file-name-part f1 :name-sec)))
+    (should (string= "Summons->2024-05-05" (plist-get f2 :document)))
+    (should (string= "Summons->2024-05-05" (lolh/file-name-part f1 :document)))
+    ))
+
+(ert-deftest extract-t-create-file-name-from-parts ()
+  "Test the function lolh/create-file-name"
+
+  (should (string= "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-05.pdf"
+                   (lolh/create-file-name
+                    "02*)"
+                    "24-2-09999-06"
+                    "2024-05-04"
+                    "LASTA,Firsta"
+                    "LASTB,Firstb"
+                    "Summons->2024-05-05")))
+  (should (string= "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta -- Summons->2024-05-05.pdf"
+                   (lolh/create-file-name
+                    "02*)"
+                    "24-2-09999-06"
+                    "2024-05-04"
+                    "LASTA,Firsta"
+                    nil
+                    "Summons->2024-05-05")))
+  (should (string= "24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-05.pdf"
+                   (lolh/create-file-name
+                    nil
+                    "24-2-09999-06"
+                    "2024-05-04"
+                    "LASTA,Firsta"
+                    "LASTB,Firstb"
+                    "Summons->2024-05-05")))
+  (should (string= "02*) [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Summons->2024-05-05.pdf"
+                   (lolh/create-file-name
+                    "02*)"
+                    nil
+                    "2024-05-04"
+                    "LASTA,Firsta"
+                    "LASTB,Firstb"
+                    "Summons->2024-05-05")))
+  (should (string= "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb.pdf"
+                   (lolh/create-file-name
+                    "02*)"
+                    "24-2-09999-06"
+                    "2024-05-04"
+                    "LASTA,Firsta"
+                    "LASTB,Firstb"
+                    nil)))
+  (should (string= "02*) 24-2-09999-06 [2024-05-04] LASTA,Firsta.pdf"
+                   (lolh/create-file-name
+                    "02*)"
+                    "24-2-09999-06"
+                    "2024-05-04"
+                    "LASTA,Firsta"
+                    nil
+                    nil)))
+  (should (string= "02*) 24-2-09999-06 [2024-05-04].pdf"
+                   (lolh/create-file-name
+                    "02*)"
+                    "24-2-09999-06"
+                    "2024-05-04"
+                    nil
+                    nil
+                    nil)))
+  (should (string= "02*) [2024-05-04].pdf"
+                   (lolh/create-file-name
+                    "02*)"
+                    nil
+                    "2024-05-04"
+                    nil
+                    nil
+                    nil)))
+  )
 
 ;; (ert-deftest extract-t-docket-date-name-tests ()
 ;;   "Tests the regexp *lolh/docket-date-name-re* and the function

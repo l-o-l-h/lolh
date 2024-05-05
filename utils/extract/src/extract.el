@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-04 15:35:14 lolh-mbp-16>
+;; Time-stamp: <2024-05-04 22:48:00 lolh-mbp-16>
 ;; Version: 0.1.7 [2024-04-17 19:36]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -85,21 +85,26 @@
    4: Optional \" -- \"
    5: Optional name: blah")
 
+(defconst *lolh/file-name-allowed-parts*
+  '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document)
+  "   0      1       2      3      4       5          6        7          8")
+
 (defconst *lolh/docket-date-name2-re*
   (rx bos
-      (group-n 1 (opt (** 3 4 (any digit "*)")))) ; docket no. or ""
+      (opt (group-n 1 (** 3 4 (any digit "*)")))) ; docket no. or nil
       (opt (0+ space) (group-n 2 (= 13 (any digit "-")))) ; cause no. or nil
-      (opt (0+ space) (group-n 3 ; bracketed date or nil
+      (opt (0+ space) (group-n 3        ; bracketed date or nil
                         "["
                         (group-n 4 (= 10 (any digit "-"))) ; date or nil
                         "]"))
-      (opt (0+ space) (group-n 5 ; all names combined or nil
+      (opt (0+ space) (group-n 5        ; all names combined or nil
                         (group-n 6 (+ upper) "," upper (+ lower)) ; first name
                         (0+ "-"
-                            (group-n 7 (0+ upper) "," upper (+ lower))))) ; Opt second name
+                            (group-n 7 (0+ upper) "," upper (+ lower))))) ; Optional second name
       (opt " -- " (group-n 8 (* (any graph space)))) ; document name
       ;; nil if no " -- "
       ;; string-empty-p t if " -- " with no document name
+      (| ".pdf" ".PDF")
       eos))
 
 
@@ -291,8 +296,8 @@ files will be ignored."
                                    (directory-files *lolh/process-dir* nil
                                                     directory-files-no-dot-files-regexp))))
 
-    (split-root-window-right)
-    ;;(dired *lolh/process-dir*)
+    ;; (split-root-window-right)
+    ;; (dired *lolh/process-dir*)
 
     ;; In the situation when the DIR property has not yet been added, add it here
     ;; and create the data directory if it does not exist
@@ -544,14 +549,6 @@ If TAG, also add the tag to the headline."
   (lolh/note-tree))
 
 
-(defun lolh/note-date-name (date name)
-  "Return a file NAME with cause-date-name using DATE."
-
-  (let ((cause (lolh/note-property "CAUSE"))
-        (def-1 (lolh/note-property "DEF-1")))
-    (format "%s [%s] %s -- %s" cause date def-1 name)))
-
-
 (defun lolh/attach-dir (&optional subdir)
   "Return a path to the local parent attachment directory for a case file.
 
@@ -670,43 +667,6 @@ If FILTER is set to a regexp, attach the matched files."
     (format "%s%s" def1 (if def2 (concat "-" def2) ""))))
 
 
-(defun lolh/extract-date-name (file-name &optional type)
-  "Given a FILE-NAME in *lolh/process-dir*, extract a date and a name.
-
-TYPE is ..."
-
-  (unless (string-match ".*\\[\\([[:digit:]-]+\\)\\][[:space:]]+\\(.*\\)[.pPdDfF]\\{4\\}$" file-name)
-    (error "Failed to parse the file-name: %s" file-name))
-  ;;(format "Found date: %s and name: %s" (match-string 1 file-name) (match-string 2 file-name))
-  (list :date (match-string 1 file-name) :name (format "%s(%s)" (if type (concat type " ") "") (match-string 2 file-name))))
-
-(defun lolh/extract-docket-date-name (file-name)
-  "Given a FILE-NAME, extract optional docket number, date, and name.
-
-The file-name should include the suffix .pdf or .PDF."
-
-  )
-
-
-(defun lolh/create-gd-file-name (&optional docket date body)
-  "With point in a note, return a file name with DOCKET, DATE, and BODY.
-
-Use an empty string for any missing arguments."
-
-  (let* ((docket (if docket (format "%s) " docket) ""))
-         (date (or date "yyyy-mm-dd"))
-         (body (or body "Need File Name"))
-         (cause (lolh/cause))
-         (both-names (lolh/both-def-names))
-         ;; (def-1 (lolh/note-property "DEF-1"))
-         ;; (def-2 (lolh/note-property "DEF-2"))
-         ;; (last-first-1 (lolh/create-first-last def-1))
-         ;; (last-first-2 (lolh/create-first-last def-2)))
-         )
-    ;; (format "%s%s [%s] %s%s -- %s.pdf" docket cause date last-first-1 (format "%s" (if last-first-2 (concat "-" last-first-2) "")) body))
-    (format "%s%s [%s] %s -- %s.pdf" docket cause date both-names body)))
-
-
 ;;;-------------------------------------------------------------------
 
 
@@ -768,6 +728,25 @@ symlinked."
       (setf new-files (cdr new-files)))))
 
 
+(defun lolh/create-gd-file-name (&optional docket date body)
+  "With point in a note, return a file name with DOCKET, DATE, and BODY.
+
+Use an empty string for any missing arguments."
+
+  (let* ((docket (if docket (format "%s) " docket) ""))
+         (date (or date "yyyy-mm-dd"))
+         (body (or body "Need File Name"))
+         (cause (lolh/cause))
+         (both-names (lolh/both-def-names))
+         ;; (def-1 (lolh/note-property "DEF-1"))
+         ;; (def-2 (lolh/note-property "DEF-2"))
+         ;; (last-first-1 (lolh/create-first-last def-1))
+         ;; (last-first-2 (lolh/create-first-last def-2)))
+         )
+    ;; (format "%s%s [%s] %s%s -- %s.pdf" docket cause date last-first-1 (format "%s" (if last-first-2 (concat "-" last-first-2) "")) body))
+    (format "%s%s [%s] %s -- %s.pdf" docket cause date both-names body)))
+
+
 (defun lolh/create-gd-file-name-2 (file-name &optional body)
   "Given a FILE-NAME from *lolh/process-dir* and a note, create new file-name with optional BODY."
 
@@ -791,6 +770,19 @@ symlinked."
             (if body (format "%s " body) "")
             (or name ""))))
 
+(defun lolh/create-file-name (&optional docket cause date name-pri name-sec document)
+  "Create a file-name using optional DOCKET CAUSE DATE NAME-PRI NAME-SEC DOCUMENT.
+
+DATE should be unbracketed: 2024-05-04
+NAME-PRI and NAME-SEC should be in LASTA,Firsta and LASTB,Firstb form."
+
+  (concat (when docket   (format "%s "    docket))
+          (when cause    (format "%s "    cause))
+          (when date     (format "[%s]"   date))
+          (when name-pri (format "%s%s"   (when date " ") name-pri))
+          (when name-sec (format "-%s"    name-sec))
+          (when document (format " -- %s" document))
+          ".pdf"))
 
 (defun lolh/extract-file-name-parts (file-name)
   "Given a FILE-NAME, extract and return its parts as a plist.
@@ -816,7 +808,16 @@ symlinked."
         :name-full (match-string 5 file-name)
         :name-pri (match-string 6 file-name)
         :name-sec (match-string 7 file-name)
-        :document (match-string-8 file-name)))
+        :document (match-string 8 file-name)))
+
+(defun lolh/file-name-part (file-name part)
+  "Given a FILE-NAME, return a part.
+See lolh/extract-file-name-parts for the parts that can be returned."
+
+  (unless (memq part *lolh/file-name-allowed-parts*)
+    (error "%s is not an allowed file-name part" part))
+  (let ((parts (lolh/extract-file-name-parts file-name)))
+    (plist-get parts part)))
 
 (defun lolh/extract-docket-date-name (file-name)
   "Extract docket, date with brackets, date, sep, and name from FILE-NAME.
