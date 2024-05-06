@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-04 22:48:00 lolh-mbp-16>
+;; Time-stamp: <2024-05-05 17:51:23 lolh-mbp-16>
 ;; Version: 0.1.7 [2024-04-17 19:36]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -65,31 +65,27 @@
 ;; GOOGLE_DRIVE = $HOME/Google Drive/My Drive"
 ;; GOOGLE_DRIVE_2022|2023|2024 = $GOOGLE_DRIVE/Lincoln Harvey 2022|2023|2024
 ;; Those values must be properly set in ~/.oh_my_zsh/custom/envvars.zsh
+
 (defconst *lolh/gd-closed* "Closed_Cases")
 ;; Closed Cases takes the form: 00_YEAR_Closed_Cases, where YEAR tracks GOOGLE_DRIVE
 
+(defconst *lolh/downloads-dir*
+  (expand-file-name "Downloads" "~"))
+
 (defconst *lolh/process-dir*
-  (expand-file-name "~/Downloads/process"))
+  (expand-file-name "process" *lolh/downloads-dir*))
+
 (defconst *lolh/pdftk-jar-path*
   (expand-file-name "~/.local/bin/pdftk-all.jar"))
+
 (defconst *lolh/first-last-name-re*
   "^\\([^[:space:]]+\\).*[[:space:]]\\([^[:space:]]+\\)$")
-(defconst *lolh/docket-date-re*
-  "^\\([[:digit:]*]+\\))[[:space:]]\\([[:digit:][-]+]\\).*\\.pdf$")
-(defconst *lolh/docket-date-name-re*
-  "^\\([[:digit:]*)]\\{3,4\\}[[:space:]]\\)\\{0,1\\}\\(\\[\\([[:digit:]-]\\{10\\}\\)\\]\\)\\{0,1\\}\\([[:space:]-]\\{0,4\\}\\)\\(.*\\)[.pPdDfF]\\{4\\}$"
-  ;;; 1                                   1           2     3                      3     2           4                       4  5    5
-  "1: Optional docket: 02*) (needs `string-trim')
-   2: Optional date including brackets: [2024-04-01]
-   3: Optional date w/out brackets: 2024-04-01
-   4: Optional \" -- \"
-   5: Optional name: blah")
 
 (defconst *lolh/file-name-allowed-parts*
   '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document)
   "   0      1       2      3      4       5          6        7          8")
 
-(defconst *lolh/docket-date-name2-re*
+(defconst *lolh/docket-date-name-rx*
   (rx bos
       (opt (group-n 1 (** 3 4 (any digit "*)")))) ; docket no. or nil
       (opt (0+ space) (group-n 2 (= 13 (any digit "-")))) ; cause no. or nil
@@ -110,6 +106,7 @@
 
 (defconst *lolh/props-re*
   "^\\(.*\\)[[:space:]]\\[\\([[:digit:]-]+\\)\\][[:space:]]\\([[:digit:]]+\\)[[:space:]]\\([[:digit:]]+\\)$")
+
 (defconst *lolh/exhibit-or-source-re*
   "^EXHIBIT-[[:alnum:]]\\|^SOURCE")
 
@@ -195,7 +192,10 @@ files will be ignored."
   (lolh/note-tree)
 
   ;; first get data from the note buffer
-  (let* ((nps (lolh/extract-properties))
+  (let* ((cause (lolh/cause))
+         (name-pri (lolh/def-last-first-name "DEF-1"))
+         (name-sec (lolh/def-last-first-name "DEF-2"))
+         (nps (lolh/extract-properties))
          ;; find the identity of the document to extract from
          (source (or (assoc "SOURCE" nps)
                      (error "No SOURCE property found")))
@@ -228,7 +228,7 @@ files will be ignored."
                          (beg-end (format "%s-%s"
                                           (cdr (assq :beg props))
                                           (cdr (assq :end props))))
-                         (gd-file-name (lolh/create-gd-file-name nil date (format "%s %s" key type)))
+                         (gd-file-name (lolh/create-file-name nil cause date name-pri name-sec (format "%s %s" key type)))
                          (output-name (expand-file-name
                                        (file-name-concat
                                         *lolh/process-dir* gd-file-name))))
@@ -261,7 +261,7 @@ files will be ignored."
 
   (interactive)
 
-  (let ((new-name (lolh/create-gd-file-name nil )))))
+  ...)
 
 
 (defun lolh/update-pleadings ()
@@ -293,8 +293,7 @@ files will be ignored."
                                                pleadings))
                                    ;; Grab all of the new pleadings in process-dir
                                    ;; but keep only those with equal docket numbers for now
-                                   (directory-files *lolh/process-dir* nil
-                                                    directory-files-no-dot-files-regexp))))
+                                   new-files)))
 
     ;; (split-root-window-right)
     ;; (dired *lolh/process-dir*)
@@ -337,16 +336,23 @@ files will be ignored."
                        (directory-files *lolh/process-dir* nil directory-files-no-dot-files-regexp))))
       (mapc (lambda (f)
               ;; find the docket number and date of new files
-              (unless (string-match *lolh/docket-date-re* f)
-                (error "Something is wrong with %s" f))
-              (let* ((docket (match-string 1 f))
-                     (date (string-trim (match-string 2 f) "\\[" "\\]"))
-                     (f-dir (file-name-concat *lolh/process-dir* f)) ; full path to file to be renamed
-                     (new-str (concat (lolh/create-gd-file-name docket date) "? "))
-                     (new-name (read-string new-str)) ; ask for the file name
-                     (new-full-name (lolh/create-gd-file-name docket date new-name)) ; add the other parts
-                     (new-full-name-dir (file-name-concat court-file new-full-name)) ; give it a path
-                     (attach-dir-file (file-name-concat attach-dir new-full-name))) ; get the symlink name
+
+              (let* ((fn-parts (lolh/extract-file-name-parts f))
+                     (docket (lolh/file-name-part f :docket))
+                     (date   (lolh/file-name-part f :date))
+                     (f-dir  (file-name-concat *lolh/process-dir* f)) ; full path to file to be renamed
+                     (document (read-string (concat f "? -- ")))
+                     (new-full-name
+                      (lolh/create-file-name docket (lolh/cause) date [def-1] [def-2] document))
+                     ;; (new-str (concat (lolh/create-gd-file-name docket date) "? "))
+                     ;; (new-name (read-string new-str)) ; ask for the file name
+                     ;; (new-full-name (lolh/create-gd-file-name docket date new-name)) ; add the other parts
+                     (new-full-name-dir
+                      (file-name-concat
+                       court-file new-full-name)) ; give it a path
+                     (attach-dir-file
+                      (file-name-concat
+                       attach-dir new-full-name))) ; get the symlink name
                 (rename-file f-dir new-full-name-dir)
                 (make-symbolic-link new-full-name-dir attach-dir-file)))
             new-pleadings))))
@@ -514,12 +520,12 @@ If optional SKIP is non-NIL, don't run lolh/note-tree."
   (let* ((hl (or (lolh/get-headline-element headline)
                  (error "Headline %s does not exist" headline)))
          (begin (org-element-property :begin hl))
-         (tags (org-element-property :tags hl))
-         (new-tags (push tag tags)))
-    (save-excursion
-      (goto-char begin)
-      (org-set-tags new-tags)))
-  (lolh/note-tree))
+         (tags (org-element-property :tags hl)))
+    (unless (member tag tags)
+      (save-excursion
+        (goto-char begin)
+        (org-set-tags (push tag tags))
+        (lolh/note-tree)))))
 
 
 (defun lolh/add-ledger ()
@@ -614,10 +620,22 @@ If FILTER is set to a regexp, attach the matched files."
   (dired-unmark-all-marks)
   (delete-window))
 
+;;;-------------------------------------------------------------------
+;;; Names
 
 ;;; TODO: Handle the error when there is no DEF-2 property
 (defun lolh/def-names ()
-  "Return the fully parsed and formated defendant names."
+  "Return the fully parsed and formated defendant names.
+
+Returns a plist of the following form:
+(DEF-1 (:first First :last Last)
+ DEF-2 (:first First :last Last))
+
+Use lolh/def-name DEF-1|DEF-2 to get each.
+Use lolh/def-first-name DEF-1|DEF-2 to get the first name
+Use lolh/def-last-name DEF-1|DEF-2 to get the last name
+Use lolh/last-first-name DEF-1|DEF-2 to get the names reversed."
+
 
   (let (defs fl)
     (dolist (def '("DEF-1" "DEF-2") defs)
@@ -653,7 +671,9 @@ If FILTER is set to a regexp, attach the matched files."
 
 
 (defun lolh/def-last-first-name (def)
-  "Return a formatted reversed name."
+  "Return a formatted reversed name.
+
+If a name does not exist, return nil."
   (let ((ln (lolh/def-last-name def t))
         (fn (lolh/def-first-name def)))
     (when ln
@@ -670,34 +690,64 @@ If FILTER is set to a regexp, attach the matched files."
 ;;;-------------------------------------------------------------------
 
 
-(defun lolh/process-dir (dest &optional body-p)
-  "Move all files in *lolh/process-dir* and rename in GD / DEST subdir.
+(defun lolh/move-new-files-into-process-dir ()
+  "Move new documents from Downloads into Downloads/process.
 
-DEST is the name of a subdirectory, which must exist.
-Without a prefix argument, BODY-P will be 1, and thus BODY will be set to nil.
-If BODY-P is 4 (1 numeric prefix), then request an additional name for
-each file.
-If BODY-P is 16 (2 numeric prefixes), then request an attachment headline
-and attach the files to the supplied headline."
+New is defined to be any document placed into Downloads within the last
+minute."
+
+  (interactive)
+
+  (let ((command (format "find %s -atime -1m -depth 1 -type f -execdir mv {} %s \\;"
+                         *lolh/downloads-dir*
+                         *lolh/process-dir*)))
+    (call-process-shell-command command)))
+
+
+;;; Give this one a key binding
+;;; I don't really see a good reason not to rename all files without names.
+;;; Without a prefix argument, simply add a name and move to Google Drive
+;;; With a single prefix argument, also attach the documents to a headline.
+;;; There might be a reason not to give the documents a name, so make that
+;;; the double prefix argument, but don't also attach.
+
+(defun lolh/process-dir (dest &optional body-p)
+  "Rename all files in *lolh/process-dir* to GD / DEST subdir and maybe attach.
+
+DEST is the name of a Google Drive subdirectory, which must exist.
+All documents in /process-dir will be moved into DEST.  If a file-name
+does not have a document name, ask for one while moving.
+
+With a single prefix argument, ask for a headline to attach the newly
+moved files to.  This is probably a good place to attach to LEDGERS, for
+example.  It could also be COURT FILES, but lolh/update does that already.
+
+With two prefux arguments, don't add a document name if one is missing,
+and don't attach the files anywhere.  I'm not sure this is really useful,
+and I should consider removing it in the future.
+
+A singled prefix argument sets BODY-P to 4, while a double prefix argument
+sets BODY-P to 16."
 
   (interactive "sGD Destination? \np")
 
   (lolh/note-tree)
   (let ((files (directory-files *lolh/process-dir* nil "^[^.]"))
-        (body (if (and (numberp body-p) ; when set, ask for a body file name
-                       (= body-p 16 ))
-                  t nil))
-        (attach-hl (if (and (numberp body-p) ;; attachment headline or nil
-                            (> body-p 4))
+        ;; do not rename documents with a double prefix argument
+        (no-doc (if (= body-p 16) t nil))
+        ;; attach files to hl using a single prefix argument
+        (attach-hl (if (eql body-p 4)
                        (read-string "Attachment headline? ")
+                     ;; don't attach if no prefix argument or two prefix arguments
                      nil))
-        (dest-dir (lolh/gd-cause-dir dest)) ; GD Destination directory
+        ;; Create the Google Drive destination
+        (dest-dir (lolh/gd-cause-dir dest))
         old-files new-files)
+
     (dolist (f files)
-      (let* ((body-fn (when body (read-string (concat f " File Name: ")))) ; might be nil
-             (nf (file-name-concat ; new file path
+      (let* ((nf (file-name-concat      ; new file path
                   dest-dir
-                  (lolh/create-gd-file-name-2 f body-fn)))
+                  (lolh/create-file-name-using-note-parts f no-doc)))
              (of (file-name-concat *lolh/process-dir* f))) ; old file path
         (push nf new-files)
         (push of old-files)))
@@ -728,47 +778,33 @@ symlinked."
       (setf new-files (cdr new-files)))))
 
 
-(defun lolh/create-gd-file-name (&optional docket date body)
-  "With point in a note, return a file name with DOCKET, DATE, and BODY.
-
-Use an empty string for any missing arguments."
-
-  (let* ((docket (if docket (format "%s) " docket) ""))
-         (date (or date "yyyy-mm-dd"))
-         (body (or body "Need File Name"))
-         (cause (lolh/cause))
-         (both-names (lolh/both-def-names))
-         ;; (def-1 (lolh/note-property "DEF-1"))
-         ;; (def-2 (lolh/note-property "DEF-2"))
-         ;; (last-first-1 (lolh/create-first-last def-1))
-         ;; (last-first-2 (lolh/create-first-last def-2)))
-         )
-    ;; (format "%s%s [%s] %s%s -- %s.pdf" docket cause date last-first-1 (format "%s" (if last-first-2 (concat "-" last-first-2) "")) body))
-    (format "%s%s [%s] %s -- %s.pdf" docket cause date both-names body)))
+;;; ------------------------------------------------------------------
+;;; File-Name
 
 
-(defun lolh/create-gd-file-name-2 (file-name &optional body)
-  "Given a FILE-NAME from *lolh/process-dir* and a note, create new file-name with optional BODY."
+(defun lolh/create-file-name-using-note-parts (file-name &optional no-doc)
+  "Grab the cause and names from the note,and add them to the FILE-NAME.
 
-  (let* ((ex (lolh/extract-docket-date-name file-name))
-         ;; DOCKET can be nil and will be ignored
-         (docket (lolh/get-extracted ex :docket))
-         ;; DATE can be nil; YYYY-MM-DD will be substituted
-         (date (or (lolh/get-extracted ex :date) "YYYY-MM-DD"))
-         (name (lolh/get-extracted ex :name)) ; NAME can be nil;
-         (cause (lolh/cause))                 ; CAUSE must exist
-         (def-1 (lolh/note-property "DEF-1")) ; DEF-1 must exist
-         (def-2 (lolh/note-property "DEF-2")) ; DEF-2 is optional
-         (last-first-1 (lolh/create-first-last def-1))
-         (last-first-2 (lolh/create-first-last def-2)))
-    (format "%s%s [%s] %s%s -- %s(%s).pdf"
-            (if docket (concat docket " ") "")
-            cause
-            date
-            last-first-1
-            (format "%s" (if last-first-2 (concat "-" last-first-2) ""))
-            (if body (format "%s " body) "")
-            (or name ""))))
+If document does not exist, ask for it, unless NO-DOC is t."
+
+  (let ((parts (lolh/extract-file-name-parts file-name))
+        (cause (lolh/cause))
+        (def-1 (lolh/def-last-first-name "DEF-1"))
+        (def-2 (lolh/def-last-first-name "DEF-2"))
+        document)
+    (setq document (lolh/get-extracted parts :document))
+    ;; If document is nil ask for a document name unless no-doc is t.
+    (when (and (null document)
+               (not no-doc))
+      (setq document (read-string (format "%s: Document? " file-name))))
+    (lolh/create-file-name
+     (lolh/get-extracted parts :docket)
+     cause
+     (lolh/get-extracted parts :date)
+     def-1
+     def-2
+     document)))
+
 
 (defun lolh/create-file-name (&optional docket cause date name-pri name-sec document)
   "Create a file-name using optional DOCKET CAUSE DATE NAME-PRI NAME-SEC DOCUMENT.
@@ -797,21 +833,21 @@ NAME-PRI and NAME-SEC should be in LASTA,Firsta and LASTB,Firstb form."
 :name-sec LASTB,Firstb | nil
 :document Some Document Name | nil if no -- | empty-string if --
 "
-  (unless (string-match *lolh/docket-date-name2-re* file-name)
+  (unless (string-match *lolh/docket-date-name-rx* file-name)
     (error "Unable to parse file-name %s" file-name))
 
-  (list :full (match-string 0 file-name)
-        :docket (match-string 1 file-name)
-        :cause (match-string 2 file-name)
-        :date-b (match-string 3 file-name)
-        :date (match-string 4 file-name)
+  (list :full      (match-string 0 file-name)
+        :docket    (match-string 1 file-name)
+        :cause     (match-string 2 file-name)
+        :date-b    (match-string 3 file-name)
+        :date      (match-string 4 file-name)
         :name-full (match-string 5 file-name)
-        :name-pri (match-string 6 file-name)
-        :name-sec (match-string 7 file-name)
-        :document (match-string 8 file-name)))
+        :name-pri  (match-string 6 file-name)
+        :name-sec  (match-string 7 file-name)
+        :document  (match-string 8 file-name)))
 
 (defun lolh/file-name-part (file-name part)
-  "Given a FILE-NAME, return a part.
+  "Given a FILE-NAME, return a PART.
 See lolh/extract-file-name-parts for the parts that can be returned."
 
   (unless (memq part *lolh/file-name-allowed-parts*)
@@ -819,39 +855,19 @@ See lolh/extract-file-name-parts for the parts that can be returned."
   (let ((parts (lolh/extract-file-name-parts file-name)))
     (plist-get parts part)))
 
-(defun lolh/extract-docket-date-name (file-name)
-  "Extract docket, date with brackets, date, sep, and name from FILE-NAME.
 
-FILE-NAME must end with either `.pdf' or `.PDF'.
-Returns a plist: (:docket ... :date-b ... :date ... :set ... :name ...)
-All elements are optional.  Each returns `nil' unless something is
-supplied."
+(defun lolh/get-extracted (parts part)
+  "Given an extracted file-name PARTS and a PART, return the part from parts.
 
-  (unless (string-match *lolh/docket-date-name-re* file-name)
-    (error "Unable to parse file-name %s" file-name))
-  (let* ((docket-space (match-string 1 file-name))
-         ;; get rid of spurious space
-         (docket (when docket-space (string-trim docket-space)))
-         (date-brackets (match-string 2 file-name))
-         (date (match-string 3 file-name)) ; does not include surrounding brackets
-         (sep (match-string 4 file-name))  ; " -- " if it exists
-         (name (match-string 5 file-name)) ; returns an empty string if not present
-         (name (if (string-empty-p name) nil name))) ; return `nil' when not present
-    ;; return a plist
-    (list :docket docket :date-b date-brackets :date date :set sep :name name)))
+PART must be one of *lolh/file-name-allowed-parts*."
 
-(defun lolh/get-extracted (ex part)
-  "Given an extracted file-name EX and a PART, return the part.
+  (unless (memq part *lolh/file-name-allowed-parts*)
+    (error "%s is not an allowed part: %s" part *lolh/file-name-allowed-parts*))
+  (plist-get parts part))
 
-PART must be one of
-- 'docket
-- 'date
-- 'name"
 
-  (let ((com (car (memq part '(:docket :date :name)))))
-    (unless com
-      (error "Part: %s is invalid; it must be one of :docket, :date, or :name" part))
-    (plist-get ex com)))
+;;;-------------------------------------------------------------------
+
 
 (provide 'extract)
 
