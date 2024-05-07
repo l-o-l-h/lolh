@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-05 17:51:23 lolh-mbp-16>
-;; Version: 0.1.7 [2024-04-17 19:36]
+;; Time-stamp: <2024-05-07 08:00:02 lolh-mbp-16>
+;; Version: 0.1.8 [2024-05-07 08:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -66,6 +66,10 @@
 ;; GOOGLE_DRIVE_2022|2023|2024 = $GOOGLE_DRIVE/Lincoln Harvey 2022|2023|2024
 ;; Those values must be properly set in ~/.oh_my_zsh/custom/envvars.zsh
 
+(defconst *lolh/cause-re*
+  "^2[2-6][-]2[-][[:digit:]]\\{5\\}[-]06$"
+  "Regexp for a Clark Co cause number for years 2022-2026.")
+
 (defconst *lolh/gd-closed* "Closed_Cases")
 ;; Closed Cases takes the form: 00_YEAR_Closed_Cases, where YEAR tracks GOOGLE_DRIVE
 
@@ -85,7 +89,7 @@
   '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document)
   "   0      1       2      3      4       5          6        7          8")
 
-(defconst *lolh/docket-date-name-rx*
+(defconst *lolh/case-file-name-rx*
   (rx bos
       (opt (group-n 1 (** 3 4 (any digit "*)")))) ; docket no. or nil
       (opt (0+ space) (group-n 2 (= 13 (any digit "-")))) ; cause no. or nil
@@ -142,6 +146,8 @@
 
 (keymap-global-set "C-x p a" #'lolh/court-files-attach)
 (keymap-global-set "C-x p h" #'lolh/extract-pdfs)
+(keymap-global-set "C-x p j" #'lolh/process-dir)
+(keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
 
 
@@ -264,8 +270,8 @@ files will be ignored."
   ...)
 
 
-(defun lolh/update-pleadings ()
-  "Update attachment documents for case note.
+(defun lolh/update-pleadings (&optional move-first)
+  "Update attachment documents for case note, moving them first if MOVE-FIRST is 4.
 
   New documents should be downloaded from Onbase and placed into the Process
   directory with the docket number for any starred files, and the docket number
@@ -277,8 +283,12 @@ files will be ignored."
 
   All new files will be sym-linked into the attachment directory."
 
-  (interactive)
+  (interactive "p")
   (lolh/note-tree)
+
+  (when (= 4 move-first)
+    (lolh/move-update-files-into-process-dir))
+
   (let* ((attach-dir (lolh/attach-dir "Court File"))
          (court-file (lolh/gd-cause-dir "Court File"))
          ;; Find the old files in the Google Drive (those with *s)
@@ -341,9 +351,16 @@ files will be ignored."
                      (docket (lolh/file-name-part f :docket))
                      (date   (lolh/file-name-part f :date))
                      (f-dir  (file-name-concat *lolh/process-dir* f)) ; full path to file to be renamed
-                     (document (read-string (concat f "? -- ")))
+                     (document (or (lolh/file-name-part f :document)
+                                   (read-string (concat f "? -- "))))
                      (new-full-name
-                      (lolh/create-file-name docket (lolh/cause) date [def-1] [def-2] document))
+                      (lolh/create-file-name
+                       docket
+                       (lolh/cause)
+                       date
+                       (lolh/def-last-first-name "DEF-1")
+                       (lolh/def-last-first-name "DEF-2")
+                       document))
                      ;; (new-str (concat (lolh/create-gd-file-name docket date) "? "))
                      ;; (new-name (read-string new-str)) ; ask for the file name
                      ;; (new-full-name (lolh/create-gd-file-name docket date new-name)) ; add the other parts
@@ -535,9 +552,14 @@ If optional SKIP is non-NIL, don't run lolh/note-tree."
 
 
 (defun lolh/cause ()
-  "Return the CAUSE for the current note."
+  "Return the CAUSE for the current note.
 
-  (lolh/note-property "CAUSE"))
+Return an error if it is not in proper format."
+
+  (let ((cause (lolh/note-property "CAUSE")))
+    (unless (string-match-p *lolh/cause-re* cause)
+      (error "This cause number is incorrect: %s" cause))
+    cause))
 
 
 (defun lolh/set-note-property-in-headline (headline new-property new-value &optional tag)
@@ -570,7 +592,9 @@ The optional argument SUBDIR is added as a final path if it is included."
          (def1 (lolh/note-property  "DEF-1"))
          (attach-dir (file-name-as-directory
                       (file-name-concat
-                       parent-dir "data" (format "%s %s" cause def1) subdir))))
+                       parent-dir "data"
+                       (format "%s %s" cause def1)
+                       subdir))))
     attach-dir))
 
 
@@ -688,24 +712,63 @@ If a name does not exist, return nil."
 
 
 ;;;-------------------------------------------------------------------
+;;; Process-Dir Files
+
+
+(defun lolh/move-update-files-into-process-dir ()
+  "Move docket files from Downloads into process-dir.
+
+Then call update."
+
+  (interactive)
+
+  (let ((files (directory-files *lolh/downloads-dir* t "^[[:digit:]]\\{2\\}[*)]\\{1,2\\}")))
+    (dolist (file files)
+      (rename-file file
+                   (file-name-concat *lolh/process-dir*
+                                     (file-name-nondirectory file))))))
 
 
 (defun lolh/move-new-files-into-process-dir ()
-  "Move new documents from Downloads into Downloads/process.
+  "Move new documents from `~/Downloads' into `~/Downloads/process'.
 
-New is defined to be any document placed into Downloads within the last
-minute."
+'New' is defined to be any document placed into `~/Downloads' within the
+last minute.
+
+After moving the files into `process-dir', make sure they can be read by
+`lolh/process-dir' by running `'lolh/make-file-name-in-process-dir' next."
 
   (interactive)
 
   (let ((command (format "find %s -atime -1m -depth 1 -type f -execdir mv {} %s \\;"
                          *lolh/downloads-dir*
                          *lolh/process-dir*)))
-    (call-process-shell-command command)))
+    (call-process-shell-command command))
+  (lolh/make-file-name-in-process-dir))
+
+(defun lolh/make-file-name-in-process-dir ()
+  "Make sure every file in `process-dir' can be read by `*lolh/case-file-name-rx*'.
+
+If not, then add a date and two dashes (` -- ') to signify a document name.
+Also add a PL or DEF signifier (actually anything can be added, or nothing).
+If it still cannot be read by *lolh/case-file-name-rx*, then there is
+something seriously wrong with it."
+
+  (let ((files (directory-files *lolh/process-dir* t "^[^.]"))
+        date party)
+    (dolist (file files)
+      (unless (string-match-p *lolh/case-file-name-rx* file)
+        (setq date (read-string (concat (file-name-nondirectory file)
+                                        ": Date? ")))
+        (setq party (read-string "PL or DEF? "))
+        (rename-file file
+                     (file-name-concat
+                      (file-name-directory file)
+                      (format "[%s] -- %s %s"
+                              date party (file-name-nondirectory file))))))))
 
 
-;;; Give this one a key binding
-;;; I don't really see a good reason not to rename all files without names.
+;;; Give this one a key binding: [C-u C-u] C-x p j
 ;;; Without a prefix argument, simply add a name and move to Google Drive
 ;;; With a single prefix argument, also attach the documents to a headline.
 ;;; There might be a reason not to give the documents a name, so make that
@@ -713,6 +776,14 @@ minute."
 
 (defun lolh/process-dir (dest &optional body-p)
   "Rename all files in *lolh/process-dir* to GD / DEST subdir and maybe attach.
+
+This calls `lolh/move-new-files-into-process-dir' first, which first
+moves all files from `~/Downloads' into `~/Downloads/process' if they
+are less than one minute old, and gives them a `date' and a `PL|DEF'
+tag, and prefix the body with ` -- ' to signify it is a case file that
+can be renamed. The actions of renaming actually occur in still a third
+function, `lolh/make-file-name-in-process-dir', which is called after the
+new files are moved in process-dir.
 
 DEST is the name of a Google Drive subdirectory, which must exist.
 All documents in /process-dir will be moved into DEST.  If a file-name
@@ -722,33 +793,42 @@ With a single prefix argument, ask for a headline to attach the newly
 moved files to.  This is probably a good place to attach to LEDGERS, for
 example.  It could also be COURT FILES, but lolh/update does that already.
 
-With two prefux arguments, don't add a document name if one is missing,
-and don't attach the files anywhere.  I'm not sure this is really useful,
-and I should consider removing it in the future.
+With two prefix arguments, don't add a document name if one is missing,
+and don't attach the files anywhere; just stick it into DEST as is.
+I'm not sure this is really useful, and I should consider removing it
+in the future.
 
-A singled prefix argument sets BODY-P to 4, while a double prefix argument
-sets BODY-P to 16."
+NOTE: A singled prefix argument sets BODY-P to 4, while a double prefix
+argument sets BODY-P to 16."
 
   (interactive "sGD Destination? \np")
 
+  (lolh/move-new-files-into-process-dir)
   (lolh/note-tree)
+
   (let ((files (directory-files *lolh/process-dir* nil "^[^.]"))
-        ;; do not rename documents with a double prefix argument
+
+        ;; do not rename documents if this command was called with a
+        ;; double prefix argument
         (no-doc (if (= body-p 16) t nil))
-        ;; attach files to hl using a single prefix argument
-        (attach-hl (if (eql body-p 4)
+
+        ;; attach files to a hl if this command was called with a single
+        ;; prefix argument.  Do not attach files otherwise.
+        (attach-hl (if (= body-p 4)
                        (read-string "Attachment headline? ")
-                     ;; don't attach if no prefix argument or two prefix arguments
                      nil))
-        ;; Create the Google Drive destination
+
+        ;; Create the Google Drive destination directory name
+        ;; TODO: This needs to produce a list of options that can be chosen
+        ;;       to avoid spelling mistakes
         (dest-dir (lolh/gd-cause-dir dest))
         old-files new-files)
 
-    (dolist (f files)
+    (dolist (file files)
       (let* ((nf (file-name-concat      ; new file path
                   dest-dir
-                  (lolh/create-file-name-using-note-parts f no-doc)))
-             (of (file-name-concat *lolh/process-dir* f))) ; old file path
+                  (lolh/create-file-name-using-note-parts file no-doc)))
+             (of (file-name-concat *lolh/process-dir* file))) ; old file path
         (push nf new-files)
         (push of old-files)))
     (lolh/send-to-gd-and-maybe-attach old-files new-files dest attach-hl)))
@@ -785,7 +865,7 @@ symlinked."
 (defun lolh/create-file-name-using-note-parts (file-name &optional no-doc)
   "Grab the cause and names from the note,and add them to the FILE-NAME.
 
-If document does not exist, ask for it, unless NO-DOC is t."
+If document part does not exist, ask for it, unless NO-DOC is t."
 
   (let ((parts (lolh/extract-file-name-parts file-name))
         (cause (lolh/cause))
@@ -833,7 +913,7 @@ NAME-PRI and NAME-SEC should be in LASTA,Firsta and LASTB,Firstb form."
 :name-sec LASTB,Firstb | nil
 :document Some Document Name | nil if no -- | empty-string if --
 "
-  (unless (string-match *lolh/docket-date-name-rx* file-name)
+  (unless (string-match *lolh/case-file-name-rx* file-name)
     (error "Unable to parse file-name %s" file-name))
 
   (list :full      (match-string 0 file-name)
