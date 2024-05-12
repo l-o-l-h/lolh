@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-07 08:00:02 lolh-mbp-16>
-;; Version: 0.1.8 [2024-05-07 08:00]
+;; Time-stamp: <2024-05-12 07:33:28 lolh-mbp-16>
+;; Version: 0.1.9 [2024-05-07 07:30]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -82,6 +82,19 @@
 (defconst *lolh/pdftk-jar-path*
   (expand-file-name "~/.local/bin/pdftk-all.jar"))
 
+;; (defconst *lolh/pdftk-command*
+;;   (combine-and-quote-strings
+;;    (list "java" "-jar" *lolh/pdftk-jar-path*
+;;          (file-name-concat *lolh/process-dir* "%s")
+;;          "cat" "%s-%s" "output"
+;;          (file-name-concat *lolh/process-dir* "%s")))
+
+;;   "A string that will be used by `format' to create a command.")
+
+(defconst *lolh/pdftk-command*
+  (concat "java -jar " *lolh/pdftk-jar-path* " \'%s\' cat %s-%s output \'%s\'"))
+;; "java -jar %s \'%s\' cat %s-%s output \'%s\'"
+
 (defconst *lolh/first-last-name-re*
   "^\\([^[:space:]]+\\).*[[:space:]]\\([^[:space:]]+\\)$")
 
@@ -149,6 +162,7 @@
 (keymap-global-set "C-x p j" #'lolh/process-dir)
 (keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
+(keymap-global-set "C-x p U" #'lolh/unlock-docs)
 
 
 (defun lolh/court-files-attach ()
@@ -159,9 +173,9 @@
 (defun lolh/pdf-attach (subdir hl)
   "Attach all of the Google documents from a SUBDIR to the current note HL.
 
-An example would be all documents in the Court File for a case.
-If new files are added, this command can be run to update, and existing
-files will be ignored."
+  An example would be all documents in the Court File for a case.
+  If new files are added, this command can be run to update, and existing
+  files will be ignored."
 
   (interactive)
   (lolh/note-tree)
@@ -231,21 +245,15 @@ files will be ignored."
 
                   (let* ((type (cdr (assq :type props))) ; e.g. Lease
                          (date (cdr (assq :date props)))
-                         (beg-end (format "%s-%s"
-                                          (cdr (assq :beg props))
-                                          (cdr (assq :end props))))
-                         (gd-file-name (lolh/create-file-name nil cause date name-pri name-sec (format "%s %s" key type)))
+                         (beg (cdr (assq :beg props)))
+                         (end (cdr (assq :end props)))
+                         (gd-file-name
+                          (lolh/create-file-name nil cause date name-pri name-sec (format "%s %s" key type)))
                          (output-name (expand-file-name
                                        (file-name-concat
                                         *lolh/process-dir* gd-file-name))))
-                    ;; pdftk / java -jar pdftk-all.jar
-                    (call-process-shell-command
-                     (combine-and-quote-strings
-                      (list
-                       "java" "-jar" *lolh/pdftk-jar-path*
-                       (file-name-concat *lolh/process-dir* "complaint.pdf")
-                       "cat" beg-end
-                       "output" output-name))))))
+
+                    (lolh/pdftk-cat complaint beg end output-name))))
               exs)
 
         (lolh/set-note-property-in-headline "EXHIBITS" "DIR"
@@ -375,6 +383,37 @@ files will be ignored."
             new-pleadings))))
 
 
+(defun lolh/unlock-docs ()
+  "Unlock DOC, e.g. an OLD or Appointment.
+
+DOC must be in *lolh/process-dir*, and so this command will first call
+`lolh/move-new-files-into-process-dir'.  It will thereafter work on every
+file in *lolh/process-dir*.
+UNLOCKED will be the same file name but with (unlocked) added to the end.
+
+The original (locked) files are deleted from *lolh/process-dir*.
+The unlocked files are moved into *lolh/downloads-dir*."
+
+  (interactive)
+
+  (lolh/copy-new-files-into-process-dir)
+
+  (let ((all-locked (directory-files *lolh/process-dir* t "^[^.]")))
+    (dolist (locked all-locked)
+      (let ((unlocked (format "%s (unlocked).pdf"
+                              (file-name-sans-extension locked))))
+        (lolh/pdftk-cat
+         (file-name-nondirectory locked)
+         1 "end"
+         (file-name-nondirectory unlocked))
+        (rename-file unlocked
+                     (file-name-concat *lolh/downloads-dir*
+                                       (file-name-nondirectory unlocked)))
+        (delete-file locked))))
+
+  (message "Files unlocked"))
+
+
 ;;;===================================================================
 
 
@@ -495,7 +534,7 @@ TODO: What to do about possible duplicate headline names??"
 
   (org-element-map *lolh/note-tree* 'headline
     (lambda (hl) (when
-                     (string= headline (org-element-property :raw-value hl))
+                     (string-match-p headline (org-element-property :raw-value hl))
                    hl))
     nil t t))
 
@@ -729,22 +768,24 @@ Then call update."
                                      (file-name-nondirectory file))))))
 
 
-(defun lolh/move-new-files-into-process-dir ()
-  "Move new documents from `~/Downloads' into `~/Downloads/process'.
+(defun lolh/copy-new-files-into-process-dir ()
+  "Copy new documents from `~/Downloads' into `~/Downloads/process'.
 
 'New' is defined to be any document placed into `~/Downloads' within the
 last minute.
 
-After moving the files into `process-dir', make sure they can be read by
+After copying the files into `process-dir', make sure they can be read by
 `lolh/process-dir' by running `'lolh/make-file-name-in-process-dir' next."
 
   (interactive)
 
-  (let ((command (format "find %s -atime -1m -depth 1 -type f -execdir mv {} %s \\;"
+  (let ((command (format "find %s -atime -1m -depth 1 -type f -execdir cp {} %s \\;"
                          *lolh/downloads-dir*
                          *lolh/process-dir*)))
     (call-process-shell-command command))
+
   (lolh/make-file-name-in-process-dir))
+
 
 (defun lolh/make-file-name-in-process-dir ()
   "Make sure every file in `process-dir' can be read by `*lolh/case-file-name-rx*'.
@@ -754,18 +795,18 @@ Also add a PL or DEF signifier (actually anything can be added, or nothing).
 If it still cannot be read by *lolh/case-file-name-rx*, then there is
 something seriously wrong with it."
 
-  (let ((files (directory-files *lolh/process-dir* t "^[^.]"))
+  (let ((files (directory-files *lolh/process-dir* nil "^[^.]"))
         date party)
     (dolist (file files)
       (unless (string-match-p *lolh/case-file-name-rx* file)
-        (setq date (read-string (concat (file-name-nondirectory file)
+        (setq date (read-string (concat file
                                         ": Date? ")))
         (setq party (read-string "PL or DEF? "))
-        (rename-file file
+        (rename-file (file-name-concat *lolh/process-dir* file)
                      (file-name-concat
-                      (file-name-directory file)
+                      *lolh/process-dir*
                       (format "[%s] -- %s %s"
-                              date party (file-name-nondirectory file))))))))
+                              date party file)))))))
 
 
 ;;; Give this one a key binding: [C-u C-u] C-x p j
@@ -788,6 +829,7 @@ new files are moved in process-dir.
 DEST is the name of a Google Drive subdirectory, which must exist.
 All documents in /process-dir will be moved into DEST.  If a file-name
 does not have a document name, ask for one while moving.
+TODO: provide a list of destination directories to choose from.
 
 With a single prefix argument, ask for a headline to attach the newly
 moved files to.  This is probably a good place to attach to LEDGERS, for
@@ -803,7 +845,7 @@ argument sets BODY-P to 16."
 
   (interactive "sGD Destination? \np")
 
-  (lolh/move-new-files-into-process-dir)
+  (lolh/copy-new-files-into-process-dir)
   (lolh/note-tree)
 
   (let ((files (directory-files *lolh/process-dir* nil "^[^.]"))
@@ -832,6 +874,7 @@ argument sets BODY-P to 16."
         (push nf new-files)
         (push of old-files)))
     (lolh/send-to-gd-and-maybe-attach old-files new-files dest attach-hl)))
+
 
 (defun lolh/send-to-gd-and-maybe-attach (old-files new-files dest &optional attach-hl)
   "Send the OLD-FILES to DEST as NEW-FILES and attach if ATTACH-HL gives
@@ -944,6 +987,21 @@ PART must be one of *lolh/file-name-allowed-parts*."
   (unless (memq part *lolh/file-name-allowed-parts*)
     (error "%s is not an allowed part: %s" part *lolh/file-name-allowed-parts*))
   (plist-get parts part))
+
+
+;;;-------------------------------------------------------------------
+;;; PDFTK
+
+(defun lolh/pdftk-cat (doc start end new-doc)
+  "Run pdftk on the DOC starting at page START, ending at page END, into NEW-DOC.
+
+All documents begin and end in *lolh/process-dir*"
+
+  (call-process-shell-command
+   (format *lolh/pdftk-command*
+           (file-name-concat *lolh/process-dir* doc)
+           start end
+           (file-name-concat *lolh/process-dir* new-doc))))
 
 
 ;;;-------------------------------------------------------------------
