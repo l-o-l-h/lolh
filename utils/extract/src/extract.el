@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-12 07:33:28 lolh-mbp-16>
+;; Time-stamp: <2024-05-13 09:41:07 lolh-mbp-16>
 ;; Version: 0.1.9 [2024-05-07 07:30]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -99,8 +99,8 @@
   "^\\([^[:space:]]+\\).*[[:space:]]\\([^[:space:]]+\\)$")
 
 (defconst *lolh/file-name-allowed-parts*
-  '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document)
-  "   0      1       2      3      4       5          6        7          8")
+  '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document :ext)
+  "   0      1       2      3      4       5          6        7          8       9")
 
 (defconst *lolh/case-file-name-rx*
   (rx bos
@@ -117,7 +117,7 @@
       (opt " -- " (group-n 8 (* (any graph space)))) ; document name
       ;; nil if no " -- "
       ;; string-empty-p t if " -- " with no document name
-      (| ".pdf" ".PDF")
+      (group-n 9 (| ".pdf" ".PDF" ".docx" ".doc"))
       eos))
 
 
@@ -926,14 +926,16 @@ If document part does not exist, ask for it, unless NO-DOC is t."
      (lolh/get-extracted parts :date)
      def-1
      def-2
-     document)))
+     document
+     (lolh/get-extracted parts :ext))))
 
 
-(defun lolh/create-file-name (&optional docket cause date name-pri name-sec document)
+(defun lolh/create-file-name (&optional docket cause date name-pri name-sec document ext)
   "Create a file-name using optional DOCKET CAUSE DATE NAME-PRI NAME-SEC DOCUMENT.
 
 DATE should be unbracketed: 2024-05-04
-NAME-PRI and NAME-SEC should be in LASTA,Firsta and LASTB,Firstb form."
+NAME-PRI and NAME-SEC should be in LASTA,Firsta and LASTB,Firstb form.
+EXT is the file's extension (mandatory), and will be either `pdf' or `docx'."
 
   (concat (when docket   (format "%s "    docket))
           (when cause    (format "%s "    cause))
@@ -941,20 +943,21 @@ NAME-PRI and NAME-SEC should be in LASTA,Firsta and LASTB,Firstb form."
           (when name-pri (format "%s%s"   (when date " ") name-pri))
           (when name-sec (format "-%s"    name-sec))
           (when document (format " -- %s" document))
-          ".pdf"))
+          (format "%s" ext)))
 
 (defun lolh/extract-file-name-parts (file-name)
   "Given a FILE-NAME, extract and return its parts as a plist.
 
-:full 02) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Document Name
-:docket 02) or 02*) | empty-string
-:cause 24-2-09999-06 | nil
-:date-b [2024-05-04] | nil
-:date 2024-05-04 | nil
-:name-full LASTA,Firsta-LASTB,Firstb | nil
-:name-pri LASTA,Firsta | nil
-:name-sec LASTB,Firstb | nil
-:document Some Document Name | nil if no -- | empty-string if --
+0 -- :full 02) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Document Name
+1 -- :docket 02) or 02*) | empty-string
+2 -- :cause 24-2-09999-06 | nil
+3 -- :date-b [2024-05-04] | nil
+4 -- :date 2024-05-04 | nil
+5 -- :name-full LASTA,Firsta-LASTB,Firstb | nil
+6 -- :name-pri LASTA,Firsta | nil
+7 -- :name-sec LASTB,Firstb | nil
+8 -- :document Some Document Name | nil if no -- | empty-string if --
+9 -- :ext .pdf | .docx | .doc
 "
   (unless (string-match *lolh/case-file-name-rx* file-name)
     (error "Unable to parse file-name %s" file-name))
@@ -967,7 +970,8 @@ NAME-PRI and NAME-SEC should be in LASTA,Firsta and LASTB,Firstb form."
         :name-full (match-string 5 file-name)
         :name-pri  (match-string 6 file-name)
         :name-sec  (match-string 7 file-name)
-        :document  (match-string 8 file-name)))
+        :document  (match-string 8 file-name)
+        :ext       (match-string 9 file-name)))
 
 (defun lolh/file-name-part (file-name part)
   "Given a FILE-NAME, return a PART.
@@ -987,6 +991,22 @@ PART must be one of *lolh/file-name-allowed-parts*."
   (unless (memq part *lolh/file-name-allowed-parts*)
     (error "%s is not an allowed part: %s" part *lolh/file-name-allowed-parts*))
   (plist-get parts part))
+
+
+(defun lolh/simple-rename-using-note ()
+
+  (interactive)
+
+  ;; move new files into process-dir
+  ;; rename them using note parts
+  ;; move them back into directory-dir
+
+  (lolh/copy-new-files-into-process-dir)
+  (let ((files (directory-files *lolh/process-dir* nil "^[^.]")))
+    (dolist (file files)
+      (let ((new-file (lolh/create-file-name-using-note-parts file)))
+        (rename-file (file-name-concat *lolh/process-dir* file)
+                     (file-name-concat *lolh/downloads-dir* new-file))))))
 
 
 ;;;-------------------------------------------------------------------
