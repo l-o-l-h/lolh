@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-13 09:41:07 lolh-mbp-16>
-;; Version: 0.1.9 [2024-05-07 07:30]
+;; Time-stamp: <2024-05-17 07:52:01 lolh-mbp-16>
+;; Version: 0.1.10 [2024-05-07 07:30]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -139,6 +139,8 @@
    "MOTIONS"	; includes CITATIONS
    ))
 
+(defconst *lolh/pdf* ".pdf")
+
 ;;;-------------------------------------------------------------------
 
 (defvar *lolh/note-tree*)
@@ -248,12 +250,10 @@
                          (beg (cdr (assq :beg props)))
                          (end (cdr (assq :end props)))
                          (gd-file-name
-                          (lolh/create-file-name nil cause date name-pri name-sec (format "%s %s" key type)))
-                         (output-name (expand-file-name
-                                       (file-name-concat
-                                        *lolh/process-dir* gd-file-name))))
-
-                    (lolh/pdftk-cat complaint beg end output-name))))
+                          (lolh/create-file-name
+                           nil cause date name-pri name-sec (format "%s %s" key type) *lolh/pdf*)))
+                    (debug)
+                    (lolh/pdftk-cat (file-name-nondirectory complaint) beg end gd-file-name))))
               exs)
 
         (lolh/set-note-property-in-headline "EXHIBITS" "DIR"
@@ -779,7 +779,9 @@ After copying the files into `process-dir', make sure they can be read by
 
   (interactive)
 
-  (let ((command (format "find %s -atime -1m -depth 1 -type f -execdir cp {} %s \\;"
+  (lolh/clean-dirs)
+
+  (let ((command (format "find %s -atime -1m -depth 1 -type f \! -name \~\$* -execdir cp {} %s \\;"
                          *lolh/downloads-dir*
                          *lolh/process-dir*)))
     (call-process-shell-command command))
@@ -795,7 +797,7 @@ Also add a PL or DEF signifier (actually anything can be added, or nothing).
 If it still cannot be read by *lolh/case-file-name-rx*, then there is
 something seriously wrong with it."
 
-  (let ((files (directory-files *lolh/process-dir* nil "^[^.]"))
+  (let ((files (directory-files *lolh/process-dir* nil "^[^~.]"))
         date party)
     (dolist (file files)
       (unless (string-match-p *lolh/case-file-name-rx* file)
@@ -1025,7 +1027,19 @@ All documents begin and end in *lolh/process-dir*"
 
 
 ;;;-------------------------------------------------------------------
+;;; Clean Directories
 
+(defun lolh/clean-dirs ()
+
+  (interactive)
+
+  (let ((files-to-delete (directory-files *lolh/downloads-dir* t "^[~]")))
+    (dolist (file-to-delete files-to-delete)
+      (delete-file file-to-delete)
+      (message "%s deleted" file-to-delete))))
+
+
+;;;-------------------------------------------------------------------
 
 (provide 'extract)
 
