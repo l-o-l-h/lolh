@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-17 07:52:01 lolh-mbp-16>
-;; Version: 0.1.10 [2024-05-07 07:30]
+;; Time-stamp: <2024-05-19 09:50:37 lolh-mbp-16>
+;; Version: 0.1.11 [2024-05-19 09:50]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -141,11 +141,15 @@
 
 (defconst *lolh/pdf* ".pdf")
 
+(defconst *lolh/title-rx* (rx (seq bol "#+title:" (0+ space) (group (1+ (any print)))))
+  "A title.")
+
+
 ;;;-------------------------------------------------------------------
 
 (defvar *lolh/note-tree*)
 
-(defun lolh/note-tree () (setq *lolh/note-tree* (org-element-parse-buffer)))
+    (defun lolh/note-tree () (setq *lolh/note-tree* (org-element-parse-buffer)))
 
 ;;; The following command requires that there be a main heading titled
 ;;; * RTC CASE
@@ -165,7 +169,7 @@
 (keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
 (keymap-global-set "C-x p U" #'lolh/unlock-docs)
-
+(keymap-global-set "M-T"     #'lolh/pbcopy-title)
 
 (defun lolh/court-files-attach ()
   (interactive)
@@ -463,6 +467,7 @@ E.g., a Complaint"
     (or gd-source-url (error "Could not find the source: %s" source))))
 
 
+;;; TODO: Create single function for these two similar predicates
 (defun lolh/main-note-p (note)
   "Predicate to test whether a NOTE is a Main note.
 
@@ -472,6 +477,19 @@ A Main note (represented by its filename) possesses the three keywords:
 - 'rtc'."
 
   (cl-subsetp '("case" "main" "rtc")
+              (denote-extract-keywords-from-path note)
+              :test #'string=))
+
+
+(defun lolh/client-note-p (note)
+  "Predicate to test whether a NOTE is a Client note.
+
+A Client note possesses the keywords:
+- `client'
+- `main'
+- `rtc'"
+
+  (cl-subsetp '("client" "main" "rtc")
               (denote-extract-keywords-from-path note)
               :test #'string=))
 
@@ -490,7 +508,7 @@ Return an error if a main note cannot be found."
             f)
         (or (cl-dolist (b blb) ; returns 'nil' if no Main note is found
               (when (lolh/main-note-p b)
-                (cl-return b))) ; returns a found Main note
+                (cl-return b)))         ; returns a found Main note
             (error "Failed to find a Main note for %s" bfn))))))
 
 
@@ -525,6 +543,70 @@ Return NIL if there is no PROPERTY."
                          (and in-hl val))
                      val)))
     nil t t))
+
+
+(defun lolh/clients ()
+  "Return a list of clients."
+
+  (interactive)
+  ;; Search the main note
+  (let ((main (lolh/main-note)))
+    (with-temp-buffer
+      (insert-file-contents main)
+      (let (clients)
+        (cl-do* ((def-no 1 (1+ def-no))
+                 (def-val (lolh/note-property (format "DEF-%d" def-no))
+                          (lolh/note-property (format "DEF-%d" def-no))))
+            ((null def-val) (reverse clients))
+          ;;(message "def-no %s  def-val %s" def-no def-val)
+          ;; (sleep-for 1)
+          (unless (string-match-p "--" def-val)
+            (push def-val clients)))))))
+
+
+(defun lolh/client-pick ()
+  "Pick a Client.  Return the Note file."
+
+  (interactive)
+
+  (let* ((clients (lolh/clients))
+         (client (if (length= clients 1) (car clients)
+                   (read-string "Pick a Client (M-n): " nil nil clients)))
+         (client-slugged (downcase (string-replace " " "*" client))))
+    (string-trim-right
+     (shell-command-to-string (concat
+                               "find "
+                               (expand-file-name "clients" (denote-directory))
+                               " -name "
+                               (shell-quote-argument
+                                (concat "*"
+                                        client-slugged
+                                        "*")))))))
+
+
+
+(defun lolh/client-telephone ()
+  "Return the PHONE property for a Client associated with the current note.
+
+This will work no matter which Note is currently being viewed, and no
+matter how many clients are associated with the Note.  If it is unclear
+which client is sought, it will ask."
+
+  (interactive)
+
+  ;; If viewing a client file, use that client
+  ;; Otherwise find the Main note.
+  ;; If there is only one client, use that.
+  ;; If there is more than one, then ask,using (lolh/client-pick).
+  (let ((client-file (cond ((lolh/client-note-p (buffer-file-name)) (buffer-file-name))
+                           (t (lolh/client-pick)))))
+    (with-temp-buffer
+      (insert-file-contents client-file)
+      (let ((phone-no (lolh/note-property "PHONE")))
+        (message "Phone: %s" phone-no)
+        (call-process-shell-command
+         (concat "echo " (shell-quote-argument phone-no) "| " "pbcopy"))))))
+
 
 
 (defun lolh/get-headline-element (headline)
@@ -1024,6 +1106,32 @@ All documents begin and end in *lolh/process-dir*"
            (file-name-concat *lolh/process-dir* doc)
            start end
            (file-name-concat *lolh/process-dir* new-doc))))
+
+
+;;;-------------------------------------------------------------------
+;;; pbcopy
+
+
+(defun lolh/title ()
+  "Return the string value of the note's title."
+
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (if (looking-at *lolh/title-rx*)
+        (message "%s" (match-string-no-properties 1))
+      (error "Could not find a title."))))
+
+
+;; M-T
+(defun lolh/pbcopy-title ()
+  "Place the string value of the title into the pbcopy command.
+It can be used with either `pbpaste' or 'Cntr-V."
+
+  (interactive)
+  (call-process-shell-command (concat "echo " (lolh/title) "| " "pbcopy")))
+
+;;(call-process-shell-command (concat "echo " phone-no "| " "pbcopy")
 
 
 ;;;-------------------------------------------------------------------
