@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-19 20:15:17 lolh-mbp-16>
+;; Time-stamp: <2024-05-20 09:33:43 lolh-mbp-16>
 ;; Version: 0.1.11 [2024-05-19 09:50]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -575,6 +575,18 @@ This returns all directories rooted in the gd-cause-dir for the current note."
       (push (cons dir (file-name-nondirectory dir)) result))))
 
 ;;;-------------------------------------------------------------------
+;;; Note Commands
+
+
+(defun lolh/cause ()
+  "Return the CAUSE for the current note.
+
+Return an error if it is not in proper format."
+
+  (let ((cause (lolh/note-property "CAUSE")))
+    (unless (string-match-p *lolh/cause-re* cause)
+      (error "This cause number is incorrect: %s" cause))
+    cause))
 
 
 ;;; TODO: Create single function for these two similar predicates
@@ -702,6 +714,8 @@ Return NIL if there is no PROPERTY."
 ;;; Headlines
 
 
+;;; BUG: When OSC has an inactive timestamp in its name, this function
+;;; returns nil; when the timestamp is made active, it returns the headline.
 (defun lolh/get-headline-element (headline)
   "Given the name of a HEADLINE, return the element from the note-tree.
 
@@ -712,6 +726,57 @@ TODO: What to do about possible duplicate headline names??"
                      (string-match-p headline (org-element-property :raw-value hl))
                    hl))
     nil t t))
+
+
+(defun lolh/subhls (&optional hl)
+  "Given a headline HL, return a list of all subheadlines underneath it.
+
+If point is on a headline, and hl is nil, use that headline.
+If point is not at a headline, set the level to 1."
+
+  (interactive "sHeadline or nil ")
+  (when (string-empty-p hl)
+    (let ((cur (org-element-at-point-no-context)))
+      (when (eq (org-element-type cur) 'headline)
+        (setq hl (org-element-property :raw-value cur)))))
+  (let ((parent hl)
+        (level (if (string-empty-p hl) 1
+                 (1+ (org-element-property :level (lolh/get-headline-element hl)))))
+        result)
+    (org-element-map *lolh/note-tree* 'headline
+      (lambda (hl) (when (and
+                          (or
+                           (string-empty-p parent)
+                           (string=
+                            (org-element-property
+                             :raw-value (org-element-property :parent hl))
+                            parent))
+                          (= (org-element-property :level hl) level))
+                     (push (org-element-property :raw-value hl) result))))
+    (print (reverse result) t)))
+
+
+(defun lolh/document-headlines ()
+  "Return a list of all document headlines."
+
+  (interactive)
+
+  (let* ((documents (lolh/get-headline-element "DOCUMENTS"))
+         (contents (org-element-contents documents))
+         (lst (org-element-map contents 'headline
+                (lambda (hl) (and (= (org-element-property :level hl) 3)
+                                  (org-element-property :raw-value hl))))))
+    (prin1 lst (current-buffer))))
+
+
+(defun lolh/pick-document-hl ()
+  "Pick a document headline from the list of document headlines."
+
+  (interactive)
+
+  (let ((hl (completing-read "Documents Headline? "
+                             (lolh/document-headlines))))
+    (print (format "You chose the headline %s" hl) (current-buffer))))
 
 
 (defun lolh/add-headline-element (parent-hl new-hl)
@@ -763,17 +828,6 @@ If optional SKIP is non-NIL, don't run lolh/note-tree."
   "Rename the file in process as a ledger and add/attach it."
 
   )
-
-
-(defun lolh/cause ()
-  "Return the CAUSE for the current note.
-
-Return an error if it is not in proper format."
-
-  (let ((cause (lolh/note-property "CAUSE")))
-    (unless (string-match-p *lolh/cause-re* cause)
-      (error "This cause number is incorrect: %s" cause))
-    cause))
 
 
 (defun lolh/set-note-property-in-headline (headline new-property new-value &optional tag)
