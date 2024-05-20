@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-19 09:50:37 lolh-mbp-16>
+;; Time-stamp: <2024-05-19 20:15:17 lolh-mbp-16>
 ;; Version: 0.1.11 [2024-05-19 09:50]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -149,7 +149,14 @@
 
 (defvar *lolh/note-tree*)
 
-    (defun lolh/note-tree () (setq *lolh/note-tree* (org-element-parse-buffer)))
+(defvar *lolh/process-dir-hl* nil
+  "Process Dir history list.")
+
+
+;;;-------------------------------------------------------------------
+
+
+(defun lolh/note-tree () (setq *lolh/note-tree* (org-element-parse-buffer)))
 
 ;;; The following command requires that there be a main heading titled
 ;;; * RTC CASE
@@ -168,8 +175,10 @@
 (keymap-global-set "C-x p j" #'lolh/process-dir)
 (keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
-(keymap-global-set "C-x p U" #'lolh/unlock-docs)
+(keymap-global-set "M-P"     #'lolh/pbcopy-client-phone)
 (keymap-global-set "M-T"     #'lolh/pbcopy-title)
+(keymap-global-set "M-U"     #'lolh/unlock-docs)
+
 
 (defun lolh/court-files-attach ()
   (interactive)
@@ -387,6 +396,79 @@
             new-pleadings))))
 
 
+;;; Give this one a key binding: [C-u C-u] C-x p j
+;;; Without a prefix argument, simply add a name and move to Google Drive
+;;; With a single prefix argument, also attach the documents to a headline.
+;;; There might be a reason not to give the documents a name, so make that
+;;; the double prefix argument, but don't also attach.
+
+(defun lolh/process-dir (dest &optional body-p)
+  "Rename all files in *lolh/process-dir* to GD / DEST subdir and maybe attach.
+
+This calls `lolh/move-new-files-into-process-dir' first, which first
+moves all files from `~/Downloads' into `~/Downloads/process' if they
+are less than one minute old, and gives them a `date' and a `PL|DEF'
+tag, and prefix the body with ` -- ' to signify it is a case file that
+can be renamed.  The actions of renaming actually occur in still a third
+function, `lolh/make-file-name-in-process-dir', which is called after the
+new files are moved in process-dir.
+
+DEST is the name of a Google Drive subdirectory, which must exist.
+All documents in /process-dir will be moved into DEST.  If a file-name
+does not have a document name, ask for one while moving.
+
+With a single prefix argument, attach the files to the headline in which
+point is sitting.
+Treat the headline LEDGERS specially.
+
+With two prefix arguments, don't add a document name if one is missing,
+and don't attach the files anywhere; just stick it into DEST as is.
+I'm not sure this is really useful, and I should consider removing it
+in the future.
+
+NOTE: A singled prefix argument sets BODY-P to 4, while a double prefix
+argument sets BODY-P to 16."
+
+  (interactive
+   ;; (setq-local completion-ignore-case t)
+   (let ((completion-ignore-case t))
+     (list (read-directory-name
+            "Destination Dir? "
+            (lolh/gd-cause-dir) nil t)
+           (prefix-numeric-value current-prefix-arg))))
+
+  (lolh/copy-new-files-into-process-dir)
+  (lolh/note-tree)
+
+  (let ((files (directory-files *lolh/process-dir* nil "^[^.]"))
+
+        ;; do not rename documents if this command was called with a
+        ;; double prefix argument
+        (no-doc (if (= body-p 16) t nil))
+
+        ;; attach files to a hl if this command was called with a single
+        ;; prefix argument.  Do not attach files otherwise.
+        (attach-hl (if (= body-p 4)
+                       (read-string "Attachment headline? ")
+                     nil))
+
+        ;; Create the Google Drive destination directory name
+        ;; TODO: This needs to produce a list of options that can be chosen
+        ;;       to avoid spelling mistakes
+        (dest-dir (lolh/gd-cause-dir dest))
+        old-files new-files)
+
+    (dolist (file files)
+      (let* ((nf (file-name-concat      ; new file path
+                  dest-dir
+                  (lolh/create-file-name-using-note-parts file no-doc)))
+             (of (file-name-concat *lolh/process-dir* file))) ; old file path
+        (push nf new-files)
+        (push of old-files)))
+    (lolh/send-to-gd-and-maybe-attach old-files new-files dest attach-hl)))
+
+
+
 (defun lolh/unlock-docs ()
   "Unlock DOC, e.g. an OLD or Appointment.
 
@@ -419,6 +501,7 @@ The unlocked files are moved into *lolh/downloads-dir*."
 
 
 ;;;===================================================================
+;;; GD
 
 
 (defun lolh/gd-year (year)
@@ -465,6 +548,33 @@ E.g., a Complaint"
   (let* ((gd-court-url (lolh/gd-cause-dir dir))
          (gd-source-url (car (directory-files gd-court-url t source))))
     (or gd-source-url (error "Could not find the source: %s" source))))
+
+
+(defun lolh/gd-dirs ()
+  "Return a list of all directories and subdirectories for gd-cause-dir."
+
+  (interactive)
+
+  ;; cl-delete item seq &key :test :test-not :key :count :start :end :from-end
+  (cl-delete
+   t
+   (directory-files-recursively (lolh/gd-cause-dir) "^[^.]" t)
+   :key (lambda (d) (file-attribute-type (file-attributes d)))
+   :test-not #'eq))
+
+
+(defun lolh/list-gd-dirs ()
+  "Returns an alist of base directory names and its full pathname.
+
+This returns all directories rooted in the gd-cause-dir for the current note."
+
+  (interactive)
+
+  (let (result)
+    (dolist (dir (lolh/gd-dirs) result)
+      (push (cons dir (file-name-nondirectory dir)) result))))
+
+;;;-------------------------------------------------------------------
 
 
 ;;; TODO: Create single function for these two similar predicates
@@ -545,6 +655,10 @@ Return NIL if there is no PROPERTY."
     nil t t))
 
 
+;;;-------------------------------------------------------------------
+;;; Clients
+
+
 (defun lolh/clients ()
   "Return a list of clients."
 
@@ -565,7 +679,7 @@ Return NIL if there is no PROPERTY."
 
 
 (defun lolh/client-pick ()
-  "Pick a Client.  Return the Note file."
+  "Pick a Client and return the associated Note file."
 
   (interactive)
 
@@ -584,29 +698,8 @@ Return NIL if there is no PROPERTY."
                                         "*")))))))
 
 
-
-(defun lolh/client-telephone ()
-  "Return the PHONE property for a Client associated with the current note.
-
-This will work no matter which Note is currently being viewed, and no
-matter how many clients are associated with the Note.  If it is unclear
-which client is sought, it will ask."
-
-  (interactive)
-
-  ;; If viewing a client file, use that client
-  ;; Otherwise find the Main note.
-  ;; If there is only one client, use that.
-  ;; If there is more than one, then ask,using (lolh/client-pick).
-  (let ((client-file (cond ((lolh/client-note-p (buffer-file-name)) (buffer-file-name))
-                           (t (lolh/client-pick)))))
-    (with-temp-buffer
-      (insert-file-contents client-file)
-      (let ((phone-no (lolh/note-property "PHONE")))
-        (message "Phone: %s" phone-no)
-        (call-process-shell-command
-         (concat "echo " (shell-quote-argument phone-no) "| " "pbcopy"))))))
-
+;;;-------------------------------------------------------------------
+;;; Headlines
 
 
 (defun lolh/get-headline-element (headline)
@@ -765,8 +858,10 @@ If FILTER is set to a regexp, attach the matched files."
   (dired-unmark-all-marks)
   (delete-window))
 
+
 ;;;-------------------------------------------------------------------
 ;;; Names
+
 
 ;;; TODO: Handle the error when there is no DEF-2 property
 (defun lolh/def-names ()
@@ -892,72 +987,6 @@ something seriously wrong with it."
                       (format "[%s] -- %s %s"
                               date party file)))))))
 
-
-;;; Give this one a key binding: [C-u C-u] C-x p j
-;;; Without a prefix argument, simply add a name and move to Google Drive
-;;; With a single prefix argument, also attach the documents to a headline.
-;;; There might be a reason not to give the documents a name, so make that
-;;; the double prefix argument, but don't also attach.
-
-(defun lolh/process-dir (dest &optional body-p)
-  "Rename all files in *lolh/process-dir* to GD / DEST subdir and maybe attach.
-
-This calls `lolh/move-new-files-into-process-dir' first, which first
-moves all files from `~/Downloads' into `~/Downloads/process' if they
-are less than one minute old, and gives them a `date' and a `PL|DEF'
-tag, and prefix the body with ` -- ' to signify it is a case file that
-can be renamed. The actions of renaming actually occur in still a third
-function, `lolh/make-file-name-in-process-dir', which is called after the
-new files are moved in process-dir.
-
-DEST is the name of a Google Drive subdirectory, which must exist.
-All documents in /process-dir will be moved into DEST.  If a file-name
-does not have a document name, ask for one while moving.
-TODO: provide a list of destination directories to choose from.
-
-With a single prefix argument, ask for a headline to attach the newly
-moved files to.  This is probably a good place to attach to LEDGERS, for
-example.  It could also be COURT FILES, but lolh/update does that already.
-
-With two prefix arguments, don't add a document name if one is missing,
-and don't attach the files anywhere; just stick it into DEST as is.
-I'm not sure this is really useful, and I should consider removing it
-in the future.
-
-NOTE: A singled prefix argument sets BODY-P to 4, while a double prefix
-argument sets BODY-P to 16."
-
-  (interactive "sGD Destination? \np")
-
-  (lolh/copy-new-files-into-process-dir)
-  (lolh/note-tree)
-
-  (let ((files (directory-files *lolh/process-dir* nil "^[^.]"))
-
-        ;; do not rename documents if this command was called with a
-        ;; double prefix argument
-        (no-doc (if (= body-p 16) t nil))
-
-        ;; attach files to a hl if this command was called with a single
-        ;; prefix argument.  Do not attach files otherwise.
-        (attach-hl (if (= body-p 4)
-                       (read-string "Attachment headline? ")
-                     nil))
-
-        ;; Create the Google Drive destination directory name
-        ;; TODO: This needs to produce a list of options that can be chosen
-        ;;       to avoid spelling mistakes
-        (dest-dir (lolh/gd-cause-dir dest))
-        old-files new-files)
-
-    (dolist (file files)
-      (let* ((nf (file-name-concat      ; new file path
-                  dest-dir
-                  (lolh/create-file-name-using-note-parts file no-doc)))
-             (of (file-name-concat *lolh/process-dir* file))) ; old file path
-        (push nf new-files)
-        (push of old-files)))
-    (lolh/send-to-gd-and-maybe-attach old-files new-files dest attach-hl)))
 
 
 (defun lolh/send-to-gd-and-maybe-attach (old-files new-files dest &optional attach-hl)
@@ -1131,7 +1160,29 @@ It can be used with either `pbpaste' or 'Cntr-V."
   (interactive)
   (call-process-shell-command (concat "echo " (lolh/title) "| " "pbcopy")))
 
-;;(call-process-shell-command (concat "echo " phone-no "| " "pbcopy")
+
+;; M-P
+(defun lolh/pbcopy-client-phone ()
+  "Return the PHONE property for a Client associated with the current note.
+
+This will work no matter which Note is currently being viewed, and no
+matter how many clients are associated with the Note.  If it is unclear
+which client is sought, it will ask."
+
+  (interactive)
+
+  ;; If viewing a client file, use that client
+  ;; Otherwise find the Main note.
+  ;; If there is only one client, use that.
+  ;; If there is more than one, then ask,using (lolh/client-pick).
+  (let ((client-file (cond ((lolh/client-note-p (buffer-file-name)) (buffer-file-name))
+                           (t (lolh/client-pick)))))
+    (with-temp-buffer
+      (insert-file-contents client-file)
+      (let ((phone-no (lolh/note-property "PHONE")))
+        (message "Phone: %s" phone-no)
+        (call-process-shell-command
+         (concat "echo " (shell-quote-argument phone-no) "| " "pbcopy"))))))
 
 
 ;;;-------------------------------------------------------------------
