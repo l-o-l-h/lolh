@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-21 08:23:25 lolh-mbp-16>
+;; Time-stamp: <2024-05-21 10:15:58 lolh-mbp-16>
 ;; Version: 0.1.11 [2024-05-19 09:50]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -265,7 +265,6 @@
                          (gd-file-name
                           (lolh/create-file-name
                            nil cause date name-pri name-sec (format "%s %s" key type) *lolh/pdf*)))
-                    (debug)
                     (lolh/pdftk-cat (file-name-nondirectory complaint) beg end gd-file-name))))
               exs)
 
@@ -362,18 +361,17 @@
           keep-pleadings)
 
     ;; Add new files, with and without *
-    (let ((new-pleadings
-           (seq-remove (lambda (f) (string= ".DS_Store" f))
-                       (directory-files *lolh/process-dir* nil directory-files-no-dot-files-regexp))))
+    (let ((new-pleadings (directory-files *lolh/process-dir* nil "^[^.]")))
       (mapc (lambda (f)
               ;; find the docket number and date of new files
 
               (let* ((fn-parts (lolh/extract-file-name-parts f))
-                     (docket (lolh/file-name-part f :docket))
-                     (date   (lolh/file-name-part f :date))
+                     (docket (lolh/get-extracted fn-parts :docket))
+                     (date   (lolh/get-extracted fn-parts :date))
                      (f-dir  (file-name-concat *lolh/process-dir* f)) ; full path to file to be renamed
-                     (document (or (lolh/file-name-part f :document)
+                     (document (or (lolh/get-extracted fn-parts :document)
                                    (read-string (concat f "? -- "))))
+                     (ext (lolh/get-extracted fn-parts :ext))
                      (new-full-name
                       (lolh/create-file-name
                        docket
@@ -381,7 +379,8 @@
                        date
                        (lolh/def-last-first-name "DEF-1")
                        (lolh/def-last-first-name "DEF-2")
-                       document))
+                       document
+                       ext))
                      ;; (new-str (concat (lolh/create-gd-file-name docket date) "? "))
                      ;; (new-name (read-string new-str)) ; ask for the file name
                      ;; (new-full-name (lolh/create-gd-file-name docket date new-name)) ; add the other parts
