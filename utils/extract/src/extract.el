@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-20 09:33:43 lolh-mbp-16>
+;; Time-stamp: <2024-05-21 08:23:25 lolh-mbp-16>
 ;; Version: 0.1.11 [2024-05-19 09:50]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -731,11 +731,11 @@ TODO: What to do about possible duplicate headline names??"
 (defun lolh/subhls (&optional hl)
   "Given a headline HL, return a list of all subheadlines underneath it.
 
-If point is on a headline, and hl is nil, use that headline.
-If point is not at a headline, set the level to 1."
+If point is on or in a headline, and hl is nil, use that headline.
+If point is before the initial headline, set the level to 1."
 
   (interactive "sHeadline or nil ")
-  (when (string-empty-p hl)
+  (when (or (null hl) (string-empty-p hl))
     (let ((cur (org-element-at-point-no-context)))
       (when (eq (org-element-type cur) 'headline)
         (setq hl (org-element-property :raw-value cur)))))
@@ -753,30 +753,22 @@ If point is not at a headline, set the level to 1."
                             parent))
                           (= (org-element-property :level hl) level))
                      (push (org-element-property :raw-value hl) result))))
-    (print (reverse result) t)))
+    (push parent result)
+    result))
 
 
-(defun lolh/document-headlines ()
-  "Return a list of all document headlines."
-
-  (interactive)
-
-  (let* ((documents (lolh/get-headline-element "DOCUMENTS"))
-         (contents (org-element-contents documents))
-         (lst (org-element-map contents 'headline
-                (lambda (hl) (and (= (org-element-property :level hl) 3)
-                                  (org-element-property :raw-value hl))))))
-    (prin1 lst (current-buffer))))
-
-
-(defun lolh/pick-document-hl ()
-  "Pick a document headline from the list of document headlines."
+(defun lolh/pick-headline ()
+  "Return a headline using the minibuffer."
 
   (interactive)
 
-  (let ((hl (completing-read "Documents Headline? "
-                             (lolh/document-headlines))))
-    (print (format "You chose the headline %s" hl) (current-buffer))))
+  (lolh/note-tree)
+  (let* ((cur-subhls (lolh/subhls))
+         (hl (if (null (cdr cur-subhls))
+                 (car cur-subhls)
+               (completing-read "Pick a headline: " (reverse cur-subhls)))))
+    (message "You picked %s" hl)
+    hl))
 
 
 (defun lolh/add-headline-element (parent-hl new-hl)
