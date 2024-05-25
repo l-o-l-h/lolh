@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-21 10:15:58 lolh-mbp-16>
-;; Version: 0.1.11 [2024-05-19 09:50]
+;; Time-stamp: <2024-05-25 14:52:40 lolh-mbp-16>
+;; Version: 0.1.12 [2024-05-25 14:50]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -117,7 +117,7 @@
       (opt " -- " (group-n 8 (* (any graph space)))) ; document name
       ;; nil if no " -- "
       ;; string-empty-p t if " -- " with no document name
-      (group-n 9 (| ".pdf" ".PDF" ".docx" ".doc"))
+      (group-n 9 (| ".pdf" ".PDF" ".docx" ".doc" ".jpg" ".JPG"))
       eos))
 
 
@@ -447,13 +447,12 @@ argument sets BODY-P to 16."
 
         ;; attach files to a hl if this command was called with a single
         ;; prefix argument.  Do not attach files otherwise.
+        TODO: Provide a list of possible headlines from the current note
         (attach-hl (if (= body-p 4)
                        (read-string "Attachment headline? ")
                      nil))
 
         ;; Create the Google Drive destination directory name
-        ;; TODO: This needs to produce a list of options that can be chosen
-        ;;       to avoid spelling mistakes
         (dest-dir (lolh/gd-cause-dir dest))
         old-files new-files)
 
@@ -578,14 +577,18 @@ This returns all directories rooted in the gd-cause-dir for the current note."
 
 
 (defun lolh/cause ()
-  "Return the CAUSE for the current note.
+  "Return the CAUSE for the current main note.
 
+This function locates the main note if it is not current.
 Return an error if it is not in proper format."
 
-  (let ((cause (lolh/note-property "CAUSE")))
-    (unless (string-match-p *lolh/cause-re* cause)
-      (error "This cause number is incorrect: %s" cause))
-    cause))
+  (let ((main (lolh/main-note)))
+    (save-excursion
+      (with-current-buffer (get-file-buffer main)
+        (let ((cause (lolh/note-property "CAUSE")))
+          (unless (string-match-p *lolh/cause-re* cause)
+            (error "This cause number is incorrect: %s" cause))
+          cause)))))
 
 
 ;;; TODO: Create single function for these two similar predicates
@@ -921,20 +924,21 @@ Use lolh/def-first-name DEF-1|DEF-2 to get the first name
 Use lolh/def-last-name DEF-1|DEF-2 to get the last name
 Use lolh/last-first-name DEF-1|DEF-2 to get the names reversed."
 
-
-  (let (defs fl)
-    (dolist (def '("DEF-1" "DEF-2") defs)
-      (let ((name (lolh/note-property def)))
-        (if (string= "--" name)
-            (setf fl nil)
-          (if (string-match *lolh/first-last-name-re* name)
-              (setf fl (list :first
-                             (match-string 1 name)
-                             :last
-                             (match-string 2 name)))
-            (error "Name %s from %s appears to be malformed" name def)))
-        (setf defs (append defs (list def fl)))))
-    defs))
+  (save-excursion
+    (with-current-buffer (get-file-buffer (lolh/main-note))
+      (let (defs fl)
+        (dolist (def '("DEF-1" "DEF-2") defs)
+          (let ((name (lolh/note-property def)))
+            (if (string= "--" name)
+                (setf fl nil)
+              (if (string-match *lolh/first-last-name-re* name)
+                  (setf fl (list :first
+                                 (match-string 1 name)
+                                 :last
+                                 (match-string 2 name)))
+                (error "Name %s from %s appears to be malformed" name def)))
+            (setf defs (append defs (list def fl)))))
+        defs))))
 
 
 (defun lolh/def-name (def)
@@ -1068,12 +1072,15 @@ symlinked."
 
 If document part does not exist, ask for it, unless NO-DOC is t."
 
-  (let ((parts (lolh/extract-file-name-parts file-name))
-        (cause (lolh/cause))
-        (def-1 (lolh/def-last-first-name "DEF-1"))
-        (def-2 (lolh/def-last-first-name "DEF-2"))
-        document)
-    (setq document (lolh/get-extracted parts :document))
+  (let* ((parts (lolh/extract-file-name-parts file-name))
+         (cause (or (lolh/get-extracted parts :cause)
+                    (lolh/cause)))
+         (def-1 (or (lolh/get-extracted parts :name-pri)
+                    (lolh/def-last-first-name "DEF-1")))
+         (def-2 (or (lolh/get-extracted parts :name-sec)
+                    (lolh/def-last-first-name "DEF-2")))
+         (document (or (lolh/get-extracted parts :document)
+                       nil)))
     ;; If document is nil ask for a document name unless no-doc is t.
     (when (and (null document)
                (not no-doc))
@@ -1115,7 +1122,7 @@ EXT is the file's extension (mandatory), and will be either `pdf' or `docx'."
 6 -- :name-pri LASTA,Firsta | nil
 7 -- :name-sec LASTB,Firstb | nil
 8 -- :document Some Document Name | nil if no -- | empty-string if --
-9 -- :ext .pdf | .docx | .doc
+9 -- :ext .pdf | .docx | .doc | .jpg
 "
   (unless (string-match *lolh/case-file-name-rx* file-name)
     (error "Unable to parse file-name %s" file-name))
