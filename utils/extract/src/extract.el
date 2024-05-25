@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-25 14:52:40 lolh-mbp-16>
+;; Time-stamp: <2024-05-25 16:35:43 lolh-mbp-16>
 ;; Version: 0.1.12 [2024-05-25 14:50]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -147,6 +147,10 @@
 
 ;;;-------------------------------------------------------------------
 
+;; TODO: create a buffer-local variable that resets to nil when a buffer
+;; stops being current; function lolh/note-tree can check this variable
+;; and run when it is nil, then set it.
+;; OR a hook is run when a buffer becomes current that runs this.
 (defvar *lolh/note-tree*)
 
 (defvar *lolh/process-dir-hl* nil
@@ -175,6 +179,8 @@
 (keymap-global-set "C-x p j" #'lolh/process-dir)
 (keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
+(keymap-global-set "M-C"     #'lolh/pbcopy-cause)
+(keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
 (keymap-global-set "M-P"     #'lolh/pbcopy-client-phone)
 (keymap-global-set "M-T"     #'lolh/pbcopy-title)
 (keymap-global-set "M-U"     #'lolh/unlock-docs)
@@ -1236,6 +1242,22 @@ which client is sought, it will ask."
         (call-process-shell-command
          (concat "echo " (shell-quote-argument phone-no) "| " "pbcopy"))))))
 
+
+(defun lolh/pbcopy-client-property (property)
+  "pbcopy the client PROPERTY requested.
+
+This will work no matter which note is being viewed, and will ask for a
+client if there is more than one."
+
+  (save-excursion
+    (with-current-buffer
+        (if (lolh/client-note-p buffer-file-name)
+            (current-buffer)
+          (get-file-buffer (lolh/client-pick)))
+      (let ((prop-val (lolh/note-property property)))
+        (call-process-shell-command
+         (concat "echo -n " (shell-quote-argument prop-val) "| " "pbcopy"))
+        (message "%s: %s" property prop-val)))))
 
 ;;;-------------------------------------------------------------------
 ;;; Clean Directories
