@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-25 16:35:43 lolh-mbp-16>
-;; Version: 0.1.12 [2024-05-25 14:50]
+;; Time-stamp: <2024-05-25 18:20:57 lolh-mbp-16>
+;; Version: 0.1.13 [2024-05-25 18:20]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -156,6 +156,9 @@
 (defvar *lolh/process-dir-hl* nil
   "Process Dir history list.")
 
+(defvar *lolh/client-pick-hl* nil
+  "Client Pick history list.")
+
 
 ;;;-------------------------------------------------------------------
 
@@ -181,6 +184,7 @@
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
 (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
 (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
+(keymap-global-set "M-N"     #'lolh/pbcopy-client-name)
 (keymap-global-set "M-P"     #'lolh/pbcopy-client-phone)
 (keymap-global-set "M-T"     #'lolh/pbcopy-title)
 (keymap-global-set "M-U"     #'lolh/unlock-docs)
@@ -679,12 +683,15 @@ Return NIL if there is no PROPERTY."
 ;;; Clients
 
 
+;; TODO: This actually returns a list of defendants, not clients.
 (defun lolh/clients ()
   "Return a list of clients."
 
   (interactive)
   ;; Search the main note
-  (let ((main (lolh/main-note)))
+  (let ((main (or
+               (lolh/main-note)
+               (error "Failed to find a main note."))))
     (with-temp-buffer
       (insert-file-contents main)
       (let (clients)
@@ -692,8 +699,6 @@ Return NIL if there is no PROPERTY."
                  (def-val (lolh/note-property (format "DEF-%d" def-no))
                           (lolh/note-property (format "DEF-%d" def-no))))
             ((null def-val) (reverse clients))
-          ;;(message "def-no %s  def-val %s" def-no def-val)
-          ;; (sleep-for 1)
           (unless (string-match-p "--" def-val)
             (push def-val clients)))))))
 
@@ -705,7 +710,7 @@ Return NIL if there is no PROPERTY."
 
   (let* ((clients (lolh/clients))
          (client (if (length= clients 1) (car clients)
-                   (read-string "Pick a Client (M-n): " nil nil clients)))
+                   (completing-read "Pick a Client (M-n): " clients nil t nil nil)))
          (client-slugged (downcase (string-replace " " "*" client))))
     (string-trim-right
      (shell-command-to-string (concat
@@ -1221,27 +1226,20 @@ It can be used with either `pbpaste' or 'Cntr-V."
 
 ;; M-P
 (defun lolh/pbcopy-client-phone ()
-  "Return the PHONE property for a Client associated with the current note.
-
-This will work no matter which Note is currently being viewed, and no
-matter how many clients are associated with the Note.  If it is unclear
-which client is sought, it will ask."
-
   (interactive)
+  (lolh/pbcopy-client-property "PHONE"))
 
-  ;; If viewing a client file, use that client
-  ;; Otherwise find the Main note.
-  ;; If there is only one client, use that.
-  ;; If there is more than one, then ask,using (lolh/client-pick).
-  (let ((client-file (cond ((lolh/client-note-p (buffer-file-name)) (buffer-file-name))
-                           (t (lolh/client-pick)))))
-    (with-temp-buffer
-      (insert-file-contents client-file)
-      (let ((phone-no (lolh/note-property "PHONE")))
-        (message "Phone: %s" phone-no)
-        (call-process-shell-command
-         (concat "echo " (shell-quote-argument phone-no) "| " "pbcopy"))))))
 
+;; M-E
+(defun lolh/pbcopy-client-email ()
+  (interactive)
+  (lolh/pbcopy-client-property "EMAIL"))
+
+
+;; M-N
+(defun lolh/pbcopy-client-name ()
+  (interactive)
+  (lolh/pbcopy-client-property "NAME"))
 
 (defun lolh/pbcopy-client-property (property)
   "pbcopy the client PROPERTY requested.
@@ -1251,13 +1249,15 @@ client if there is more than one."
 
   (save-excursion
     (with-current-buffer
-        (if (lolh/client-note-p buffer-file-name)
-            (current-buffer)
-          (get-file-buffer (lolh/client-pick)))
+        (find-file-noselect
+         (if (lolh/client-note-p buffer-file-name)
+             buffer-file-name
+           (lolh/client-pick)))
       (let ((prop-val (lolh/note-property property)))
         (call-process-shell-command
          (concat "echo -n " (shell-quote-argument prop-val) "| " "pbcopy"))
         (message "%s: %s" property prop-val)))))
+
 
 ;;;-------------------------------------------------------------------
 ;;; Clean Directories
