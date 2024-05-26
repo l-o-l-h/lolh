@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-25 18:20:57 lolh-mbp-16>
-;; Version: 0.1.13 [2024-05-25 18:20]
+;; Time-stamp: <2024-05-25 19:07:18 lolh-mbp-16>
+;; Version: 0.1.14 [2024-05-25 17:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -584,21 +584,6 @@ This returns all directories rooted in the gd-cause-dir for the current note."
 
 ;;;-------------------------------------------------------------------
 ;;; Note Commands
-
-
-(defun lolh/cause ()
-  "Return the CAUSE for the current main note.
-
-This function locates the main note if it is not current.
-Return an error if it is not in proper format."
-
-  (let ((main (lolh/main-note)))
-    (save-excursion
-      (with-current-buffer (get-file-buffer main)
-        (let ((cause (lolh/note-property "CAUSE")))
-          (unless (string-match-p *lolh/cause-re* cause)
-            (error "This cause number is incorrect: %s" cause))
-          cause)))))
 
 
 ;;; TODO: Create single function for these two similar predicates
@@ -1221,7 +1206,35 @@ All documents begin and end in *lolh/process-dir*"
 It can be used with either `pbpaste' or 'Cntr-V."
 
   (interactive)
-  (call-process-shell-command (concat "echo " (lolh/title) "| " "pbcopy")))
+  (call-process-shell-command (concat "echo " (lolh/title) " | " "pbcopy")))
+
+
+(defun lolh/cause ()
+  "Return the CAUSE for the current main note.
+
+This function locates the main note if it is not current.
+Return an error if it is not in proper format."
+
+  (let ((main (lolh/main-note)))
+    (save-excursion
+      (with-current-buffer (or
+                            ;; the main buffer must already be open
+                            (get-file-buffer main)
+                            (error "Failed to find a main note."))
+        (let ((cause (lolh/note-property "CAUSE")))
+          (unless (string-match-p *lolh/cause-re* cause)
+            (error "This cause number is incorrect: %s" cause))
+          cause)))))
+
+
+;; M-C
+(defun lolh/pbcopy-cause ()
+  "Return the cause number of the current case."
+
+  (interactive)
+  (let ((cause (lolh/cause)))
+    (call-process-shell-command (concat "echo -n " cause " | " "pbcopy"))
+    (message "Cause: %s" cause)))
 
 
 ;; M-P
