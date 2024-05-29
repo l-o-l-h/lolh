@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-25 19:07:18 lolh-mbp-16>
+;; Time-stamp: <2024-05-28 21:25:44 lolh-mbp-16>
 ;; Version: 0.1.14 [2024-05-25 17:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -665,46 +665,41 @@ Return NIL if there is no PROPERTY."
 
 
 ;;;-------------------------------------------------------------------
-;;; Clients
+;;; Defendants
 
 
-;; TODO: This actually returns a list of defendants, not clients.
-(defun lolh/clients ()
-  "Return a list of clients."
-
-  (interactive)
-  ;; Search the main note
-  (let ((main (or
-               (lolh/main-note)
-               (error "Failed to find a main note."))))
-    (with-temp-buffer
-      (insert-file-contents main)
-      (let (clients)
-        (cl-do* ((def-no 1 (1+ def-no))
-                 (def-val (lolh/note-property (format "DEF-%d" def-no))
-                          (lolh/note-property (format "DEF-%d" def-no))))
-            ((null def-val) (reverse clients))
-          (unless (string-match-p "--" def-val)
-            (push def-val clients)))))))
-
-
-(defun lolh/client-pick ()
-  "Pick a Client and return the associated Note file."
+(defun lolh/defs ()
+  "Return a list of defendants."
 
   (interactive)
 
-  (let* ((clients (lolh/clients))
-         (client (if (length= clients 1) (car clients)
-                   (completing-read "Pick a Client (M-n): " clients nil t nil nil)))
-         (client-slugged (downcase (string-replace " " "*" client))))
+  (with-main-note
+   (let (defs)
+     (cl-do* ((def-no 1 (1+ def-no))
+              (def-val (lolh/note-property (format "DEF-%d" def-no))
+                       (lolh/note-property (format "DEF-%d" def-no))))
+         ((null def-val) (reverse defs))
+       (unless (string-match-p "--" def-val)
+         (push def-val defs))))))
+
+
+(defun lolh/def-pick ()
+  "Pick a defendant and return the associated Note file."
+
+  (interactive)
+
+  (let* ((defs (lolh/defs))
+         (def (if (length= defs 1) (car defss)
+                (completing-read "Pick a Defendant (M-n): " defs nil t nil nil)))
+         (def-slugged (downcase (string-replace " " "*" def))))
     (string-trim-right
      (shell-command-to-string (concat
                                "find "
-                               (expand-file-name "clients" (denote-directory))
+                               (expand-file-name "defs" (denote-directory))
                                " -name "
                                (shell-quote-argument
                                 (concat "*"
-                                        client-slugged
+                                        def-slugged
                                         "*")))))))
 
 
@@ -1189,42 +1184,66 @@ All documents begin and end in *lolh/process-dir*"
 ;;; pbcopy
 
 
+(defun lolh/pbcopy (thing)
+  "Copy a THING using pbcopy."
+
+  (call-process-shell-command
+   (concat
+    "echo -n " thing " | " "pbcopy")))
+
+
 (defun lolh/title ()
-  "Return the string value of the note's title."
+  "Return the string value of the main note's title."
 
   (interactive)
-  (save-excursion
-    (goto-char (point-min))
-    (if (looking-at *lolh/title-rx*)
-        (message "%s" (match-string-no-properties 1))
-      (error "Could not find a title."))))
+
+  (with-main-note
+   (goto-char (point-min))
+   (if (looking-at *lolh/title-rx*)
+       (message "%s" (match-string-no-properties 1))
+     (error "Could not find a title."))))
+
+
+(defun lolh/client-note  (client)
+  "Return the file name of the client note for CLIENT.
+
+CLIENT is the string name of the note (with spaces."
+
+  ;;; Goto Main Note
+  ;;; Get list of links from the Main Note
+  ;;; Filter links for keywords "client,main,rtc"
+  ;;; Pick one and return it.
+  )
 
 
 ;; M-T
 (defun lolh/pbcopy-title ()
-  "Place the string value of the title into the pbcopy command.
-It can be used with either `pbpaste' or 'Cntr-V."
+  "pbcopy the string value of the main note's title."
 
   (interactive)
-  (call-process-shell-command (concat "echo " (lolh/title) " | " "pbcopy")))
+  (lolh/pbcopy (lolh/title)))
+
+
+(defun lolh/main-property (property)
+  "Return the value of PROPERTY from a main note."
+
+  (interactive "sProperty")
+
+  (with-main-note
+   (let ((value (lolh/note-property property)))
+     (and
+      (message "%s: %s" property value)
+      value))))
 
 
 (defun lolh/cause ()
-  "Return the CAUSE for the current main note.
+  "Return the string value of the main note's cause number."
 
-This function locates the main note if it is not current.
-Return an error if it is not in proper format."
-
-  (let ((main (lolh/main-note)))
-    (save-excursion
-      (with-current-buffer (or
-                            ;; the main buffer must already be open
-                            (get-file-buffer main)
-                            (error "Failed to find a main note."))
-        (let ((cause (lolh/note-property "CAUSE")))
-          (unless (string-match-p *lolh/cause-re* cause)
-            (error "This cause number is incorrect: %s" cause))
-          cause)))))
+  (interactive)
+  (let ((cause (lolh/main-property "CAUSE")))
+    (if (string-match-p *lolh/cause-re* cause)
+        cause
+      (error "Failed to find a valid cause."))))
 
 
 ;; M-C
@@ -1232,9 +1251,7 @@ Return an error if it is not in proper format."
   "Return the cause number of the current case."
 
   (interactive)
-  (let ((cause (lolh/cause)))
-    (call-process-shell-command (concat "echo -n " cause " | " "pbcopy"))
-    (message "Cause: %s" cause)))
+  (lolh/pbcopy (lolh/cause)))
 
 
 ;; M-P
@@ -1270,6 +1287,27 @@ client if there is more than one."
         (call-process-shell-command
          (concat "echo -n " (shell-quote-argument prop-val) "| " "pbcopy"))
         (message "%s: %s" property prop-val)))))
+
+
+;;;-------------------------------------------------------------------
+;;; Macro with-main-note
+
+
+(defmacro with-main-note (&rest body)
+  (save-excursion
+    `(with-current-buffer (get-file-buffer ,(lolh/main-note))
+       ,@body)))
+
+
+(defmacro with-client-note (client &rest body)
+  "Process BODY with the CLIENT note active.
+
+CLIENT is the full string name of the client as found in the title
+of that client note."
+
+  (save-excursion
+    (with-current-buffer (get-file-buffer ,(lolh/client-note client))
+      ,@body)))
 
 
 ;;;-------------------------------------------------------------------
