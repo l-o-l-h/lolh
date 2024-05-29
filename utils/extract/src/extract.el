@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-28 21:25:44 lolh-mbp-16>
-;; Version: 0.1.14 [2024-05-25 17:00]
+;; Time-stamp: <2024-05-28 23:34:51 lolh-mbp-16>
+;; Version: 0.1.15 [2024-05-28 23:30]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -665,45 +665,6 @@ Return NIL if there is no PROPERTY."
 
 
 ;;;-------------------------------------------------------------------
-;;; Defendants
-
-
-(defun lolh/defs ()
-  "Return a list of defendants."
-
-  (interactive)
-
-  (with-main-note
-   (let (defs)
-     (cl-do* ((def-no 1 (1+ def-no))
-              (def-val (lolh/note-property (format "DEF-%d" def-no))
-                       (lolh/note-property (format "DEF-%d" def-no))))
-         ((null def-val) (reverse defs))
-       (unless (string-match-p "--" def-val)
-         (push def-val defs))))))
-
-
-(defun lolh/def-pick ()
-  "Pick a defendant and return the associated Note file."
-
-  (interactive)
-
-  (let* ((defs (lolh/defs))
-         (def (if (length= defs 1) (car defss)
-                (completing-read "Pick a Defendant (M-n): " defs nil t nil nil)))
-         (def-slugged (downcase (string-replace " " "*" def))))
-    (string-trim-right
-     (shell-command-to-string (concat
-                               "find "
-                               (expand-file-name "defs" (denote-directory))
-                               " -name "
-                               (shell-quote-argument
-                                (concat "*"
-                                        def-slugged
-                                        "*")))))))
-
-
-;;;-------------------------------------------------------------------
 ;;; Headlines
 
 
@@ -899,7 +860,42 @@ If FILTER is set to a regexp, attach the matched files."
 
 
 ;;;-------------------------------------------------------------------
-;;; Names
+;;; Defendants and Names
+
+
+(defun lolh/defs ()
+  "Return a list of defendants."
+
+  (interactive)
+
+  (with-main-note
+   (let (defs)
+     (cl-do* ((def-no 1 (1+ def-no))
+              (def-val (lolh/note-property (format "DEF-%d" def-no))
+                       (lolh/note-property (format "DEF-%d" def-no))))
+         ((null def-val) (reverse defs))
+       (unless (string-match-p "--" def-val)
+         (push def-val defs))))))
+
+
+(defun lolh/def-pick ()
+  "Pick a defendant and return the associated Note file."
+
+  (interactive)
+
+  (let* ((defs (lolh/defs))
+         (def (if (length= defs 1) (car defss)
+                (completing-read "Pick a Defendant (M-n): " defs nil t nil nil)))
+         (def-slugged (downcase (string-replace " " "*" def))))
+    (string-trim-right
+     (shell-command-to-string (concat
+                               "find "
+                               (expand-file-name "defs" (denote-directory))
+                               " -name "
+                               (shell-quote-argument
+                                (concat "*"
+                                        def-slugged
+                                        "*")))))))
 
 
 ;;; TODO: Handle the error when there is no DEF-2 property
@@ -1204,16 +1200,46 @@ All documents begin and end in *lolh/process-dir*"
      (error "Could not find a title."))))
 
 
+(defun lolh/client-notes ()
+  "Return a list of the client files for the main note."
+
+;;; ==> denote-link-return-links (&optional file)
+;;; ==> denote-extract-keywords-from-path (path)
+;;; ==> _client.*_main.*_rtc
+
+  (with-main-note
+   (let ((linked-notes (denote-link-return-links))
+         (client-keys '("client" "main" "rtc"))
+         client-notes)
+
+     ;; First, return a list of just the client notes (as filenames)
+     ;; based upon the linked client notes ("client" "main" "rtc")
+     (cl-dolist (note linked-notes client-notes)
+       (when (cl-subsetp
+              client-keys
+              (denote-extract-keywords-from-path note))
+         (push note client-notes))))))
+
+
 (defun lolh/client-note  (client)
   "Return the file name of the client note for CLIENT.
 
-CLIENT is the string name of the note (with spaces."
+CLIENT is the string name of the note (with spaces)."
 
-  ;;; Goto Main Note
-  ;;; Get list of links from the Main Note
-  ;;; Filter links for keywords "client,main,rtc"
-  ;;; Pick one and return it.
-  )
+  (interactive "sClient name? ")
+;;; ==> denote-retrieve-filename-title
+
+  (let ((client-notes (lolh/client-notes))
+        client-note)
+    ;; Second, find the single client note based upon the matching argument CLIENT
+    ;; using the client notes found above
+    (let ((split-name (split-string (downcase client))) ; ("first" "last")
+          client-note)
+      (cl-dolist (client-full client-notes (car client-note))
+        (let ((client-nd (split-string
+                          (denote-retrieve-filename-title client-full) "-")))
+          (when (cl-subsetp client-nd split-name :test #'string=)
+            (push client-full client-note)))))))
 
 
 ;; M-T
