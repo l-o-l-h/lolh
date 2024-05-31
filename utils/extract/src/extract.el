@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-28 23:34:51 lolh-mbp-16>
-;; Version: 0.1.15 [2024-05-28 23:30]
+;; Time-stamp: <2024-05-31 08:13:35 lolh-mbp-16>
+;; Version: 0.1.16 [2024-05-31 08:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -143,6 +143,14 @@
 
 (defconst *lolh/title-rx* (rx (seq bol "#+title:" (0+ space) (group (1+ (any print)))))
   "A title.")
+
+
+(defconst *lolh/main-note* '("case" "main" "rtc")
+  "The keyword attributes of a Main note.")
+
+
+(defconst *lolh/client-note* '("client" "main" "rtc")
+  "The keyword attributes of a Client note.")
 
 
 ;;;-------------------------------------------------------------------
@@ -583,34 +591,20 @@ This returns all directories rooted in the gd-cause-dir for the current note."
       (push (cons dir (file-name-nondirectory dir)) result))))
 
 ;;;-------------------------------------------------------------------
-;;; Note Commands
+;;; Main Note and Client Note Commands
 
 
-;;; TODO: Create single function for these two similar predicates
-(defun lolh/main-note-p (note)
-  "Predicate to test whether a NOTE is a Main note.
+(defun lolh/note-p (note type)
+  "Predicate to test the TYPE of a NOTE.
 
-A Main note (represented by its filename) possesses the three keywords:
-- 'case'
-- 'main'
-- 'rtc'."
+TYPE can be either 'main or 'client."
 
-  (cl-subsetp '("case" "main" "rtc")
-              (denote-extract-keywords-from-path note)
-              :test #'string=))
-
-
-(defun lolh/client-note-p (note)
-  "Predicate to test whether a NOTE is a Client note.
-
-A Client note possesses the keywords:
-- `client'
-- `main'
-- `rtc'"
-
-  (cl-subsetp '("client" "main" "rtc")
-              (denote-extract-keywords-from-path note)
-              :test #'string=))
+  (cl-subsetp
+   (cl-ecase type
+     ('main *lolh/main-note*)
+     ('client *lolh/client-note*))
+   (denote-extract-keywords-from-path note)
+   :test #'string=))
 
 
 (defun lolh/main-note ()
@@ -621,7 +615,7 @@ Then check all of the backlink buffers.
 Return an error if a main note cannot be found."
 
   (let ((bfn (buffer-file-name)))
-    (if (lolh/main-note-p bfn)
+    (if (lolh/note-p bfn 'main)
         bfn
       (let ((blb (denote-link-return-backlinks))
             f)
@@ -629,6 +623,71 @@ Return an error if a main note cannot be found."
               (when (lolh/main-note-p b)
                 (cl-return b)))         ; returns a found Main note
             (error "Failed to find a Main note for %s" bfn))))))
+
+
+(defun lolh/client-note ()
+  "Given a list of client names, pick one and return its associated filename.
+
+lolh/client-notes retuns a list of client names.
+lolh/client-names-from-notes returns an alist of (client-name . client-note)
+The user is presented with a list of client names and picks one.
+The associated cons cells is returned."
+
+  (interactive)
+
+  (when (lolh/note-p buffer-file-name 'client)
+    buffer-file-name)
+
+  (let* ((client-notes (lolh/client-names-from-notes (lolh/client-notes)))
+         (client-names (mapcar #'car client-notes)))
+    (cdr
+     (assoc
+      (completing-read "Pick a Client: " client-names nil t nil nil client-names)
+      client-notes))))
+
+
+(defun lolh/client-notes ()
+  "Return a list of the client files for the main note."
+
+;;; ==> denote-link-return-links (&optional file)
+;;; ==> denote-extract-keywords-from-path (path)
+;;; ==> _client.*_main.*_rtc
+
+  (with-main-note
+   (let ((linked-notes (denote-link-return-links))
+         client-notes)
+
+     ;; Return a list of just the client notes (as filenames)
+     ;; based upon those containing the linked client notes
+     ;; keywords ("client" "main" "rtc")
+     (cl-dolist (note linked-notes client-notes)
+       (when (cl-subsetp
+              *lolh/client-note*
+              (denote-extract-keywords-from-path note))
+         (push note client-notes))))))
+
+
+(defun lolh/client-names-from-notes (client-notes)
+  "Extract the client names from CLIENT-NOTES.
+
+Return an alist of (client-name . client-note) pairs."
+
+  (let (client-names)
+    (dolist (client-note client-notes client-names)
+      (push
+       (cons (lolh/client-name-from-note client-note) client-note)
+       client-names))))
+
+
+(defun lolh/client-name-from-note (client-note)
+  "Extract the client name from a CLIENT-NOTE."
+
+  (capitalize
+   (string-replace "-" " " (denote-retrieve-filename-title client-note))))
+
+
+;;;-------------------------------------------------------------------
+;;; Notes, Headlines, and Properties
 
 
 (defun lolh/note-type-to-hl (type)
@@ -666,6 +725,31 @@ Return NIL if there is no PROPERTY."
 
 ;;;-------------------------------------------------------------------
 ;;; Headlines
+
+
+(defun lolh/get-links-in-headline (headline)
+  "Return a list of the links in HEADLINE.
+
+HEADLINE is a string.
+This is designed specifically to return the list of links in CLIENT."
+
+  (let ((hl (lolh/get-headline-element headline)))
+    (org-element-map hl 'link
+      #'identity)))
+
+(defun lolh/link-values-in-headline (headline)
+  "Return the contents of links in HEADLINE."
+
+  (let ((links (lolh/get-links-in-headline headline))
+        values)
+    (dolist (link links values)
+      (push (org-element-contents link) values))
+    (print values t)))
+
+
+(defun lolh/link-value-in-headline (links)
+  (let ((first (car links)))
+    (org-no-properties (prin1-to-string first))))
 
 
 ;;; BUG: When OSC has an inactive timestamp in its name, this function
@@ -1200,47 +1284,6 @@ All documents begin and end in *lolh/process-dir*"
      (error "Could not find a title."))))
 
 
-(defun lolh/client-notes ()
-  "Return a list of the client files for the main note."
-
-;;; ==> denote-link-return-links (&optional file)
-;;; ==> denote-extract-keywords-from-path (path)
-;;; ==> _client.*_main.*_rtc
-
-  (with-main-note
-   (let ((linked-notes (denote-link-return-links))
-         (client-keys '("client" "main" "rtc"))
-         client-notes)
-
-     ;; First, return a list of just the client notes (as filenames)
-     ;; based upon the linked client notes ("client" "main" "rtc")
-     (cl-dolist (note linked-notes client-notes)
-       (when (cl-subsetp
-              client-keys
-              (denote-extract-keywords-from-path note))
-         (push note client-notes))))))
-
-
-(defun lolh/client-note  (client)
-  "Return the file name of the client note for CLIENT.
-
-CLIENT is the string name of the note (with spaces)."
-
-  (interactive "sClient name? ")
-;;; ==> denote-retrieve-filename-title
-
-  (let ((client-notes (lolh/client-notes))
-        client-note)
-    ;; Second, find the single client note based upon the matching argument CLIENT
-    ;; using the client notes found above
-    (let ((split-name (split-string (downcase client))) ; ("first" "last")
-          client-note)
-      (cl-dolist (client-full client-notes (car client-note))
-        (let ((client-nd (split-string
-                          (denote-retrieve-filename-title client-full) "-")))
-          (when (cl-subsetp client-nd split-name :test #'string=)
-            (push client-full client-note)))))))
-
 
 ;; M-T
 (defun lolh/pbcopy-title ()
@@ -1297,6 +1340,7 @@ CLIENT is the string name of the note (with spaces)."
   (interactive)
   (lolh/pbcopy-client-property "NAME"))
 
+
 (defun lolh/pbcopy-client-property (property)
   "pbcopy the client PROPERTY requested.
 
@@ -1306,7 +1350,7 @@ client if there is more than one."
   (save-excursion
     (with-current-buffer
         (find-file-noselect
-         (if (lolh/client-note-p buffer-file-name)
+         (if (lolh/note-p buffer-file-name 'client)
              buffer-file-name
            (lolh/client-pick)))
       (let ((prop-val (lolh/note-property property)))
