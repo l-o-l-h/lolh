@@ -1,5 +1,5 @@
-;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-01 08:45:59 lolh-mbp-16>
+;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
+;; Time-stamp: <2024-06-01 16:10:59 lolh-mbp-16>
 ;; Version: 0.1.16 [2024-05-31 08:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -465,24 +465,23 @@ argument sets BODY-P to 16."
 
         ;; attach files to a hl if this command was called with a single
         ;; prefix argument.  Do not attach files otherwise.
+        ;; At this point, use the headline in which point exists.
         ;; TODO: Provide a list of possible headlines from the current note
         (attach-hl (if (= body-p 4)
-                       (read-string "Attachment headline? ")
+                       (lolh/get-current-headline)
                      nil))
 
         ;; Create the Google Drive destination directory name
-        (dest-dir (lolh/gd-cause-dir dest))
         old-files new-files)
 
     (dolist (file files)
       (let* ((nf (file-name-concat      ; new file path
-                  dest-dir
+                  dest
                   (lolh/create-file-name-using-note-parts file no-doc)))
              (of (file-name-concat *lolh/process-dir* file))) ; old file path
         (push nf new-files)
         (push of old-files)))
     (lolh/send-to-gd-and-maybe-attach old-files new-files dest attach-hl)))
-
 
 
 (defun lolh/unlock-docs ()
@@ -727,6 +726,15 @@ Return NIL if there is no PROPERTY."
 ;;; Headlines
 
 
+(defun lolh/get-current-headline ()
+  "Return the headline element in which point sits."
+
+  (interactive)
+  (cl-loop for element = (org-element-at-point) then (org-element-property :parent element)
+           until (eq (org-element-type element) 'headline)
+           finally (return element)))
+
+
 (defun lolh/get-links-in-headline (headline)
   "Return a list of the links in HEADLINE.
 
@@ -843,8 +851,10 @@ for the user to do and there is no need to try to get the syntax correct."
 
 If optional SKIP is non-NIL, don't run lolh/note-tree."
 
-  (let* ((hl (or (lolh/get-headline-element headline)
-                 (error "Headline %s does not exist" headline)))
+  (let* ((hl (cond ((eq 'headline (org-element-type headline)) headline)
+                   ((stringp headline)
+                    (or (lolh/get-headline-element headline)
+                        (error "Headline %s does not exist" headline)))))
          (begin (org-element-property :begin hl))
          (tags (org-element-property :tags hl)))
     (unless (member tag tags)
@@ -865,8 +875,11 @@ If optional SKIP is non-NIL, don't run lolh/note-tree."
 
 If TAG, also add the tag to the headline."
 
-  (let ((hl (or (lolh/get-headline-element headline)
-                (error "Headline %s does not exist" headline))))
+  (let ((hl (cond ((eq 'headline (org-element-type headline)) headline)
+                  ((stringp headline)
+                   (or (lolh/get-headline-element headline)
+                       (error "Headline %s does not exist" headline)))
+                  (t (error "Should not be here.")))))
     (let  ((begin (org-element-property :begin hl)))
       (goto-char begin)
       (org-entry-put begin new-property new-value))
@@ -1101,7 +1114,7 @@ something seriously wrong with it."
         (setq date (read-string (concat file
                                         ": Date? ")))
         (setq party (read-string "PL or DEF? "))
-        (rename-file (file-name-concat *lolh/process-dir* file)
+        (rename-file (file-name-concat *lolh/process-dir* (file-name-nondirectory file))
                      (file-name-concat
                       *lolh/process-dir*
                       (format "[%s] -- %s %s"
@@ -1109,28 +1122,29 @@ something seriously wrong with it."
 
 
 
-(defun lolh/send-to-gd-and-maybe-attach (old-files new-files dest &optional attach-hl)
+(defun lolh/send-to-gd-and-maybe-attach (old-files new-files dest attach-hl)
   "Send the OLD-FILES to DEST as NEW-FILES and attach if ATTACH-HL gives
 a headline.
 
-ATTACH-HL should name a real headline under which the new files should be
-symlinked."
+ATTACH-HL is a headline element under which the new files should be attached.
+If it is nil, do not attach anything."
 
   (let ((attach-dir (when attach-hl ; might be nil, meaning don't attach
-                      (lolh/attach-dir dest)))
+                      (lolh/attach-dir (org-element-property :raw-value attach-hl))))
         n)
     (when (and attach-dir
-               (not (lolh/note-property "DIR" attach-hl)))
-      (lolh/set-note-property-in-headline attach-hl "DIR" attach-dir)
-      (lolh/put-tag-in-headline "ATTACH" attach-hl)
+               (not (org-element-property :DIR attach-hl)))
+      (save-excursion
+        (lolh/set-note-property-in-headline attach-hl "DIR" attach-dir)
+        (lolh/put-tag-in-headline "ATTACH" attach-hl))
       (unless (file-directory-p attach-dir)
         (when (make-directory attach-dir)
           (error "Directory failed to be created: %s" attach-dir))))
     (dolist (o old-files)
-      (setf n (car new-files))
+      (setf n (expand-file-name (car new-files)))
       (rename-file o n)
       (when attach-hl
-        (f-symlink n attach-dir))
+        (make-symbolic-link n attach-dir))
       (setf new-files (cdr new-files)))))
 
 
