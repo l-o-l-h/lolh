@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-01 08:28:53 lolh-mbp-16>
+;; Time-stamp: <2024-06-01 08:45:59 lolh-mbp-16>
 ;; Version: 0.1.16 [2024-05-31 08:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -635,15 +635,15 @@ The associated cons cells is returned."
 
   (interactive)
 
-  (when (lolh/note-p buffer-file-name 'client)
+  (cond
+   ((lolh/note-p buffer-file-name 'client)
     buffer-file-name)
-
-  (let* ((client-notes (lolh/client-names-from-notes (lolh/client-notes)))
-         (client-names (mapcar #'car client-notes)))
-    (cdr
-     (assoc
-      (completing-read "Pick a Client: " client-names nil t nil nil client-names)
-      client-notes))))
+   (t (let* ((client-notes (lolh/client-names-from-notes (lolh/client-notes)))
+             (client-names (mapcar #'car client-notes)))
+        (cdr
+         (assoc
+          (completing-read "Pick a Client: " client-names nil t nil nil client-names)
+          client-notes))))))
 
 
 (defun lolh/client-notes ()
