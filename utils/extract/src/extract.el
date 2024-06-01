@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-05-31 08:13:35 lolh-mbp-16>
+;; Time-stamp: <2024-06-01 08:28:53 lolh-mbp-16>
 ;; Version: 0.1.16 [2024-05-31 08:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -465,7 +465,7 @@ argument sets BODY-P to 16."
 
         ;; attach files to a hl if this command was called with a single
         ;; prefix argument.  Do not attach files otherwise.
-        TODO: Provide a list of possible headlines from the current note
+        ;; TODO: Provide a list of possible headlines from the current note
         (attach-hl (if (= body-p 4)
                        (read-string "Attachment headline? ")
                      nil))
@@ -620,7 +620,7 @@ Return an error if a main note cannot be found."
       (let ((blb (denote-link-return-backlinks))
             f)
         (or (cl-dolist (b blb) ; returns 'nil' if no Main note is found
-              (when (lolh/main-note-p b)
+              (when (lolh/note-p b 'main)
                 (cl-return b)))         ; returns a found Main note
             (error "Failed to find a Main note for %s" bfn))))))
 
@@ -1269,7 +1269,7 @@ All documents begin and end in *lolh/process-dir*"
 
   (call-process-shell-command
    (concat
-    "echo -n " thing " | " "pbcopy")))
+    "echo -n " (shell-quote-argument thing) " | " "pbcopy")))
 
 
 (defun lolh/title ()
@@ -1344,19 +1344,13 @@ All documents begin and end in *lolh/process-dir*"
 (defun lolh/pbcopy-client-property (property)
   "pbcopy the client PROPERTY requested.
 
-This will work no matter which note is being viewed, and will ask for a
-client if there is more than one."
+If point is not in a client note, and there are more than one clients,
+this function will ask for a client."
 
-  (save-excursion
-    (with-current-buffer
-        (find-file-noselect
-         (if (lolh/note-p buffer-file-name 'client)
-             buffer-file-name
-           (lolh/client-pick)))
-      (let ((prop-val (lolh/note-property property)))
-        (call-process-shell-command
-         (concat "echo -n " (shell-quote-argument prop-val) "| " "pbcopy"))
-        (message "%s: %s" property prop-val)))))
+  (with-client-note
+   (let ((property-value (lolh/note-property property)))
+     (message "%s: %s" property property-value)
+     (lolh/pbcopy property-value))))
 
 
 ;;;-------------------------------------------------------------------
@@ -1369,15 +1363,15 @@ client if there is more than one."
        ,@body)))
 
 
-(defmacro with-client-note (client &rest body)
+(defmacro with-client-note (&rest body)
   "Process BODY with the CLIENT note active.
 
 CLIENT is the full string name of the client as found in the title
 of that client note."
 
   (save-excursion
-    (with-current-buffer (get-file-buffer ,(lolh/client-note client))
-      ,@body)))
+    `(with-current-buffer (find-file-noselect ,(lolh/client-note))
+       ,@body)))
 
 
 ;;;-------------------------------------------------------------------
