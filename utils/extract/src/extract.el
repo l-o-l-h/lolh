@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-01 16:10:59 lolh-mbp-16>
+;; Time-stamp: <2024-06-01 19:44:04 lolh-mbp-16>
 ;; Version: 0.1.16 [2024-05-31 08:00]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -52,7 +52,10 @@
 ;; - `org-element-secondary-p' :: does a given object belong to a secondary string
 ;; - `org-element-class' :: is the parsed data an element or an object
 ;; - `org-element-copy' ::  return a copy.
-
+;; - PARSERS
+;; - `org-element-%s-parser'
+;; - INTERPRETERS
+;; - `org-element-%s-interpreter'
 
 ;;; Code:
 
@@ -1386,6 +1389,30 @@ of that client note."
   (save-excursion
     `(with-current-buffer (find-file-noselect ,(lolh/client-note))
        ,@body)))
+
+
+;;--------------------------------------------------------------------
+;;; Links
+
+
+(defun lolh/file-link-interpreter (path contents)
+  "Insert a file link into the buffer at the headline using PATH and CONTENTS."
+
+  (let* ((el (org-element-set-contents
+              (org-element-create
+               'link
+               (list :type "file"
+                     :path path
+                     :format 'bracket))
+              contents))
+         (hl (lolh/get-current-headline))
+         (end (org-element-property :contents-end hl)))
+    (save-excursion
+      (goto-char end)
+      (insert "- ")
+      (insert (org-element-interpret-data el))
+      (newline)))
+  (lolh/note-tree))
 
 
 ;;;-------------------------------------------------------------------
