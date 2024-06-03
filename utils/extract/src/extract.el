@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-01 19:44:04 lolh-mbp-16>
-;; Version: 0.1.16 [2024-05-31 08:00]
+;; Time-stamp: <2024-06-02 20:31:23 lolh-mbp-16>
+;; Version: 0.1.18 [2024-06-02 20:30]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -174,7 +174,9 @@
 ;;;-------------------------------------------------------------------
 
 
-(defun lolh/note-tree () (setq *lolh/note-tree* (org-element-parse-buffer)))
+(defun lolh/note-tree ()
+  (interactive)
+  (setq *lolh/note-tree* (org-element-parse-buffer)))
 
 ;;; The following command requires that there be a main heading titled
 ;;; * RTC CASE
@@ -193,6 +195,7 @@
 (keymap-global-set "C-x p j" #'lolh/process-dir)
 (keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
+(keymap-global-set "M-A"     #'lolh/note-tree)
 (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
 (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
 (keymap-global-set "M-N"     #'lolh/pbcopy-client-name)
@@ -421,6 +424,9 @@
 ;;; With a single prefix argument, also attach the documents to a headline.
 ;;; There might be a reason not to give the documents a name, so make that
 ;;; the double prefix argument, but don't also attach.
+
+;;; TODO: Update LEDGER-# property when a ledger is attached.
+;;; Check for the word "ledger" in the filename
 
 (defun lolh/process-dir (dest &optional body-p)
   "Rename all files in *lolh/process-dir* to GD / DEST subdir and maybe attach.
@@ -729,13 +735,33 @@ Return NIL if there is no PROPERTY."
 ;;; Headlines
 
 
+;;; BUG: When OSC has an inactive timestamp in its name, this function
+;;; returns nil; when the timestamp is made active, it returns the headline.
+(defun lolh/get-headline-element (headline)
+  "Given the name of a HEADLINE, return the element from the note-tree.
+
+TODO: What to do about possible duplicate headline names??"
+
+  (org-element-map *lolh/note-tree* 'headline
+    (lambda (hl) (when
+                     (string-match-p headline (org-element-property :raw-value hl))
+                   hl))
+    nil t t))
+
+
 (defun lolh/get-current-headline ()
-  "Return the headline element in which point sits."
+  "Return the portion of the AST for the headline in which point sits."
 
   (interactive)
-  (cl-loop for element = (org-element-at-point) then (org-element-property :parent element)
-           until (eq (org-element-type element) 'headline)
-           finally (return element)))
+
+  (forward-line 0)
+  (while (not (looking-at-p org-element-headline-re))
+    (forward-line -1))
+  (let (title hl)
+    (looking-at "^[* ]+\\([^:]*\\)")
+    (setq title (string-trim-right (match-string-no-properties 1) "[ \t\n\r.]+"))
+    (setq hl (lolh/get-headline-element title))
+    hl))
 
 
 (defun lolh/get-links-in-headline (headline)
@@ -761,20 +787,6 @@ This is designed specifically to return the list of links in CLIENT."
 (defun lolh/link-value-in-headline (links)
   (let ((first (car links)))
     (org-no-properties (prin1-to-string first))))
-
-
-;;; BUG: When OSC has an inactive timestamp in its name, this function
-;;; returns nil; when the timestamp is made active, it returns the headline.
-(defun lolh/get-headline-element (headline)
-  "Given the name of a HEADLINE, return the element from the note-tree.
-
-TODO: What to do about possible duplicate headline names??"
-
-  (org-element-map *lolh/note-tree* 'headline
-    (lambda (hl) (when
-                     (string-match-p headline (org-element-property :raw-value hl))
-                   hl))
-    nil t t))
 
 
 (defun lolh/subhls (&optional hl)
@@ -867,10 +879,29 @@ If optional SKIP is non-NIL, don't run lolh/note-tree."
         (lolh/note-tree)))))
 
 
-(defun lolh/add-ledger ()
+(defun lolh/add-ledger (link date)
   "Rename the file in process as a ledger and add/attach it."
 
-  )
+  (let* ((l-hl (lolh/get-headline-element "LEDGERS"))
+         (s-hl (org-element-map l-hl 'section #'identity nil t t))
+         (p-hl (org-element-map s-hl 'property-drawer #'identity nil t t))
+         (n-p (org-element-contents p-hl)))
+    (cl-dolist (n n-p)
+      (let ((key (org-element-property :key n))
+            (val (org-element-property :value n))
+            (beg (org-element-property :begin n))
+            (end (org-element-property :end n)))
+        (when (string= "-- [DATE]" val)
+          (setq n
+                (org-element-put-property n
+                                          :value (concat
+                                                  "\t-- "
+                                                  (org-element-link-interpreter link date))))
+          (save-excursion
+            (goto-char beg)
+            (delete-region beg (1- end))
+            (insert (org-element-node-property-interpreter n nil)))
+          (cl-return))))))
 
 
 (defun lolh/set-note-property-in-headline (headline new-property new-value &optional tag)
@@ -1145,9 +1176,14 @@ If it is nil, do not attach anything."
           (error "Directory failed to be created: %s" attach-dir))))
     (dolist (o old-files)
       (setf n (expand-file-name (car new-files)))
-      (rename-file o n)
+      (unless (file-exists-p n)
+        (rename-file o n))
       (when attach-hl
-        (make-symbolic-link n attach-dir))
+        (make-symbolic-link n attach-dir)
+        (let* ((bn (file-name-nondirectory n))
+               (fbn (lolh/escape-braces
+                     (file-name-concat attach-dir bn))))
+          (lolh/file-link-interpreter fbn (lolh/file-name-part bn :document))))
       (setf new-files (cdr new-files)))))
 
 
@@ -1233,7 +1269,7 @@ See lolh/extract-file-name-parts for the parts that can be returned."
   (unless (memq part *lolh/file-name-allowed-parts*)
     (error "%s is not an allowed file-name part" part))
   (let ((parts (lolh/extract-file-name-parts file-name)))
-    (plist-get parts part)))
+    (lolh/get-extracted parts part)))
 
 
 (defun lolh/get-extracted (parts part)
@@ -1396,7 +1432,10 @@ of that client note."
 
 
 (defun lolh/file-link-interpreter (path contents)
-  "Insert a file link into the buffer at the headline using PATH and CONTENTS."
+  "Insert a file link into the buffer at the headline using PATH and CONTENTS.
+
+If the file contains the word `ledger' then add it as a link to the `'LEDGERS'
+headline properties."
 
   (let* ((el (org-element-set-contents
               (org-element-create
@@ -1411,7 +1450,11 @@ of that client note."
       (goto-char end)
       (insert "- ")
       (insert (org-element-interpret-data el))
-      (newline)))
+      (newline))
+    (when (string-match-p "ledger" contents)
+      (let ((date (progn (string-match "\\[\\(.*\\)\\\\]" path)
+                         (match-string-no-properties 1 path))))
+        (lolh/add-ledger el date))))
   (lolh/note-tree))
 
 
@@ -1426,6 +1469,11 @@ of that client note."
     (dolist (file-to-delete files-to-delete)
       (delete-file file-to-delete)
       (message "%s deleted" file-to-delete))))
+
+
+(defun lolh/escape-braces (s)
+  (string-match "\\[\\(.*\\)\\]" s)
+  (replace-match "\\\\[\\1\\\\]" nil nil s))
 
 
 ;;;-------------------------------------------------------------------
