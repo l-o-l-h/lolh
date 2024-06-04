@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-02 20:31:23 lolh-mbp-16>
+;; Time-stamp: <2024-06-03 19:21:46 lolh-mbp-16>
 ;; Version: 0.1.18 [2024-06-02 20:30]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -428,6 +428,8 @@
 ;;; TODO: Update LEDGER-# property when a ledger is attached.
 ;;; Check for the word "ledger" in the filename
 
+;;; TODO: Be able to create a new directory in which to store files
+
 (defun lolh/process-dir (dest &optional body-p)
   "Rename all files in *lolh/process-dir* to GD / DEST subdir and maybe attach.
 
@@ -758,7 +760,7 @@ TODO: What to do about possible duplicate headline names??"
   (while (not (looking-at-p org-element-headline-re))
     (forward-line -1))
   (let (title hl)
-    (looking-at "^[* ]+\\([^:]*\\)")
+    (looking-at (rx bol (and (* space) (1+ "*") (1+ space) (group (1+ (not (any ":\n")))))))
     (setq title (string-trim-right (match-string-no-properties 1) "[ \t\n\r.]+"))
     (setq hl (lolh/get-headline-element title))
     hl))
