@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-03 19:21:46 lolh-mbp-16>
-;; Version: 0.1.18 [2024-06-02 20:30]
+;; Time-stamp: <2024-06-05 10:16:27 lolh-mbp-16>
+;; Version: 0.1.19 [2024-06-05 10:15]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -78,6 +78,8 @@
 
 (defconst *lolh/downloads-dir*
   (expand-file-name "Downloads" "~"))
+
+(setq-local default-directory *lolh/downloads-dir*)
 
 (defconst *lolh/process-dir*
   (expand-file-name "process" *lolh/downloads-dir*))
@@ -174,20 +176,12 @@
 ;;;-------------------------------------------------------------------
 
 
+;;; TODO: Is it possible to use a hook from `org-element'
+;;; to determine when a parsed buffer has changed?  Then update the
+;;; `lolh/note-tree' variable.
 (defun lolh/note-tree ()
   (interactive)
   (setq *lolh/note-tree* (org-element-parse-buffer)))
-
-;;; The following command requires that there be a main heading titled
-;;; * RTC CASE
-;;; that contains the Properties
-;;; :CAUSE: with a valid cause number, e.g. 24-2-99999-06
-;;; :DEF-1: with the defendant's caption name, e.g., John Smith
-;;; It also requires a subheading of
-;;; ** COURT FILES
-;;; Given those requirements, this command attaches the Google Drive
-;;; Court File documents to this subheading
-;;; in a subdirectory .../data/24-2-99999-06 John Smith/Court File/
 
 
 (keymap-global-set "C-x p a" #'lolh/court-files-attach)
@@ -204,6 +198,16 @@
 (keymap-global-set "M-U"     #'lolh/unlock-docs)
 
 
+;;; The following command requires that there be a main heading titled
+;;; * RTC CASE
+;;; that contains the Properties
+;;; :CAUSE: with a valid cause number, e.g. 24-2-99999-06
+;;; :DEF-1: with the defendant's caption name, e.g., John Smith
+;;; It also requires a subheading of
+;;; ** COURT FILES
+;;; Given those requirements, this command attaches the Google Drive
+;;; Court File documents to this subheading
+;;; in a subdirectory .../data/24-2-99999-06 John Smith/Court File/
 (defun lolh/court-files-attach ()
   (interactive)
   (lolh/pdf-attach "Court File" "COURT FILES"))
@@ -499,7 +503,7 @@ argument sets BODY-P to 16."
   "Unlock DOC, e.g. an OLD or Appointment.
 
 DOC must be in *lolh/process-dir*, and so this command will first call
-`lolh/move-new-files-into-process-dir'.  It will thereafter work on every
+`lolh/copy-new-files-into-process-dir'.  It will thereafter work on every
 file in *lolh/process-dir*.
 UNLOCKED will be the same file name but with (unlocked) added to the end.
 
@@ -602,6 +606,18 @@ This returns all directories rooted in the gd-cause-dir for the current note."
 
 ;;;-------------------------------------------------------------------
 ;;; Main Note and Client Note Commands
+
+
+(defun lolh/title ()
+  "Return the string value of the main note's title."
+
+  (interactive)
+
+  (with-main-note
+   (goto-char (point-min))
+   (if (looking-at *lolh/title-rx*)
+       (message "%s" (match-string-no-properties 1))
+     (error "Could not find a title."))))
 
 
 (defun lolh/note-p (note type)
@@ -1114,6 +1130,8 @@ Then call update."
                                      (file-name-nondirectory file))))))
 
 
+;;; TODO Maybe make a version that asks for a list of files in ~/Downloads
+;;; instead of finding new files automatically.
 (defun lolh/copy-new-files-into-process-dir ()
   "Copy new documents from `~/Downloads' into `~/Downloads/process'.
 
@@ -1127,9 +1145,10 @@ After copying the files into `process-dir', make sure they can be read by
 
   (lolh/clean-dirs)
 
-  (let ((command (format "find %s -atime -1m -depth 1 -type f \! -name \~\$* -execdir cp {} %s \\;"
-                         *lolh/downloads-dir*
-                         *lolh/process-dir*)))
+  (let ((command
+         (format "find %s -atime -1m -depth 1 -type f \! -name \~\$* -execdir cp {} %s \\;"
+                 *lolh/downloads-dir*
+                 *lolh/process-dir*)))
     (call-process-shell-command command))
 
   (lolh/make-file-name-in-process-dir))
@@ -1153,7 +1172,7 @@ something seriously wrong with it."
         (rename-file (file-name-concat *lolh/process-dir* (file-name-nondirectory file))
                      (file-name-concat
                       *lolh/process-dir*
-                      (format "[%s] -- %s %s"
+                      (format "[%s] -- %s [%s]"
                               date party file)))))))
 
 
@@ -1315,6 +1334,60 @@ All documents begin and end in *lolh/process-dir*"
            (file-name-concat *lolh/process-dir* new-doc))))
 
 
+(defun lolh/call-split-dismissal-old ()
+  (interactive)
+  (setq-local default-directory *lolh/downloads-dir*)
+  (setq-local insert-default-directory t)
+  (call-interactively #'lolh/split-dismissal-old))
+
+
+;;; Split and rename a combined Stipulated Dismissal-OLD
+;;; case [date] def-names -- Stipulated Dismisall-OLD.pdf
+(defun lolh/split-dismissal-old (file)
+  "Split into two documents a single stipulated dismissal-OLD."
+
+  (interactive
+   (let ((default-directory *lolh/downloads-dir*)
+         (insert-default-directory nil)
+         (initial (directory-files *lolh/downloads-dir* nil "Stipulated Dismissal-OLD")))
+     (list
+      (read-file-name "File to split? "nil nil t (car initial)))))
+
+  (lolh/clean-dirs)
+
+  (let* ((bn-file (file-name-nondirectory file))
+         (full (and
+                (string-match (rx (seq
+                                   bos
+                                   (group (* ascii))
+                                   " -- "
+                                   (group "Stipulated")
+                                   (any space)
+                                   (group "Dismissal")
+                                   "-"
+                                   (group "OLD")
+                                   (group (* ascii))
+                                   ".pdf"
+                                   eos))
+                              bn-file)
+                (match-string 0 bn-file)))
+         (first (match-string 1 bn-file))
+         (second (match-string 2 bn-file))
+         (third (match-string 3 bn-file))
+         (fourth (match-string 4 bn-file))
+         (fifth (match-string 5 bn-file))
+         (dismissal (format "%s -- %s %s%s (unlocked).pdf" first second third fifth))
+         (old (format "%s -- %s %s%s (unlocked).pdf" first second fourth fifth))
+         (process-file (file-name-concat *lolh/process-dir* full)))
+    (copy-file file process-file)
+    (lolh/pdftk-cat full 1 1 dismissal)
+    (lolh/pdftk-cat full 2 3 old)
+    (delete-file process-file)
+    (rename-file (file-name-concat *lolh/process-dir* dismissal)
+                 (file-name-concat *lolh/downloads-dir* dismissal))
+    (rename-file (file-name-concat *lolh/process-dir* old)
+                 (file-name-concat *lolh/downloads-dir* old))))
+
 ;;;-------------------------------------------------------------------
 ;;; pbcopy
 
@@ -1325,19 +1398,6 @@ All documents begin and end in *lolh/process-dir*"
   (call-process-shell-command
    (concat
     "echo -n " (shell-quote-argument thing) " | " "pbcopy")))
-
-
-(defun lolh/title ()
-  "Return the string value of the main note's title."
-
-  (interactive)
-
-  (with-main-note
-   (goto-char (point-min))
-   (if (looking-at *lolh/title-rx*)
-       (message "%s" (match-string-no-properties 1))
-     (error "Could not find a title."))))
-
 
 
 ;; M-T
