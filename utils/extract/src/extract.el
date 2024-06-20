@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-05 10:16:27 lolh-mbp-16>
+;; Time-stamp: <2024-06-09 19:36:04 lolh-mbp-16>
 ;; Version: 0.1.19 [2024-06-05 10:15]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -33,6 +33,11 @@
 ;;      attach it to DOCUMENTS
 
 
+;;; Denote Commands
+;; denote-after-new-note-hook
+;; denote-after-rename-file-hook
+
+
 ;;; Accessors and Setters from org-element.el
 ;; - ACCESSORS
 ;; - `org-element-type' :: return type of element
@@ -56,6 +61,11 @@
 ;; - `org-element-%s-parser'
 ;; - INTERPRETERS
 ;; - `org-element-%s-interpreter'
+
+
+;;; Buffer Commands to learn:
+;;  (with-current-buffer (get-buffer-create *buffer-name*) ...
+
 
 ;;; Code:
 
@@ -192,8 +202,10 @@
 (keymap-global-set "M-A"     #'lolh/note-tree)
 (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
 (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
+(keymap-global-set "M-H"     #'lolh/add-columns-header)
 (keymap-global-set "M-N"     #'lolh/pbcopy-client-name)
 (keymap-global-set "M-P"     #'lolh/pbcopy-client-phone)
+(keymap-global-set "M-R"     #'lolh/simple-rename-using-note)
 (keymap-global-set "M-T"     #'lolh/pbcopy-title)
 (keymap-global-set "M-U"     #'lolh/unlock-docs)
 
@@ -499,6 +511,7 @@ argument sets BODY-P to 16."
     (lolh/send-to-gd-and-maybe-attach old-files new-files dest attach-hl)))
 
 
+;; M-U
 (defun lolh/unlock-docs ()
   "Unlock DOC, e.g. an OLD or Appointment.
 
@@ -1172,7 +1185,7 @@ something seriously wrong with it."
         (rename-file (file-name-concat *lolh/process-dir* (file-name-nondirectory file))
                      (file-name-concat
                       *lolh/process-dir*
-                      (format "[%s] -- %s [%s]"
+                      (format "[%s] -- %s %s"
                               date party file)))))))
 
 
@@ -1191,10 +1204,11 @@ If it is nil, do not attach anything."
                (not (org-element-property :DIR attach-hl)))
       (save-excursion
         (lolh/set-note-property-in-headline attach-hl "DIR" attach-dir)
-        (lolh/put-tag-in-headline "ATTACH" attach-hl))
-      (unless (file-directory-p attach-dir)
-        (when (make-directory attach-dir)
-          (error "Directory failed to be created: %s" attach-dir))))
+        (lolh/put-tag-in-headline "ATTACH" attach-hl)
+        (let ((res (make-directory attach-dir t)))
+          (pcase res
+            (null (message "% successfully created" attach-dir))
+            (_ (message "%s already existed" attach-dir))))))
     (dolist (o old-files)
       (setf n (expand-file-name (car new-files)))
       (unless (file-exists-p n)
@@ -1303,6 +1317,7 @@ PART must be one of *lolh/file-name-allowed-parts*."
   (plist-get parts part))
 
 
+;; M-R
 (defun lolh/simple-rename-using-note ()
 
   (interactive)
@@ -1469,7 +1484,7 @@ this function will ask for a client."
 
 
 ;;;-------------------------------------------------------------------
-;;; Macro with-main-note
+;;; Macro with-main-note, with-client-note
 
 
 (defmacro with-main-note (&rest body)
@@ -1536,6 +1551,17 @@ headline properties."
 (defun lolh/escape-braces (s)
   (string-match "\\[\\(.*\\)\\]" s)
   (replace-match "\\\\[\\1\\\\]" nil nil s))
+
+
+;;;--------------------------------------------------------------------
+;; Columns
+
+;; M-H
+(defun lolh/add-columns-header ()
+  "Add a columns definition at point"
+
+  (interactive)
+  (insert "#+columns: %35item %10todo %22scheduled %22deadline %clocksum{:} %20tags\n"))
 
 
 ;;;-------------------------------------------------------------------

@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-04-23 12:58:01 minilolh>
+;; Time-stamp: <2024-06-10 06:39:06 lolh-mbp-16>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -43,6 +43,7 @@
 (defun newcase ()
   "Create a new Denote note for a new RTC case."
   (concat
+   "#+columns: %35item %10todo %22scheduled %22deadline %clocksum{:} %20tags\n\n"
    "* RTC CASE\n"
    ":PROPERTIES:\n"
    ":O/C:\t\t--\n"
@@ -141,6 +142,7 @@
 - [ ] Draft Documents
   - [ ] NOA
   - [ ] Appointment-Fee Waiver
+  - [ ] OLD
 "))
 
 (defun recipe ()
@@ -151,16 +153,19 @@
    "* Comments\n\n"
    "* Accompanied\n\n"))
 
-(defun newcase-with-newclient (case pl def cl info)
+(defun newcase-with-newclient (cause pl def cl cl-id)
   (interactive
-   "sCase: \nsPlaintiff: \nsDefendants: \nsClient: \nsClient Info: ")
-  (print (format "Case: %s  Plaintiff: %s  Defendants: %s  Client: %s  Info: %s"
-                 case pl def cl info) (current-buffer)))
+   "sCause: \nsPlaintiff: \nsDefendants: \nsClient: \nsClient ID: ")
+  (denote
+   (concat
+    cause
+    )))
 
 ;; Denote Last Name
 
 (defun lastname (note)
   )
+
 
 (provide 'template-funcs)
 
