@@ -1,7 +1,7 @@
 ;;; add.el --- Additional Utilities -*- mode: elisp; lexical-binding: t; -*-
-;;; Time-stamp: <2024-06-24 08:53:59 minilolh>
+;;; Time-stamp: <2024-06-29 18:47:47 minilolh>
 ;;; Version: 0.0.1_2024-06-23T1455
-;;; Package-requires: ((cl-lib))
+;;; Package-requires: ((emacs "24.1") (cl-lib))
 
 ;;; Author: LOLH
 ;;; Created: 2024-06-23
@@ -10,15 +10,83 @@
 ;;; Commentary:
 ;;  Additional helper utilities
 
+;; Constants
+;; - add-*case-info*
+;; - add-*notices*
+;; - add-*judicial-depts*
+
+;; Structures:
+;; - add-case-info | category: add-case-info-type | value number
+;; - add-value     | cat: 'string | v1: 'string |  v2: 'string
+;; - add-number    | value: 'singular 'plural
+
+;; Enums
+;; - add-*case-info-enum*
+;; - add-*notices-enum*
+;; - add-*judicial-depts-enum*
+
+;; Types
+;; - add-case-info-type      | add-*case-info-enum*
+;; - add-notices-type        | add-*notices-enum*
+;; - add-judicial-depts-type | add-*judicial-depts-enum*
+;; - add-number-type         | 'singular 'plural
+
 ;;; Code:
 
 
 (require 'cl-lib)
 
 
+;;;-------------------------------------------------------------------
+;; add-name-p
+
+(defconst add-*name-rx*
+  (rx (seq
+       bos
+       (= 1 (>= 2 (| word punct)))
+       (* (seq space (>= 2 (| word punct))))
+       (= 1 space (>= 2 word) (? punct))
+       eos))
+  "Regular expression to test for the proper form of a `name'.
+
+A name can be of the form:
+- John Doe
+- John Quincy Doe
+- John Q. Doe, Jr.
+- J. Quincy Doe
+
+But not
+- John Q.")
+
+
+;;;===================================================================
+;; add-id-p
+
+(defconst add-*id-rx*
+  (rx (seq
+       bos
+       (= 2 digit)
+       "-"
+       (= 7 digit)
+       eos))
+  "Regular expression to test for the proper form of a case id.
+
+- `24-0123456'")
+
+
+;;;===================================================================
+;; add-date-p
+
+(defconst add-*date-rx*
+  (rx bos
+      (= 4 digit)
+      (= 2 (seq "-" (= 2 digit)))
+      eos)
+  "Regular expression to test for the proper form of date.")
+
+
 ;;;===================================================================
 ;; add-*case-info*
-
 
 (defconst add-*case-info* '(("cause" :string :singular)
                             ("plaintiff" (or :string :name) :plural)
@@ -49,7 +117,7 @@
 
 
 ;;;===================================================================
-;; add-*notices*
+;; constant add-*notices*
 
 
 (defconst add-*notices* '(("RCW 59.18.650(2)(a)" 14  "Nonpayment of rent")
@@ -85,7 +153,7 @@
 
 
 ;;;===================================================================
-;; add-*judicial-depts*
+;; constant add-*judicial-depts*
 
 
 (defconst add-*judicial-depts* '((1 "One" "Nancy Retsina")
@@ -126,6 +194,9 @@
 ;; structure add-value
 
 
+(cl-deftype add-value-cat-type () '(member nil or and))
+
+
 ;; Examples:
 ;; (nil :string nil)
 ;; (or :string :name)
@@ -137,6 +208,10 @@
   (v2 nil :type string))
 
 
+;;;===================================================================
+;; structure add-case-info
+
+
 (cl-defstruct add-case-info
   (category :type string
             :documentation "A string like `cause', or `plaintiff'")
@@ -145,6 +220,29 @@
   (number :type add-number
           :documentation "Two values: 1) :singular 2) :plural; indicates how many values are possible"))
 
+;;;===================================================================
+;; Create an add-value
+
+(defun add-create-add-value (add-value-form)
+  "Create an add-value data element from ADD-VALUE-FORM."
+
+  (pcase add-value-form
+    (`(nil ,s nil)
+     (let ((str (read-from-minibuffer "Give me a string: ")))
+       (make-string-value str)))
+    (`(or ,v1 ,v2)
+     (let ((str1 (read-from-minibuffer (format "Give me either a %s or a %s: " v1 v2))))
+       (make-add-value :cat 'or :v1 str1))))
+
+  ;; (pcase (cl-first add-value-form)
+  ;;   ((pred null) ;; nil
+  ;;    (let ((str (read-from-minibuffer "Give me a string: ")))
+  ;;      (make-string-value str)))
+  ;;   ())
+
+  ;; (let ((str (read-from-minibuffer "Give me a string: ")))
+  ;;   (make-string-value str))
+  )
 
 (provide 'add)
 

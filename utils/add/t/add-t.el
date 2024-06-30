@@ -1,5 +1,5 @@
 ;;; add-t.el --- Test file for add.el -*- mode: elisp; lexical-binding: t; -*-
-;;; Time-stamp: <2024-06-24 09:05:29 minilolh>
+;;; Time-stamp: <2024-06-29 18:51:44 minilolh>
 ;;; Version: 0.0.1_2024-06-23T1455
 ;;; Package-requires: ((emacs "24.3") (emacs "25.1"))
 
@@ -23,6 +23,38 @@
   (load "add/t/add-t")
   (ert t))
 
+
+(defun add-t-random-string ()
+  "Create a random string for testing."
+  (let ((xcharset "BCDFGHJKMNPQRSTVWXYZbcdfghjkmnpqrstvwxyz23456789")
+        xcount xvec)
+    (setq xcount (length xcharset))
+    (setq xvec (mapcar (lambda (_) (aref xcharset (random xcount)))
+                       (make-vector 5)))
+    (mapconcat 'char-to-string xvec)))
+
+
+(ert-deftest add-t-test-add-*name-rx* ()
+  "Make sure this regular expression catches proper names."
+  (should (string-match-p add-*name-rx* "John Doe"))
+  (should (string-match-p add-*name-rx* "John Q. Doe"))
+  (should (string-match-p add-*name-rx* "John Q. Doe, Jr."))
+  (should (string-match-p add-*name-rx* "J. Quincy Doe"))
+  (should-not (string-match-p add-*name-rx* "John Q.")))
+
+(ert-deftest add-t-test-add-*id-rx* ()
+  "Make sure this regular expression catches proper case ids."
+  (should (string-match-p add-*id-rx* "24-0123456"))
+  (should-not (string-match-p add-*id-rx* "2-0123456"))
+  (should-not (string-match-p add-*id-rx* "24-012345")))
+
+(ert-deftest add-t-test-add-*date-rx* ()
+  (should (string-match-p add-*date-rx* "2024-01-01"))
+  (should (string-match-p add-*date-rx* "2024-12-31"))
+  (should-not (string-match-p add-*date-rx* "2024-1-31"))
+  (should-not (string-match-p add-*date-rx* "2024-12-1"))
+  (should-not (string-match-p add-*date-rx* "202-12-31")))
+
 (ert-deftest add-t-test-type-case-category ()
   "Make sure the following types have been defined:
 add-case-info-type
@@ -37,7 +69,11 @@ add-number-type"
   (should (cl-typep :singular 'add-number-type))
   (should-not (cl-typep :multi 'add-number-type))
   (should (cl-typep 1 'add-judicial-depts-type))
-  (should-not (cl-typep 2 'add-judicial-depts-type)))
+  (should-not (cl-typep 2 'add-judicial-depts-type))
+  (should (cl-typep 'or 'add-value-cat-type))
+  (should (cl-typep 'and 'add-value-cat-type))
+  (should (cl-typep 'nil 'add-value-cat-type))
+  (should-not (cl-typep 'band 'add-value-cat-type)))
 
 
 (ert-deftest add-t-test-consts ()
