@@ -1,8 +1,8 @@
 ;;; extract-t.el --- Extract tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-05-06 06:54:08 lolh-mbp-16>
+;; Time-stamp: <2024-08-13 21:44:25 minilolh>
 ;; Version: 0.0.1 [2024-05-05 Sat 13:40]
 
-;; Package-Requires: ((emacs "24.1") extract)
+;; Package-Requires: ((emacs "24.1") (emacs "24.3") extract)
 ;; Created: [2024-04-06 Sat 19:54]
 ;; Author: LOLH <lolh@lolh.com>
 ;; Homepage:
@@ -303,6 +303,26 @@
                "02) 24-2-99999-06 [2024-05-05] ADAMS,John-ADAMS,Abigail -- Complaint (30-Day).pdf"
                (lolh/create-file-name-using-note-parts fn1))))))
 
+
+(ert-deftest extract-t-properties-dir ()
+  (with-temp-buffer
+    (insert-file-contents
+     "./notes/20240406T220700==test=1--24-2-99999-06-big-bad-wolf-llc-v-john-quincy-adams-and-abigail-adams__active_case_denote_extract_main_osc_rtc_test.org")
+    (widen)
+    (lolh/note-tree)
+    (defvar dirs)
+    (setq dirs ())
+
+    (org-element-map *lolh/note-tree* 'node-property
+      (lambda (np) (when (string= "DIR" (org-element-property :key np))
+                     (push (org-element-property :value np)
+                           dirs)
+                     (lolh/update-files-in-dir (org-element-property :value np)))))
+    (princ (format "dirs = %s" dirs))))
+
+(defun lolh/update-files-in-dir (dir)
+  "Given a dir, add the closed directory in the middle."
+  )
 
 ;; (ert-deftest extract-t-docket-date-name-tests ()
 ;;   "Tests the regexp *lolh/docket-date-name-re* and the function

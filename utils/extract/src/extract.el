@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-09 19:36:04 lolh-mbp-16>
-;; Version: 0.1.19 [2024-06-05 10:15]
+;; Time-stamp: <2024-08-14 23:17:33 minilolh>
+;; Version: 0.1.20 [2024-08-14 21:15]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -14,7 +14,7 @@
 ;; 3. Update PDFs
 
 ;;; TODO Items
-;; -[ ] [2024-04-15T15:30]
+;; -[X] [2024-04-15T15:30]
 ;;      When I receive a ledger by email, download it.  Go to the Ledger
 ;;      section; hit a key command, process the ledger, file it in the
 ;;      Google Drive, and attach it.  Also try to create a link.
@@ -341,7 +341,16 @@
   case name, and will then ask for the file name for the remaining files and
   also place them into the Google Drive.
 
-  All new files will be sym-linked into the attachment directory."
+  All new files will be sym-linked into the attachment directory.
+
+  This command must work even when the case has been closed (moved into the
+  /closed directory).
+  e.g.: ~/.local/share/notes/ccvlp/cases/closed/...
+
+  The data directory should stay the same; the reference to this directory
+  needs to change when it is `closed'.
+
+  lolh/gd-cause-dir \"Court File\""
 
   (interactive "p")
   (lolh/note-tree)
@@ -543,8 +552,38 @@ The unlocked files are moved into *lolh/downloads-dir*."
   (message "Files unlocked"))
 
 
+(defun lolh/close-case (case)
+  "Close a CASE, updating any data directory references.
+
+First, move the Google_Drive folder into the 00_YEAR_Closed_Cases directory.
+Second, update the files in the .../data/Case/... directory to point to them.
+
+These directorys are found by following the PROPERTIES...DIR...END values.
+Use `org-element-map' function to find the DIR properties.
+
+
+When a case is closed, The Google Drive documents are moved into the
+`00_YEAR_Closed Cases' directory.  Thus, the local data directory files
+must be updated to point to those files.  All directory references simply
+must have this `00_YEAR_Closed Cases' directory inserted at the appropriate
+location.  For example, the links in the data/CASE/Court Files is something
+like ~/Google Drive/My Drive/Lincoln Harvey 2024/CASE/02 Case -- Summons.pdf
+This will need to have 00_YEAR_Close Cases inserted after Lincoln Harvey 2024.
+I think.
+
+This command must go through each and every directory and every sym-link
+it finds and modify the sym-link to include this new directory entry.")
+
+
 ;;;===================================================================
 ;;; GD
+
+
+(defun lolh/year-from-cause (cause)
+  "Return the full year of a CAUSE.
+
+E.g. 24-2-01234-06 => 2024"
+  (format "20%s" (substring cause 0 2)))
 
 
 (defun lolh/gd-year (year)
@@ -555,6 +594,77 @@ The GOOGLE_DRIVE environment variables must be set and named correctly."
   (let ((gd-year (format "%s_%s" *lolh/gd* year)))
     (or (getenv gd-year)
         (error "Year %s did not return a Google Drive value" year))))
+
+
+(defun lolh/gd-closed (year)
+  "Return the directory portion of the closed dir for YEAR.
+
+E.g. 00_2024_Closed_Cases"
+  (format "00_%s_%s" year *lolh/gd-closed*))
+
+
+(defun lolh/number-dirs (dir)
+  "Given a DIR, return the number of its components."
+  (if (string= "/" dir)
+      1
+    (1+ (lolh/number-dirs
+         (file-name-directory
+          (directory-file-name dir))))))
+
+
+(defun lolh/closed-gd-year (year dir)
+  "Given a YEAR and a DIR, make the DIR closed."
+
+  (file-name-concat
+   (lolh/gd-year year)
+   (lolh/gd-closed year)
+   (string-join (nthcdr (lolh/number-dirs (lolh/gd-year year))
+                        (file-name-split dir))
+                "/")))
+
+
+;;; NEED A COMMAND TO CLOSE A CAUSE
+;; As part of its operation, it will run lolh/update-dir-properties
+
+;;; THE FOLLOWING HAS BEEN IMPLEMENTED
+;; function `'lolh/update-dir-properties' CAUSE
+;; 1. Obtain the case note that has been moved using (denote-directory-files "[CASE].*case"
+;; 2. Find all `DIR' Properties
+;; 2a. For each `DIR' found, go to the directory
+;; 2b. Run through each file in that directory and obtain the symlink value
+;; 2bi. (file-truename [FILE]) or (file-chase-links [FILE])
+;; 2c. Update the symlink value to include the `CLOSED' directory component
+;; 2ci. make-symbolic-link target linkname ok-if-already-exists
+
+
+;;; NEED A KEY COMMAND HERE
+(defun lolh/update-dir-properties (cause)
+  "CAUSE is the case number of the current case note.
+
+For each DIR property, update the symlinks of the files to point to the
+directory containing the CLOSED files."
+  (interactive (list (lolh/cause)))
+  (with-temp-buffer
+    (insert-file-contents
+     ;; TODO: Need to test this value to make sure it returns something; else error.
+     (car (denote-directory-files (format "%s.*_case" cause))))
+    (widen)
+    (lolh/note-tree)
+    (org-element-map *lolh/note-tree* 'node-property
+      (lambda (np)
+        (when (string= "DIR" (org-element-property :key np))
+          (lolh/close-dir-files (org-element-property :value np) cause))))))
+
+
+(defun lolh/close-dir-files (dir cause)
+  "Update all files in DIR for CAUSE to point to the 00_YEAR_Closed Cases directory."
+  (let ((year (lolh/year-from-cause cause))
+        (all-files (directory-files dir t directory-files-no-dot-files-regexp)))
+    (dolist (f all-files)
+      ;; There are multiple symbolic links involved; just change the first level
+      (let* ((sf (file-chase-links f 1))
+             (nf (lolh/closed-gd-year year sf)))
+        (make-symbolic-link nf f t)))))
 
 
 (defun lolh/gd-cause-dir (&optional subdir closed)

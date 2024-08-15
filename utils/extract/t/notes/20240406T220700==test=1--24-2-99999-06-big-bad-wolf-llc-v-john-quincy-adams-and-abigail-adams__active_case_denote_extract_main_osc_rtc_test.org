@@ -31,30 +31,33 @@
 *** OSC-2
 
 ** DOCUMENTS
-
 *** APPEARANCE
 
 *** APPOINTMENT
 
 *** COURT FILES
+:PROPERTIES:
+:DIR:      ~/.local/src/emacs/lolh/utils/extract/t/data/Court Files/
+:END:
 
 *** EXHIBITS
 :PROPERTIES:
 :EXHIBIT-1:	-- Lease [date]
 :EXHIBIT-2:	-- Notice [date]
 :EXHIBIT-3:	-- Service [date]
+:DIR:      ~/.local/src/emacs/lolh/utils/extract/t/notes/Exhibits
 :END:
 
 *** LEDGERS
 :PROPERTIES:
 :LEDGER-1:	-- [DATE]
 :LEDGER-2:	-- [DATE]
+:DIR:      ~/.local/src/emacs/lolh/utils/extract/t/data/Ledgers/
 :END:
 
 * CLIENT
 
 * O/C
-
 ** O/C INFO
 
 ** O/C COMMUNICATION
