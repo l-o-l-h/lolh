@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-08-14 23:17:33 minilolh>
+;; Time-stamp: <2024-08-21 19:10:50 lolh-mbp-16>
 ;; Version: 0.1.20 [2024-08-14 21:15]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -199,6 +199,7 @@
 (keymap-global-set "C-x p j" #'lolh/process-dir)
 (keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
+(keymap-global-set "C-x p C" #'lolh/close-case)
 (keymap-global-set "M-A"     #'lolh/note-tree)
 (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
 (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
@@ -552,7 +553,8 @@ The unlocked files are moved into *lolh/downloads-dir*."
   (message "Files unlocked"))
 
 
-(defun lolh/close-case (case)
+;;
+(defun lolh/close-case ()
   "Close a CASE, updating any data directory references.
 
 First, move the Google_Drive folder into the 00_YEAR_Closed_Cases directory.
@@ -572,7 +574,21 @@ This will need to have 00_YEAR_Close Cases inserted after Lincoln Harvey 2024.
 I think.
 
 This command must go through each and every directory and every sym-link
-it finds and modify the sym-link to include this new directory entry.")
+it finds and modify the sym-link to include this new directory entry."
+  (interactive)
+
+  ;; move a folder
+  ;; 1. Assume the command is called from a case note; use the cause it produces.
+  ;; 2. Obtain the base directory
+  (let* ((cause (lolh/cause))
+         (year (lolh/year-from-cause cause))
+         (cause-dir (lolh/gd-cause-dir))
+         (closed-dir-year (lolh/gd-closed year))
+         (closed-dir (file-name-as-directory
+                      (file-name-concat cause-dir closed-dir-year))))
+    (princ (format "cause: %s\nyear: %s\ncause-dir: %s\nclosed-dir: %s\n"
+                   cause year cause-dir closed-dir)))
+  )
 
 
 ;;;===================================================================

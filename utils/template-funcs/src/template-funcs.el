@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2024-06-10 06:39:06 lolh-mbp-16>
+;; Time-stamp: <2024-09-14 06:52:04 lolh-mbp-16>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -63,6 +63,10 @@
    ":APPOINT:\t--\n"
    ":NOA:\t\t--\n"
    ":LEDGER:\t--\n"
+   ":OLD:\t\t--\n"
+   ":DISMISS:\t--\n"
+   ":WRIT:\t\t--\n"
+   ":JUDGMENT:\t--\n"
    ":END:\n\n"
 
    "** OSC\n"
@@ -109,10 +113,13 @@
 - [ ] Checklist [0/3]
   - [ ] Requested
   - [ ] Received
-  - [ ] Reviewed
-\n"
+  - [ ] Reviewed\n\n"
 
-   "* ISSUES [0/0]\n\n"))
+   "* ISSUES [0/0]\n\n"
+   "** Balance Calculation\n\n"
+   "|DATE|DESCRIPTION|AMOUNT|SUBTOTAL|RUNNING TOTAL|COMMENTS|\n"
+   "|-\t"
+   "|\t\n\n"))
 
 (defun checklist ()
   "New RTC Case Checklist Note"
