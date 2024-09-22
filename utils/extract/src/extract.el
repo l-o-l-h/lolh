@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-08-21 19:10:50 lolh-mbp-16>
+;; Time-stamp: <2024-09-22 11:03:40 lolh-mbp-16>
 ;; Version: 0.1.20 [2024-08-14 21:15]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -117,6 +117,24 @@
   '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document :ext)
   "   0      1       2      3      4       5          6        7          8       9")
 
+(defconst *lolh/cause-rx*
+  (rx string-start (= 2 digit) "-" digit "-" (= 5 digit) "-" (= 2 digit)))
+
+(defconst *lolh/cause-plaintiffs-defendants-rx*
+  (rx string-start
+      (group (= 2 digit) "-" digit "-" (= 5 digit) "-" (= 2 digit))
+      (+ space)
+      (group (1+ anything))
+      (seq (1+ space) (or "v" "V" "vs" "VS") (? ".") (1+ space))
+                                        ;(or " v. " " V. " " vs " " vs. ")
+      (group (1+ anything))
+      string-end)
+  "24-2-012345-06 PLAINTIFF VS. DEFENDANTS.
+   Group-0 is the whole case name;
+   Group-1 is the Cause;
+   Group-2 is/are the Plaintiff(s) as a whole;
+   Group-3 is/are the Defendant(s) as a whole.")
+
 (defconst *lolh/case-file-name-rx*
   (rx bos
       (opt (group-n 1 (** 3 4 (any digit "*)")))) ; docket no. or nil
@@ -209,6 +227,7 @@
 (keymap-global-set "M-R"     #'lolh/simple-rename-using-note)
 (keymap-global-set "M-T"     #'lolh/pbcopy-title)
 (keymap-global-set "M-U"     #'lolh/unlock-docs)
+(keymap-global-set "M-W"     #'lolh/return-cause-plaintiffs-defendants)
 
 
 ;;; The following command requires that there be a main heading titled
@@ -559,8 +578,9 @@ The unlocked files are moved into *lolh/downloads-dir*."
 
 First, move the Google_Drive folder into the 00_YEAR_Closed_Cases directory.
 Second, update the files in the .../data/Case/... directory to point to them.
+Third, update links in the case files to point to the Closed_Cases directory.
 
-These directorys are found by following the PROPERTIES...DIR...END values.
+These directories are found by following the PROPERTIES...DIR...END values.
 Use `org-element-map' function to find the DIR properties.
 
 
@@ -579,16 +599,24 @@ it finds and modify the sym-link to include this new directory entry."
 
   ;; move a folder
   ;; 1. Assume the command is called from a case note; use the cause it produces.
-  ;; 2. Obtain the base directory
+  ;; 2. Obtain the year
+  ;; 3. Obtain the base directory; turn it into a file for directory manipulation
+  ;; 4. Create the file name in the Closed Directory,e.g., 00_YEAR_Closed_Cases
+  ;; 5. Insert the Closed name into the Cause Dir to create the destination directory
+  ;; 6. Copy the directory
+  ;; 7. Delete the directory
   (let* ((cause (lolh/cause))
          (year (lolh/year-from-cause cause))
          (cause-dir (lolh/gd-cause-dir))
-         (closed-dir-year (lolh/gd-closed year))
-         (closed-dir (file-name-as-directory
-                      (file-name-concat cause-dir closed-dir-year))))
-    (princ (format "cause: %s\nyear: %s\ncause-dir: %s\nclosed-dir: %s\n"
-                   cause year cause-dir closed-dir)))
-  )
+         (closed-dir (lolh/closed-gd-year year cause-dir))
+         (keep-time t)
+         (parents nil)
+         (copy-contents t)
+         (recursive t)
+         (trash t))
+    (copy-directory cause-dir closed-dir keep-time parents copy-contents)
+    ;;(delete-directory cause-dir recursive trash)
+    ))
 
 
 ;;;===================================================================
@@ -849,6 +877,44 @@ Return an alist of (client-name . client-note) pairs."
 
   (capitalize
    (string-replace "-" " " (denote-retrieve-filename-title client-note))))
+
+
+(defun lolh/cause-plaintiffs-defendants ()
+  "Return  a list of the full, cause, plaintiffs, and defendants of a case note.
+'(full, cause, plaintiffs, defendants)"
+  ;; Do this without calling (lolh/gd-cause-dir)
+  ;; use: (denote-retrieve-title-or-filename (buffer-file-name) 'org)
+  (let ((case-name (denote-retrieve-title-or-filename (buffer-file-name) 'org)))
+    (if (string-match *lolh/cause-plaintiffs-defendants-rx* case-name)
+        (list
+         (match-string 0 case-name)     ; Full match
+         (match-string 1 case-name)     ; Cause
+         (match-string 2 case-name)     ; Plaintiff(s)
+         (match-string 3 case-name))    ; Defendant(s)
+      (error "In lolh/cause-plaintiffs-defendants but failed to match a case file name: %s" case-name))))
+
+
+(defun lolh/return-cause-plaintiffs-defendants (which)
+  "From a case note, return one of:
+<f>ull:       full case name
+<c>ause:      cause number
+<p>laintiffs: the plaintiffs
+<d>efendants: the defendants
+based upon the WHICH, which must be a corresponding symbol.
+An error will be called if something goes wrong."
+  (interactive "cfull cause plaintiffs defendants: ")
+  (let ((ls (lolh/cause-plaintiffs-defendants)))
+
+    (cond
+     ((eql which ?f) (and (lolh/pbcopy (cl-first ls))
+                          (message (cl-first ls))))
+     ((eql which ?c) (and (lolh/pbcopy (cl-second ls))
+                          (message (cl-second ls))))
+     ((eql which ?p) (and (lolh/pbcopy (cl-third ls))
+                          (message (cl-third ls))))
+     ((eql which ?d) (and (lolh/pbcopy (cl-fourth ls))
+                          (message (cl-fourth ls))))
+     (t (error "Need one of '<f>ull '<c>ause '<p>laintiffs or '<d>efendants but received <%c> instead" which)))))
 
 
 ;;;-------------------------------------------------------------------
