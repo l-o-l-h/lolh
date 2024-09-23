@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-09-22 11:03:40 lolh-mbp-16>
+;; Time-stamp: <2024-09-23 09:10:57 lolh-mbp-16>
 ;; Version: 0.1.20 [2024-08-14 21:15]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -33,10 +33,25 @@
 ;;      attach it to DOCUMENTS
 
 
-;;; Denote Commands
+;;; Denote Commands Used
 ;; denote-after-new-note-hook
 ;; denote-after-rename-file-hook
 
+;; (denote-directory)
+;; (denote-directory-files (format "%s.*_case" cause))
+
+;; (defcustom denote-rename-confirmations '(rewrite-front-matter modify-file-name)
+
+;; (denote-retrieve-filename-title client-note) -- includes dashes
+;; (denote-retrieve-title-or-filename (buffer-file-name) 'org)) -- string without dashes
+;; (denote-retrieve-filename-keywords (file)) -- includes underscores
+
+;; (denote-extract-keywords-from-path (path)) -- returns a list
+;; (denote-rewrite-keywords (file keywords file-type &optional save-buffer))
+;; (denote-keywords--combine (combination-type user-input-keywords keywords))
+
+;; (denote-link-return-links)
+;; (denote-link-return-backlinks)
 
 ;;; Accessors and Setters from org-element.el
 ;; - ACCESSORS
@@ -117,23 +132,19 @@
   '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document :ext)
   "   0      1       2      3      4       5          6        7          8       9")
 
-(defconst *lolh/cause-rx*
-  (rx string-start (= 2 digit) "-" digit "-" (= 5 digit) "-" (= 2 digit)))
-
 (defconst *lolh/cause-plaintiffs-defendants-rx*
   (rx string-start
       (group (= 2 digit) "-" digit "-" (= 5 digit) "-" (= 2 digit))
       (+ space)
       (group (1+ anything))
       (seq (1+ space) (or "v" "V" "vs" "VS") (? ".") (1+ space))
-                                        ;(or " v. " " V. " " vs " " vs. ")
       (group (1+ anything))
       string-end)
   "24-2-012345-06 PLAINTIFF VS. DEFENDANTS.
-   Group-0 is the whole case name;
-   Group-1 is the Cause;
-   Group-2 is/are the Plaintiff(s) as a whole;
-   Group-3 is/are the Defendant(s) as a whole.")
+   Group-0 is the full case name;
+   Group-1 is the cause;
+   Group-2 is/are the plaintiff(s) as a whole;
+   Group-3 is/are the defendant(s) as a whole.")
 
 (defconst *lolh/case-file-name-rx*
   (rx bos
@@ -252,6 +263,7 @@
   If new files are added, this command can be run to update, and existing
   files will be ignored."
 
+  ;; TODO: Updated interactive to allow this command to work from the command-line.
   (interactive)
   (lolh/note-tree)
 
@@ -572,7 +584,11 @@ The unlocked files are moved into *lolh/downloads-dir*."
   (message "Files unlocked"))
 
 
-;;
+;;====================================================================
+
+
+;; C-x p C :: CLOSE A CASE
+
 (defun lolh/close-case ()
   "Close a CASE, updating any data directory references.
 
@@ -598,25 +614,108 @@ it finds and modify the sym-link to include this new directory entry."
   (interactive)
 
   ;; move a folder
-  ;; 1. Assume the command is called from a case note; use the cause it produces.
-  ;; 2. Obtain the year
-  ;; 3. Obtain the base directory; turn it into a file for directory manipulation
+  ;; 1. Obtain the CAUSE from the main case note
+  ;; 2. Obtain the YEAR
+  ;; 3. Obtain the gd-cause-dir (FULL PATH to the note)
   ;; 4. Create the file name in the Closed Directory,e.g., 00_YEAR_Closed_Cases
-  ;; 5. Insert the Closed name into the Cause Dir to create the destination directory
-  ;; 6. Copy the directory
-  ;; 7. Delete the directory
-  (let* ((cause (lolh/cause))
+  ;; 5. Copy the directory
+  ;; 6. Delete the directory
+  ;; 7. Update the links in the DIR directories to point to the 00_YEAR_Closed_Cases
+  ;;    and change `_active' or `_pending' keyword to `_closed'.
+
+  ;; Obtain the necessary data;
+  (let* (;; 1. CAUSE
+         (cause (lolh/return-cause-plaintiffs-defendants ?c)) ;; don't use lolh/cause
+         ;; 2. YEAR
          (year (lolh/year-from-cause cause))
+         ;; 3. gd-cause-dir FULL PATH
          (cause-dir (lolh/gd-cause-dir))
+         ;; 4. Closed dir
          (closed-dir (lolh/closed-gd-year year cause-dir))
+         ;; Optional arguments for functions `copy-directory' and `delete-directory'
          (keep-time t)
          (parents nil)
          (copy-contents t)
          (recursive t)
          (trash t))
+
+    ;; 5. Copy the directory into Closed
     (copy-directory cause-dir closed-dir keep-time parents copy-contents)
-    ;;(delete-directory cause-dir recursive trash)
-    ))
+
+    ;; 6. Delete the directory leaving only Closed
+    (delete-directory cause-dir recursive trash)
+
+    ;; 7. Update the symlinks and add `_closed' keyword
+    (lolh/update-dir-properties cause)))
+
+
+;;; Called by lolh/close-case
+
+(defun lolh/update-dir-properties (cause)
+  "CAUSE is the case number of the current case note.
+
+After the GD case directory has been moved into the closed directory,
+update the symlinks of the files to point to that directory.
+Then change the `_active' or `_pending' keyword to `_closed' for the main note
+and move the notes into the /closed Denote directory."
+
+  (interactive (list (lolh/cause)))
+
+  ;; Loop through a list of every case note for <CAUSE>
+  (dolist (file-to-close (denote-directory-files (format "--%s-" cause)))
+
+    ;; update all DIR symlinks to point to the file's new location in GD
+    (lolh/close-dir-file file-to-close cause)
+
+    ;; check for the main note; if yes, change the keyword to `_closed'
+    ;; and then move the newly-named note into the closed/ dir.
+    ;; If not the main note, just move it into the closed/dir.
+    (let ((closed-dir (file-name-concat
+                       (file-name-parent-directory file-to-close)
+                       "closed/")))
+      (if (string-match-p "_main" file-to-close)
+          (let ((new-file-to-close (lolh/close-case-add-closed-keyword file-to-close)))
+            (write-file new-file-to-close)
+            (rename-file new-file-to-close closed-dir))
+        (rename-file file-to-close closed-dir)))))
+
+
+(defun lolh/close-case-add-closed-keyword (file-to-close)
+  "Given a FILE-TO-CLOSE, change the `_active' or `_pending' keyword to `_closed'."
+
+  (let* ((kws (denote-extract-keywords-from-path file-to-close))
+         (new-kws-1 (seq-filter
+                     (lambda (elt) (not (or (equal elt "active")
+                                            (equal elt "pending"))))
+                     kws))
+         (new-kws-2 (push "closed" new-kws-1))
+         (denote-rename-confirmations nil))
+
+    ;; (denote--rename-file (file title keywords signature date))
+    ;; Use 'keep-current for `file', `title', `signature', and `date'
+    (denote--rename-file
+     file-to-close
+     'keep-current new-kws-2 'keep-current 'keep-current)))
+
+
+(defun lolh/close-dir-file (file-to-close cause)
+  "Update all DIR links in FILE-TO-CLOSE to point to the 00_YEAR_Closed Cases directory."
+
+  (with-temp-buffer
+    (insert-file-contents file-to-close)
+    (widen)
+    (lolh/note-tree)
+    (org-element-map *lolh/note-tree* 'node-property
+      (lambda (np)
+        (when (string= "DIR" (org-element-property :key np))
+          (let ((year (lolh/year-from-cause cause))
+                (all-files (directory-files
+                            (org-element-property :value np) t directory-files-no-dot-files-regexp)))
+            (dolist (f all-files)
+              ;; There are multiple symbolic links involved; just change the first level
+              (let* ((sf (file-chase-links f 1))
+                     (nf (lolh/closed-gd-year year sf)))
+                (make-symbolic-link nf f t)))))))))
 
 
 ;;;===================================================================
@@ -665,50 +764,6 @@ E.g. 00_2024_Closed_Cases"
    (string-join (nthcdr (lolh/number-dirs (lolh/gd-year year))
                         (file-name-split dir))
                 "/")))
-
-
-;;; NEED A COMMAND TO CLOSE A CAUSE
-;; As part of its operation, it will run lolh/update-dir-properties
-
-;;; THE FOLLOWING HAS BEEN IMPLEMENTED
-;; function `'lolh/update-dir-properties' CAUSE
-;; 1. Obtain the case note that has been moved using (denote-directory-files "[CASE].*case"
-;; 2. Find all `DIR' Properties
-;; 2a. For each `DIR' found, go to the directory
-;; 2b. Run through each file in that directory and obtain the symlink value
-;; 2bi. (file-truename [FILE]) or (file-chase-links [FILE])
-;; 2c. Update the symlink value to include the `CLOSED' directory component
-;; 2ci. make-symbolic-link target linkname ok-if-already-exists
-
-
-;;; NEED A KEY COMMAND HERE
-(defun lolh/update-dir-properties (cause)
-  "CAUSE is the case number of the current case note.
-
-For each DIR property, update the symlinks of the files to point to the
-directory containing the CLOSED files."
-  (interactive (list (lolh/cause)))
-  (with-temp-buffer
-    (insert-file-contents
-     ;; TODO: Need to test this value to make sure it returns something; else error.
-     (car (denote-directory-files (format "%s.*_case" cause))))
-    (widen)
-    (lolh/note-tree)
-    (org-element-map *lolh/note-tree* 'node-property
-      (lambda (np)
-        (when (string= "DIR" (org-element-property :key np))
-          (lolh/close-dir-files (org-element-property :value np) cause))))))
-
-
-(defun lolh/close-dir-files (dir cause)
-  "Update all files in DIR for CAUSE to point to the 00_YEAR_Closed Cases directory."
-  (let ((year (lolh/year-from-cause cause))
-        (all-files (directory-files dir t directory-files-no-dot-files-regexp)))
-    (dolist (f all-files)
-      ;; There are multiple symbolic links involved; just change the first level
-      (let* ((sf (file-chase-links f 1))
-             (nf (lolh/closed-gd-year year sf)))
-        (make-symbolic-link nf f t)))))
 
 
 (defun lolh/gd-cause-dir (&optional subdir closed)
@@ -880,22 +935,23 @@ Return an alist of (client-name . client-note) pairs."
 
 
 (defun lolh/cause-plaintiffs-defendants ()
-  "Return  a list of the full, cause, plaintiffs, and defendants of a case note.
+  "Return a list of the full, cause, plaintiffs, and defendants of the main note.
 '(full, cause, plaintiffs, defendants)"
   ;; Do this without calling (lolh/gd-cause-dir)
   ;; use: (denote-retrieve-title-or-filename (buffer-file-name) 'org)
-  (let ((case-name (denote-retrieve-title-or-filename (buffer-file-name) 'org)))
-    (if (string-match *lolh/cause-plaintiffs-defendants-rx* case-name)
-        (list
-         (match-string 0 case-name)     ; Full match
-         (match-string 1 case-name)     ; Cause
-         (match-string 2 case-name)     ; Plaintiff(s)
-         (match-string 3 case-name))    ; Defendant(s)
-      (error "In lolh/cause-plaintiffs-defendants but failed to match a case file name: %s" case-name))))
+  (with-main-note
+   (let ((case-name (denote-retrieve-title-or-filename (buffer-file-name) 'org)))
+     (if (string-match *lolh/cause-plaintiffs-defendants-rx* case-name)
+         (list
+          (match-string 0 case-name)                ; Full match
+          (match-string 1 case-name)                ; Cause
+          (match-string 2 case-name)                ; Plaintiff(s)
+          (match-string 3 case-name))               ; Defendant(s)
+       (error "In lolh/cause-plaintiffs-defendants but failed to match a case file name: %s" case-name)))))
 
 
 (defun lolh/return-cause-plaintiffs-defendants (which)
-  "From a case note, return one of:
+  "From a case or client note, return one of:
 <f>ull:       full case name
 <c>ause:      cause number
 <p>laintiffs: the plaintiffs
@@ -1628,7 +1684,13 @@ All documents begin and end in *lolh/process-dir*"
 
 
 (defun lolh/cause ()
-  "Return the string value of the main note's cause number."
+  "Return the string value of the main note's cause number.
+
+NOTE: this command uses the `CAUSE' PROPERTY from RTC CASE headline.
+It also uses `org-element-map' so might be slow.
+Alternative the command lolh/return-cause-plaintiffs-defendants ?c uses
+the main note's title instead.  Should usually use
+`lolh/return-cause-plaintiffs-defendants ?c' for faster operation."
 
   (interactive)
   (let ((cause (lolh/main-property "CAUSE")))
