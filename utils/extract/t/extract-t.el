@@ -1,5 +1,5 @@
 ;;; extract-t.el --- Extract tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-09-26 23:20:05 lolh-mbp-16>
+;; Time-stamp: <2024-09-27 08:26:01 lolh-mbp-16>
 ;; Version: 0.0.2 [2024-09-26 Thu 23:20]
 
 ;; Package-Requires: ((emacs "24.1") (emacs "24.3") extract)
@@ -293,12 +293,8 @@
 
 (ert-deftest extract-t-create-file-name-using-note-parts ()
   (with-temp-buffer
-    ;; TODO: need to use (set-visited-file-name FILENAME t) to give this buffer a buffer file name
-    ;; TODO: need to figure how to avoid the query to save the buffer
     (insert-file-contents
-     "./notes/20240406T220700==test=1--24-2-99999-06-big-bad-wolf-llc-v-john-quincy-adams-and-abigail-adams__active_case_denote_extract_main_osc_rtc_test.org")
-    (set-visited-file-name
-     (expand-file-name "./notes/20240926T073802==test=2--24-2-99999-06-big-bad-wolf-llc-v-john-henry-adams-jr-and-abilgail-susan-adams__active_case_denote_extract_main_osc_rtc_test.org") t)
+     "./notes/20240406T220700==test=1--24-2-99999-06-big-bad-wolf-llc-v-john-quincy-adams-and-abigail-adams__active_case_denote_extract_main_osc_rtc_test.org" t)
     (widen)
     (lolh/note-tree)
 
@@ -307,15 +303,10 @@
                "02) 24-2-99999-06 [2024-05-05] ADAMS,John-ADAMS,Abigail -- Complaint (30-Day).pdf"
                (lolh/create-file-name-using-note-parts fn1))))))
 
-
 (ert-deftest extract-t-create-file-name-using-note-parts-with-jr ()
   (with-temp-buffer
-    ;; TODO: need to use (set-visited-file-name FILENAME t) to give this buffer a buffer file name
-    ;; TODO: need to figure how to avoid the query to save the buffer
     (insert-file-contents
-     "./notes/20240926T073802==test=2--24-2-99999-06-big-bad-wolf-llc-v-john-henry-adams-jr-and-abilgail-susan-adams__active_case_denote_extract_main_osc_rtc_test.org")
-    (set-visited-file-name
-     (expand-file-name "./notes/20240926T073802==test=2--24-2-99999-06-big-bad-wolf-llc-v-john-henry-adams-jr-and-abilgail-susan-adams__active_case_denote_extract_main_osc_rtc_test.org") t)
+     "./notes/20240926T073802==test=2--24-2-99999-06-big-bad-wolf-llc-v-john-henry-adams-jr-and-abilgail-susan-adams__active_case_denote_extract_main_osc_rtc_test.org" t)
     (widen)
     (lolh/note-tree)
 
