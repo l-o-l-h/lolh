@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-09-23 09:10:57 lolh-mbp-16>
-;; Version: 0.1.20 [2024-08-14 21:15]
+;; Time-stamp: <2024-09-26 23:19:14 lolh-mbp-16>
+;; Version: 0.1.21 [2024-09-26 23:20]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -31,6 +31,12 @@
 ;;      PDF form, file in Google Drive and attach under the appropriate headline.
 ;; -[ ] [2024-04-15T12:15] After receiving confirmation of filing of NOA,
 ;;      attach it to DOCUMENTS
+;; -[ ] [2024-09-25T0715 While in a case note, enter a command to open a
+;;      dired window belowthat will open to the GD directory to allow
+;;      linking to documents.
+;;      - Need to study opening a new window below
+;;      - Need to study opening dired to a particular directory
+;;      - There is already a linking command C-c L which is basically usable.
 
 
 ;;; Denote Commands Used
@@ -41,6 +47,7 @@
 ;; (denote-directory-files (format "%s.*_case" cause))
 
 ;; (defcustom denote-rename-confirmations '(rewrite-front-matter modify-file-name)
+;; denote-save-buffers t
 
 ;; (denote-retrieve-filename-title client-note) -- includes dashes
 ;; (denote-retrieve-title-or-filename (buffer-file-name) 'org)) -- string without dashes
@@ -125,8 +132,16 @@
   (concat "java -jar " *lolh/pdftk-jar-path* " \'%s\' cat %s-%s output \'%s\'"))
 ;; "java -jar %s \'%s\' cat %s-%s output \'%s\'"
 
-(defconst *lolh/first-last-name-re*
-  "^\\([^[:space:]]+\\).*[[:space:]]\\([^[:space:]]+\\)$")
+(defconst *lolh/first-middle-last-name-rx*
+  (rx bos
+      (group (| (1+ word) (seq word "."))) space ; first initial or name
+      (opt (group (1+ (any word "."))) space)    ; middle initial or name
+      (group (1+ (any word "-")))                ; last name
+      (opt (seq "," space (group (1+ (any word "."))))) ; suffix Jr., Sr., MD.
+      eos))
+
+;; (defconst *lolh/first-last-name-re*
+;;   "^\\([^[:space:]]+\\).*[[:space:]]\\([^[:space:]]+\\)$")
 
 (defconst *lolh/file-name-allowed-parts*
   '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document :ext)
@@ -672,12 +687,13 @@ and move the notes into the /closed Denote directory."
     ;; If not the main note, just move it into the closed/dir.
     (let ((closed-dir (file-name-concat
                        (file-name-parent-directory file-to-close)
-                       "closed/")))
+                       "closed/"))
+          (buffer-file-to-close (find-buffer-visiting file-to-close)))
       (if (string-match-p "_main" file-to-close)
           (let ((new-file-to-close (lolh/close-case-add-closed-keyword file-to-close)))
-            (write-file new-file-to-close)
             (rename-file new-file-to-close closed-dir))
-        (rename-file file-to-close closed-dir)))))
+        (rename-file file-to-close closed-dir))
+      (kill-buffer buffer-file-to-close))))
 
 
 (defun lolh/close-case-add-closed-keyword (file-to-close)
@@ -689,7 +705,8 @@ and move the notes into the /closed Denote directory."
                                             (equal elt "pending"))))
                      kws))
          (new-kws-2 (push "closed" new-kws-1))
-         (denote-rename-confirmations nil))
+         (denote-rename-confirmations nil)
+         (denote-save-buffers t))
 
     ;; (denote--rename-file (file title keywords signature date))
     ;; Use 'keep-current for `file', `title', `signature', and `date'
@@ -862,7 +879,7 @@ First, check if the current note is the Main note.  If so, return it.
 Then check all of the backlink buffers.
 Return an error if a main note cannot be found."
 
-  (let ((bfn (buffer-file-name)))
+  (let ((bfn (buffer-file-name))) ; watch out for (buffer-file-name) returning NIL
     (if (lolh/note-p bfn 'main)
         bfn
       (let ((blb (denote-link-return-backlinks))
@@ -1313,13 +1330,17 @@ If FILTER is set to a regexp, attach the matched files."
   "Return the fully parsed and formated defendant names.
 
 Returns a plist of the following form:
-(DEF-1 (:first First :last Last)
- DEF-2 (:first First :last Last))
+(DEF-1 (:first First :middle Middle :last Last :suffix Jr.|Sr.|MD)
+ DEF-2 (:first First :middle Middle :last Last :suffix Jr.|Sr.|MD))
+
+If a component does not exit, it will be NIL.
 
 Use lolh/def-name DEF-1|DEF-2 to get each.
 Use lolh/def-first-name DEF-1|DEF-2 to get the first name
 Use lolh/def-last-name DEF-1|DEF-2 to get the last name
-Use lolh/last-first-name DEF-1|DEF-2 to get the names reversed."
+Use lolh/last-first-name DEF-1|DEF-2 to get the names reversed.
+
+TODO: Implement getter for the middle name and suffix."
 
   (save-excursion
     (with-current-buffer (get-file-buffer (lolh/main-note))
@@ -1328,11 +1349,15 @@ Use lolh/last-first-name DEF-1|DEF-2 to get the names reversed."
           (let ((name (lolh/note-property def)))
             (if (string= "--" name)
                 (setf fl nil)
-              (if (string-match *lolh/first-last-name-re* name)
+              (if (string-match *lolh/first-middle-last-name-rx* name)
                   (setf fl (list :first
                                  (match-string 1 name)
+                                 :middle
+                                 (match-string 2 name)
                                  :last
-                                 (match-string 2 name)))
+                                 (match-string 3 name)
+                                 :suffix
+                                 (match-string 4 name)))
                 (error "Name %s from %s appears to be malformed" name def)))
             (setf defs (append defs (list def fl)))))
         defs))))
@@ -1743,6 +1768,11 @@ this function will ask for a client."
 
 (defmacro with-main-note (&rest body)
   (save-excursion
+    ;; TODO: fix this error
+    ;; (get-file-buffer FILENNAME) returns NIL if there is no associated buffer;
+    ;; this NIL causes an error down the line;
+    ;; this only seems to happen during testing, however,
+    ;; but it should probably be found to avoid that error later on.
     `(with-current-buffer (get-file-buffer ,(lolh/main-note))
        ,@body)))
 

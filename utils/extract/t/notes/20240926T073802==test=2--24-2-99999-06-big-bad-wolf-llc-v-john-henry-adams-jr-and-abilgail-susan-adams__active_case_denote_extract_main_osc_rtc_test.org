@@ -1,18 +1,18 @@
-#+title:      24-2-99999-06 Big Bad Wolf, LLC v. John Quincy Adams and Abigail Adams
-#+date:       [2024-04-06 Sat 22:07]
+#+title:      24-2-99999-06 Big Bad Wolf, LLC v. John Henry Adams, Jr. and Abilgail Susan Adams
+#+date:       [2024-09-26 Thu 07:38]
 #+filetags:   :active:case:denote:extract:main:osc:rtc:test:
-#+identifier: 20240406T220700
+#+identifier: 20240926T073802
 
 * RTC CASE
 :PROPERTIES:
-:O/C:		-- Mean Attorney
+:O/C:		--
 :CAUSE:	-- 24-2-99999-06
-:DEPT:	-- 11 Judy
-:PL-1:	-- Big Bad Wolf, LLC
+:DEPT:	--
+:PL-1:	--
 :PL-2:	--
 :APRTMNT:	--
-:DEF-1:	-- John Quincy Adams
-:DEF-2:	-- Abigail Adams
+:DEF-1:	-- John Henry Adams, Jr.
+:DEF-2:	-- Abigail Susan Adams
 :LEASE:	--
 :NOTICE:	--
 :SUMMONS:	--
@@ -65,4 +65,3 @@
 * PLAN
 
 * ISSUES
-
