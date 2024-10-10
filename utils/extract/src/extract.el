@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-09-26 23:19:14 lolh-mbp-16>
+;; Time-stamp: <2024-09-30 08:14:05 lolh-mbp-16>
 ;; Version: 0.1.21 [2024-09-26 23:20]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -186,16 +186,23 @@
 (defconst *lolh/exhibit-or-source-re*
   "^EXHIBIT-[[:alnum:]]\\|^SOURCE")
 
+(defconst *lolh/case-regex*
+  (rx (seq
+       space (1+ word) space "v." space (1+ word) "," space
+       (1+ digit) (1+ (| "Wash." "Wn." "App." "2n")) (1+ digit) space
+       "(" (= 4 digit) ")"
+       (| space punct))))
+
 (defconst *lolh/doc-types*
   (list
    "COURT FILES"
    "EXHIBITS"
-   "LEDGERS"    ; includes CHECKLIST
-   "APPEARANCE" ; includes APPOINTMENT
+   "LEDGERS"                            ; includes CHECKLIST
+   "APPEARANCE"                         ; includes APPOINTMENT
    "OLD"
    "ORDERS"
    "PROPOSED"
-   "MOTIONS"	; includes CITATIONS
+   "MOTIONS"                            ; includes CITATIONS
    ))
 
 (defconst *lolh/pdf* ".pdf")

@@ -1,5 +1,5 @@
 ;;; extract-t.el --- Extract tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-09-27 08:26:01 lolh-mbp-16>
+;; Time-stamp: <2024-09-30 08:55:34 lolh-mbp-16>
 ;; Version: 0.0.2 [2024-09-26 Thu 23:20]
 
 ;; Package-Requires: ((emacs "24.1") (emacs "24.3") extract)
@@ -364,6 +364,30 @@
 ;;                   :sep " -- "
 ;;                   :name "Document Title")
 ;;                 (lolh/extract-docket-date-name f)))))
+
+(ert-deftest extract-t-court-case-regex-tests ()
+  (let ((case-regex1 (rx (seq
+                          (1+ (any word punct space)) space "v. " (1+ (any word punct space)) ", " ; case name
+                          (1+ digit) space                                                         ; volume
+                          (1+ (| "Wash." "Wn.") (opt "App.") (opt "2d") space)                     ; court
+                          (1+ digit) space                                                         ; page
+                          "(" (= 4 digit) ")"                                                      ; year
+                          )))
+        (case-regex2 (rx (seq
+                          (1+ (any word punct space)) space "v. " (1+ (any word punct space))
+                          "(" (= 4 digit) ")" space
+                          (1+ digit) space
+                          (1+ (| "Wash." "Wn.") (opt "App.") (opt "2d"))
+                          )))
+        (case01 "Green v. Pierce County, 197 Wash.2d 841 (2021)")
+        (case02 "Coates v. City of Tacoma, 11 Wash.App.2d 688 (2019)")
+        (case02a "Coates, Inc. v. City of Tacoma, LLC, 11 Wash.App.2d 688 (2019)")
+        (case03 "State ex rel. Lemon v. Coffin (1958) 52 Wash.2d 894"))
+    (should (string-match-p case-regex1 case01))
+    (should (string-match-p case-regex1 case02))
+    (should (string-match-p case-regex1 case02a))
+    (should (string-match-p case-regex2 case03))
+    ))
 
 (provide 'extract-t)
 ;;; extract-t.el ends here
