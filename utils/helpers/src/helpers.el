@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-15 10:49:35 lolh-mbp-16>
+;;; Time-stamp: <2024-10-15 13:57:26 lolh-mbp-16>
 ;;; Version: 0.0.2_2024-10-15T1040
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -459,8 +459,16 @@ in the *Help* buffer."
   ;; 7. Find West Headnotes and make it a subheading 2
   ;; 8. Turn Headnotes into subheadings 3; turn Attorneys and Law Firms
   ;;    into subheading 2; turn Opinion into a subheading 2
-  ;; 9. Find a dissenting opinion and turn it into a subheading 2
-  ;; 10. Delete All Citations to End of Document
+  ;; 9. Make sure there is one empty line between paragraphs.
+  ;; 10. Find a dissenting opinion and turn it into a subheading 2
+  ;; 11. Delete `'All Citations' to End of Document
+  ;; 12. Save file as Org doc; convert to Denote note
+  ;; TODO:
+  ;; 13. Fix Headnotes styling
+  ;; 14. Link Headnotes to body headnotes
+  ;; 15. Do something with Footnotes
+  ;; 16. Add Division to coa signature,like coa i, coa ii, coa iii
+  ;; 17. Add keyword interface
 
   ;; 1.
   (find-file text-file)
@@ -479,6 +487,23 @@ in the *Help* buffer."
   "83 Wash.2d 553
    83 Wn.App. 553
    83 Wn.App.2d 553")
+
+(defconst *helpers-date-rx*
+  (rx (seq (|
+            "January"
+            "Februry"
+            "March"
+            "April"
+            "May"
+            "June"
+            "July"
+            "August"
+            "September"
+            "October"
+            "November"
+            "December")
+           (+ space) (** 1 2 digit) "," (+ space) (= 4 digit)))
+  "RX for finding a date of the form `October 15, 2024'")
 
 (defun helpers-convert-date (date)
   "Convert the string DATE of the form 'Month Day, Year' into YYYY-MM-DDTHH:MM"
@@ -589,21 +614,22 @@ in the *Help* buffer."
         ((eql fc ?\n) (forward-line) (while (looking-at-p "\n") (delete-line)))
         (t (insert-char ?\n))))
 
+     ;; 11.
      finally (delete-region (point) (point-max)))
 
+    ;; 10.
     (goto-char cp)
-    (when (re-search-forward "dissenting")
+    (when (re-search-forward "dissenting" nil t)
       (org-toggle-heading 2)))
 
   (goto-char (point-min))
 
+  ;; 12.
   (let* ((bfn (buffer-file-name))
          (title (buffer-substring (+ 2 (pos-bol)) (pos-eol)))
          (kws '("case")) ; TODO: ask for a list of keywords at this point
          (sig (if (string-search "Supreme" title) "sc" "coa")) ; TODO check for unpublished cases also
-         (date (when
-                   (re-search-forward
-                    (rx (seq (| "January" "October") (+ space) (** 1 2 digit) "," (+ space) (= 4 digit))))
+         (date (when (re-search-forward *helpers-date-rx*)
                  (helpers-convert-date (match-string 0))))
          (cit (save-excursion
                 (when (re-search-forward
@@ -611,11 +637,11 @@ in the *Help* buffer."
                   (match-string 1))))
          (nfn (file-name-concat (denote-directory) "law" (concat cit ".org")))
          )
-    (write-file nfn nil)
-    (let ((denote-rename-confirmations nil)
-          (denote-save-buffers t))
-      (denote-rename-file nfn title kws sig date))
-    ;; (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
+    ;; (write-file nfn nil)
+    ;; (let ((denote-rename-confirmations nil)
+    ;;       (denote-save-buffers t))
+    ;;   (denote-rename-file nfn title kws sig date))
+    (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
     )
   )
 
