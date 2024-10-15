@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-15 03:09:08 lolh-mbp-16>
+;;; Time-stamp: <2024-10-15 10:41:26 lolh-mbp-16>
 ;;; Version: 0.0.1_2024-06-11T0340
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -480,6 +480,10 @@ in the *Help* buffer."
    83 Wn.App. 553
    83 Wn.App.2d 553")
 
+(defun helpers-convert-date (date)
+  "Convert the string DATE of the form 'Month Day, Year' into YYYY-MM-DDTHH:MM"
+
+  (format-time-string "%FT%R" (date-to-time date)))
 
 (defun helpers-delete-empty-lines ()
   "Delete empty lines through the first line of text."
@@ -544,7 +548,9 @@ in the *Help* buffer."
 
   ;; 7.
   (re-search-forward "West Headnotes")
-  (org-toggle-heading)
+  (org-toggle-heading 2)
+  (forward-line -1)
+  (delete-line)
 
   ;; 8.
   (cl-loop
@@ -590,9 +596,30 @@ in the *Help* buffer."
       (org-toggle-heading 2)))
 
   (goto-char (point-min))
+
+  (let* ((bfn (buffer-file-name))
+         (title (buffer-substring (+ 2 (pos-bol)) (pos-eol)))
+         (kws '("case")) ; TODO: ask for a list of keywords at this point
+         (sig (if (string-search "Supreme" title) "sc" "coa")) ; TODO check for unpublished cases also
+         (date (when
+                   (re-search-forward
+                    (rx (seq (| "January" "October") (+ space) (** 1 2 digit) "," (+ space) (= 4 digit))))
+                 (helpers-convert-date (match-string 0))))
+         (cit (save-excursion
+                (when (re-search-forward
+                       (rx "Washington Citation:" (+ space) (group (+ nonl))))
+                  (match-string 1))))
+         (nfn (file-name-concat (denote-directory) "law" (concat cit ".org")))
+         )
+    (write-file nfn nil)
+    (let ((denote-rename-confirmations nil)
+          (denote-save-buffers t))
+      (denote-rename-file nfn title kws sig date))
+    ;; (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
+    )
   )
 
 
 (provide 'helpers)
 
-                       ;;; helpers.el ends here
+;;; helpers.el ends here
