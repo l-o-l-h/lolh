@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-09-30 08:14:05 lolh-mbp-16>
+;; Time-stamp: <2024-10-14 13:16:13 lolh-mbp-16>
 ;; Version: 0.1.21 [2024-09-26 23:20]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -135,8 +135,8 @@
 (defconst *lolh/first-middle-last-name-rx*
   (rx bos
       (group (| (1+ word) (seq word "."))) space ; first initial or name
-      (opt (group (1+ (any word "."))) space)    ; middle initial or name
-      (group (1+ (any word "-")))                ; last name
+      (opt (group (1+ (any word "."))) space) ; middle initial or name
+      (group (1+ (any word "-")))             ; last name
       (opt (seq "," space (group (1+ (any word "."))))) ; suffix Jr., Sr., MD.
       eos))
 
@@ -1768,6 +1768,24 @@ this function will ask for a client."
      (message "%s: %s" property property-value)
      (lolh/pbcopy property-value))))
 
+
+;;;-------------------------------------------------------------------
+;;; textutil
+
+(defun lolh/textutil-rtf-to-txt-command ()
+  "Convert a set of RTF documents into same-named TXT documents.
+
+The RTF documents should be in /Downloads.
+The TXT documents will end up in /process."
+
+  (interactive)
+
+  (cl-dolist (rtf (directory-files *lolh/downloads-dir* t ".rtf$"))
+    (rename-file rtf (file-name-as-directory *lolh/process-dir*))
+    (let ((new-rtf (file-name-concat *lolh/process-dir* (file-name-nondirectory rtf))))
+      (call-process-shell-command
+       (format "textutil -convert txt \"%s\"" new-rtf))
+      (delete-file new-rtf t))))
 
 ;;;-------------------------------------------------------------------
 ;;; Macro with-main-note, with-client-note

@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-06-22 20:54:37 lolh-mbp-16>
+;;; Time-stamp: <2024-10-15 03:09:08 lolh-mbp-16>
 ;;; Version: 0.0.1_2024-06-11T0340
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -437,6 +437,162 @@ in the *Help* buffer."
       (mapcar describe-func (sort sym-list 'string<)))))
 
 
+;;;-------------------------------------------------------------------
+;;; Text Utility Helpers
+
+(defun helpers-process-text-case-file (text-file)
+  "Clean up and format a text case file TEXT-FILE."
+
+  (interactive)
+
+  ;; 0. Mark all page numbers
+  ;; 1. Delete all empty lines prior to first non-empty line; join the
+  ;;    first two lines.  Make this a main heading.
+  ;; 2. Delete all lines between 'Document Details' and washington Citation:
+  ;; 3. Capitalize washington
+  ;; 4. Combine Washington Citation and the citation
+  ;; 5. Delete all lines between 'All Citations' and 'Inline KeyCite:
+  ;;    and following lines until case citation.  The case citation will
+  ;;    become a headline
+  ;; 6. Center all lines between Washington Citation and Synopsis;
+  ;;    make Synopsis a subheadline
+  ;; 7. Find West Headnotes and make it a subheading 2
+  ;; 8. Turn Headnotes into subheadings 3; turn Attorneys and Law Firms
+  ;;    into subheading 2; turn Opinion into a subheading 2
+  ;; 9. Find a dissenting opinion and turn it into a subheading 2
+  ;; 10. Delete All Citations to End of Document
+
+  ;; 1.
+  (find-file text-file)
+  (goto-char (point-min))
+  (delete-blank-lines) (delete-blank-lines)
+  (forward-line 1)
+  (join-line)
+  )
+
+
+(defconst *helpers-citation-rx*
+  (rx
+   bol
+   (1+ digit) space (or "Wash." "Wn.") (* (| "App." "2d")) space (+ digit)
+   eol)
+  "83 Wash.2d 553
+   83 Wn.App. 553
+   83 Wn.App.2d 553")
+
+
+(defun helpers-delete-empty-lines ()
+  "Delete empty lines through the first line of text."
+
+  (interactive)
+
+  ;; 0.
+  (goto-char (point-min))
+  (replace-regexp-in-region
+   (rx (group (: (+ "*") (+ digit))) space) "{\\1} ")
+
+  ;; 1.
+  (goto-char (point-min))
+  (delete-blank-lines) (delete-blank-lines)
+  (forward-line) (join-line)
+  (org-toggle-heading)
+
+  ;; 2.
+  (forward-line 2)
+  (let ((cp (point))
+        np)
+    (if
+        (re-search-forward "washington Citation:")
+        (setq np (match-beginning 0))
+      (error "Failed to find `washington Citation:'"))
+    (delete-region cp np))
+
+  ;; 3.
+  (capitalize-region (pos-bol) (pos-eol))
+
+  ;; 4.
+  (forward-line)
+  (delete-blank-lines)
+  (join-line)
+  (insert-char ?\s)
+  (forward-line)
+
+  ;; 5.
+  (let ((cp (point))
+        np)
+    (if
+        (re-search-forward *helpers-citation-rx*)
+        (setq np (match-beginning 0))
+      (error "Failed to find a Washington citation."))
+    (delete-region cp np))
+  (beginning-of-line)
+  (open-line 1) (forward-line)
+
+  ;; 6.
+  (cl-loop
+   until (looking-at "Synopsis")
+   do
+
+   (cond
+    ((looking-at-p "|") (delete-line))
+    ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
+    (t (center-line) (forward-line)))
+
+   finally
+   (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n)
+   )
+
+  ;; 7.
+  (re-search-forward "West Headnotes")
+  (org-toggle-heading)
+
+  ;; 8.
+  (cl-loop
+   until (looking-at-p "^Opinion")
+   do
+   (when (looking-at-p (rx bol "Attorneys and Law Firms"))
+     (org-toggle-heading 2)
+     (forward-line)
+     (open-line 1))
+   (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
+     (forward-line 1)
+     (delete-blank-lines)
+     (join-line)
+     (org-toggle-heading 3))
+   (forward-line)
+   (when (looking-at-p (rx bol eol))
+     (delete-blank-lines))
+   (when (looking-at-p (rx (| digit "(")))
+     (insert "- "))
+   finally
+   (org-toggle-heading 2)
+   (open-line 1) (forward-line)
+   )
+
+  ;; 9.
+  (let ((cp (point)))
+    (cl-loop
+     until (looking-at-p "All Citations")
+     do
+
+     (forward-line)
+
+     (let ((fc (following-char)))
+       (cond
+        ((eql fc ?\ ) (while (looking-at-p " ") (delete-line)) (insert-char ?\n))
+        ((eql fc ?\n) (forward-line) (while (looking-at-p "\n") (delete-line)))
+        (t (insert-char ?\n))))
+
+     finally (delete-region (point) (point-max)))
+
+    (goto-char cp)
+    (when (re-search-forward "dissenting")
+      (org-toggle-heading 2)))
+
+  (goto-char (point-min))
+  )
+
+
 (provide 'helpers)
 
-;;; helpers.el ends here
+                       ;;; helpers.el ends here
