@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-15 13:57:26 lolh-mbp-16>
+;;; Time-stamp: <2024-10-16 09:03:58 lolh-mbp-16>
 ;;; Version: 0.0.2_2024-10-15T1040
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -438,12 +438,12 @@ in the *Help* buffer."
 
 
 ;;;-------------------------------------------------------------------
-;;; Text Utility Helpers
+;;; Text Case Processing Utility Helpers
 
 (defun helpers-process-text-case-file (text-file)
   "Clean up and format a text case file TEXT-FILE."
 
-  (interactive)
+  (interactive "f")
 
   ;; 0. Mark all page numbers
   ;; 1. Delete all empty lines prior to first non-empty line; join the
@@ -472,10 +472,7 @@ in the *Help* buffer."
 
   ;; 1.
   (find-file text-file)
-  (goto-char (point-min))
-  (delete-blank-lines) (delete-blank-lines)
-  (forward-line 1)
-  (join-line)
+  (helpers-single-space-text)
   )
 
 
@@ -509,6 +506,56 @@ in the *Help* buffer."
   "Convert the string DATE of the form 'Month Day, Year' into YYYY-MM-DDTHH:MM"
 
   (format-time-string "%FT%R" (date-to-time date)))
+
+
+(defun helpers-single-space-text ()
+  "Remove unnecessary empty lines and add lines between paragraphs.
+
+Also delete the final section after All Citations."
+
+  (interactive)
+
+  (goto-char (point-min))
+
+  (save-excursion
+    (cl-loop
+     ;; start adding lines after Opinion starts
+     ;; op is t in the Opinion section
+     with op = nil
+     until (eql (point) (point-max))
+     do
+     (cond
+      ;; first test is for the beginning of the Opinion section
+      ((looking-at-p (rx bol "Opinion" eol (= 2 ?\n)))
+       (setq op t) (forward-line))
+      ;; remove certain characters
+      ((looking-at-p "^[| ]+$")
+       (delete-line)
+       (when (looking-at-p "\n") (delete-line)))
+      ((looking-at-p " ") (delete-char 1))
+      ;; remove double empty lines
+      ((looking-at-p "\n\n")
+       (delete-char 1))
+      ;; add lines between paragraphs in Opinion section
+      (op
+       (if (looking-at-p "\n")
+           (forward-line)
+         (progn
+           (forward-line)
+           (unless (looking-at-p "\n")
+             (insert-char ?\n)))))
+      ;; don't add lines between paragraphs prior to Opinion section
+      (t (forward-line))))
+
+    ;; remove a first empty line, if any
+    (goto-char (point-min))
+    (when (looking-at-p "\n") (delete-line))
+
+    ;; Remove final section after All Citations
+    (goto-char (point-max))
+    (search-backward "All Citations")
+    (delete-region (pos-bol) (point-max))))
+
 
 (defun helpers-delete-empty-lines ()
   "Delete empty lines through the first line of text."
