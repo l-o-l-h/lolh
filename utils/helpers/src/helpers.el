@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-16 09:03:58 lolh-mbp-16>
+;;; Time-stamp: <2024-10-17 07:16:37 lolh-mbp-16>
 ;;; Version: 0.0.2_2024-10-15T1040
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -502,6 +502,10 @@ in the *Help* buffer."
            (+ space) (** 1 2 digit) "," (+ space) (= 4 digit)))
   "RX for finding a date of the form `October 15, 2024'")
 
+(defconst *helpers-page-notation-rx*
+  (rx (group (: (+ "*") (+ digit))) space)
+  "RX for a page notation")
+
 (defun helpers-convert-date (date)
   "Convert the string DATE of the form 'Month Day, Year' into YYYY-MM-DDTHH:MM"
 
@@ -541,20 +545,81 @@ Also delete the final section after All Citations."
        (if (looking-at-p "\n")
            (forward-line)
          (progn
+           ;; check for a line number notation in this line of text
+           (helpers-paginate)
            (forward-line)
            (unless (looking-at-p "\n")
              (insert-char ?\n)))))
       ;; don't add lines between paragraphs prior to Opinion section
-      (t (forward-line))))
+      (t (helpers-paginate) (forward-line))))
 
     ;; remove a first empty line, if any
     (goto-char (point-min))
     (when (looking-at-p "\n") (delete-line))
 
-    ;; Remove final section after All Citations
-    (goto-char (point-max))
-    (search-backward "All Citations")
-    (delete-region (pos-bol) (point-max))))
+    ;; Delete unnecessary sections
+    (helpers-process-sections)))
+
+
+(defun helpers-process-sections ()
+  "Process sections by combining or deleting regions."
+
+  ;; Combine the first two lines to make the title
+  (end-of-line) (insert " -- ") (delete-char 1) (org-toggle-heading 1)
+
+  ;; Delete section between `Document Details' and `Washington Citation:'
+  (delete-region (and (search-forward "Document Details") (pos-bol))
+                 (and (search-forward "washington Citation:") (pos-bol)))
+
+  ;; Combine Citation lines with their citations
+  (forward-line) (delete-line) (join-line) (beginning-of-line) (capitalize-word 1)
+  (forward-line 3) (delete-line) (join-line) (forward-line -1) (delete-line) (forward-line 2)
+
+  ;; Delete section between `Search Details' and beginning of caption information
+  (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
+
+  ;; Center the caption lines
+  (cl-loop
+   until (looking-at "Synopsis")
+   do
+
+   (cond
+    ((looking-at-p "|") (delete-line))
+    ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
+    (t (center-line) (forward-line)))
+
+   finally
+   ;; Make `Synopsis' a level 2 headline
+   (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n))
+
+  ;; Separate the lines in the Synopsis section
+  (cl-loop
+   until (looking-at-p "West Headnotes")
+   do
+   (if (looking-at-p "\n")
+       (forward-line)
+     (progn
+       (forward-line)
+       (unless (looking-at-p "\n")
+         (insert-char ?\n))))
+   )
+
+  ;; Make West Headnotes a level 2 headline
+  (re-search-forward "West Headnotes") (org-toggle-heading 2) (forward-line -1)
+
+
+  ;; Between `All Citations" and the end of the document'
+  (goto-char (point-max))
+  (search-backward "All Citations")
+  (delete-region (pos-bol) (point-max)))
+
+
+(defun helpers-paginate ()
+  "Place page notation inside brackets for easier identification."
+
+  (replace-regexp-in-region *helpers-page-notation-rx*
+                            "{ _\\1_ } "
+                            (pos-bol) (pos-eol)))
 
 
 (defun helpers-delete-empty-lines ()
@@ -615,8 +680,7 @@ Also delete the final section after All Citations."
     (t (center-line) (forward-line)))
 
    finally
-   (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n)
-   )
+   (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n))
 
   ;; 7.
   (re-search-forward "West Headnotes")
