@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-17 07:16:37 lolh-mbp-16>
+;;; Time-stamp: <2024-10-17 07:44:45 lolh-mbp-16>
 ;;; Version: 0.0.2_2024-10-15T1040
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -440,6 +440,7 @@ in the *Help* buffer."
 ;;;-------------------------------------------------------------------
 ;;; Text Case Processing Utility Helpers
 
+
 (defun helpers-process-text-case-file (text-file)
   "Clean up and format a text case file TEXT-FILE."
 
@@ -473,43 +474,9 @@ in the *Help* buffer."
   ;; 1.
   (find-file text-file)
   (helpers-single-space-text)
+  (helpers-process-sections)
+  (helpers-process-headnotes)
   )
-
-
-(defconst *helpers-citation-rx*
-  (rx
-   bol
-   (1+ digit) space (or "Wash." "Wn.") (* (| "App." "2d")) space (+ digit)
-   eol)
-  "83 Wash.2d 553
-   83 Wn.App. 553
-   83 Wn.App.2d 553")
-
-(defconst *helpers-date-rx*
-  (rx (seq (|
-            "January"
-            "Februry"
-            "March"
-            "April"
-            "May"
-            "June"
-            "July"
-            "August"
-            "September"
-            "October"
-            "November"
-            "December")
-           (+ space) (** 1 2 digit) "," (+ space) (= 4 digit)))
-  "RX for finding a date of the form `October 15, 2024'")
-
-(defconst *helpers-page-notation-rx*
-  (rx (group (: (+ "*") (+ digit))) space)
-  "RX for a page notation")
-
-(defun helpers-convert-date (date)
-  "Convert the string DATE of the form 'Month Day, Year' into YYYY-MM-DDTHH:MM"
-
-  (format-time-string "%FT%R" (date-to-time date)))
 
 
 (defun helpers-single-space-text ()
@@ -531,7 +498,7 @@ Also delete the final section after All Citations."
      (cond
       ;; first test is for the beginning of the Opinion section
       ((looking-at-p (rx bol "Opinion" eol (= 2 ?\n)))
-       (setq op t) (forward-line))
+       (setq op t) (open-line 1) (forward-line 2))
       ;; remove certain characters
       ((looking-at-p "^[| ]+$")
        (delete-line)
@@ -555,71 +522,86 @@ Also delete the final section after All Citations."
 
     ;; remove a first empty line, if any
     (goto-char (point-min))
-    (when (looking-at-p "\n") (delete-line))
-
-    ;; Delete unnecessary sections
-    (helpers-process-sections)))
+    (when (looking-at-p "\n") (delete-line))))
 
 
 (defun helpers-process-sections ()
   "Process sections by combining or deleting regions."
 
-  ;; Combine the first two lines to make the title
-  (end-of-line) (insert " -- ") (delete-char 1) (org-toggle-heading 1)
 
-  ;; Delete section between `Document Details' and `Washington Citation:'
-  (delete-region (and (search-forward "Document Details") (pos-bol))
-                 (and (search-forward "washington Citation:") (pos-bol)))
+  (save-excursion
 
-  ;; Combine Citation lines with their citations
-  (forward-line) (delete-line) (join-line) (beginning-of-line) (capitalize-word 1)
-  (forward-line 3) (delete-line) (join-line) (forward-line -1) (delete-line) (forward-line 2)
+   ;; Combine the first two lines to make the title
+   (end-of-line) (insert " -- ") (delete-char 1) (org-toggle-heading 1)
 
-  ;; Delete section between `Search Details' and beginning of caption information
-  (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
+   ;; Delete section between `Document Details' and `Washington Citation:'
+   (delete-region (and (search-forward "Document Details") (pos-bol))
+                  (and (search-forward "washington Citation:") (pos-bol)))
 
-  ;; Center the caption lines
-  (cl-loop
-   until (looking-at "Synopsis")
-   do
+   ;; Combine Citation lines with their citations
+   (forward-line) (delete-line) (join-line) (beginning-of-line) (capitalize-word 1)
+   (forward-line 3) (delete-line) (join-line) (forward-line -1) (delete-line) (forward-line 2)
 
-   (cond
-    ((looking-at-p "|") (delete-line))
-    ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
-    (t (center-line) (forward-line)))
+   ;; Delete section between `Search Details' and beginning of caption information
+   (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
 
-   finally
-   ;; Make `Synopsis' a level 2 headline
-   (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n))
+   ;; Center the caption lines
+   (cl-loop
+    until (looking-at "Synopsis")
+    do
 
-  ;; Separate the lines in the Synopsis section
-  (cl-loop
-   until (looking-at-p "West Headnotes")
-   do
-   (if (looking-at-p "\n")
-       (forward-line)
-     (progn
-       (forward-line)
-       (unless (looking-at-p "\n")
-         (insert-char ?\n))))
-   )
+    (cond
+     ((looking-at-p "|") (delete-line))
+     ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
+     (t (center-line) (forward-line)))
 
-  ;; Make West Headnotes a level 2 headline
-  (re-search-forward "West Headnotes") (org-toggle-heading 2) (forward-line -1)
+    finally
+    ;; Make `Synopsis' a level 2 headline
+    (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n))
+
+   ;; Separate the lines in the Synopsis section
+   (cl-loop
+    until (looking-at-p "West Headnotes")
+    do
+    (if (looking-at-p "\n")
+        (forward-line)
+      (progn
+        (forward-line)
+        (unless (looking-at-p "\n")
+          (insert-char ?\n)))))
+
+   ;; Make West Headnotes a level 2 headline
+   (re-search-forward "West Headnotes") (org-toggle-heading 2) (forward-line -1)
+
+   ;; Delete the region between `All Citations" and the end of the document'
+   (goto-char (point-max))
+   (search-backward "All Citations")
+   (delete-region (pos-bol) (point-max))))
 
 
-  ;; Between `All Citations" and the end of the document'
-  (goto-char (point-max))
-  (search-backward "All Citations")
-  (delete-region (pos-bol) (point-max)))
+(defun helpers-process-headnotes ()
+  "Make headnotes readable and linked to the body text."
 
+  (save-excursion
 
-(defun helpers-paginate ()
-  "Place page notation inside brackets for easier identification."
+    (search-forward "West Headnotes") (forward-line)
 
-  (replace-regexp-in-region *helpers-page-notation-rx*
-                            "{ _\\1_ } "
-                            (pos-bol) (pos-eol)))
+    (cl-loop
+     until (looking-at-p "^Attorneys and Law Firms")
+     do
+
+     (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
+       (forward-line 1)
+       (delete-blank-lines)
+       (join-line)
+       (org-toggle-heading 3))
+     (forward-line)
+     (when (looking-at-p (rx (| digit "(")))
+       (insert "- "))
+     ;; finally
+     ;; (org-toggle-heading 2)
+     ;; (forward-line) (insert-char ?\n)
+     )))
 
 
 (defun helpers-delete-empty-lines ()
