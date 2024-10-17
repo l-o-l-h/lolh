@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-17 08:04:34 lolh-mbp-16>
+;;; Time-stamp: <2024-10-17 08:18:02 lolh-mbp-16>
 ;;; Version: 0.0.2_2024-10-15T1040
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -476,6 +476,7 @@ in the *Help* buffer."
   (helpers-single-space-text)
   (helpers-process-sections)
   (helpers-process-headnotes)
+  (helpers-save-file)
   )
 
 
@@ -570,12 +571,16 @@ Also delete the final section after All Citations."
         (unless (looking-at-p "\n")
           (insert-char ?\n)))))
 
-   ;; Make West Headnotes a level 2 headline
+   ;; Make some headings Level 2 Headlines
    (re-search-forward "West Headnotes") (org-toggle-heading 2)
 
-   ;; Make Attorneys and Law Firms and Opinion level 2 headlines
    (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
    (forward-line) (insert-char ?\n)
+
+   (re-search-forward "Opinion") (org-toggle-heading 2)
+
+   (when (re-search-forward "dissenting" nil t)
+     (org-toggle-heading 2))
 
    ;; Delete the region between `All Citations" and the end of the document'
    (goto-char (point-max))
@@ -606,6 +611,27 @@ Also delete the final section after All Citations."
      ;; (org-toggle-heading 2)
      ;; (forward-line) (insert-char ?\n)
      )))
+
+
+(defun helpers-save-file ()
+  (let* ((bfn (buffer-file-name))
+         (title (buffer-substring (+ 2 (pos-bol)) (pos-eol)))
+         (kws '("case")) ; TODO: ask for a list of keywords at this point
+         (sig (if (string-search "Supreme" title) "sc" "coa")) ; TODO check for unpublished cases also
+         (date (when (re-search-forward *helpers-date-rx*)
+                 (helpers-convert-date (match-string 0))))
+         (cit (save-excursion
+                (when (re-search-forward
+                       (rx "Washington Citation:" (+ space) (group (+ nonl))))
+                  (match-string 1))))
+         (nfn (file-name-concat (denote-directory) "law" (concat cit ".org")))
+         )
+    (write-file nfn nil)
+    (let ((denote-rename-confirmations nil)
+          (denote-save-buffers t))
+      (denote-rename-file nfn title kws sig date))
+    ;; (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
+    ))
 
 
 (defun helpers-delete-empty-lines ()
