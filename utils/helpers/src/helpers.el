@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-17 07:44:45 lolh-mbp-16>
+;;; Time-stamp: <2024-10-17 08:04:34 lolh-mbp-16>
 ;;; Version: 0.0.2_2024-10-15T1040
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -571,7 +571,11 @@ Also delete the final section after All Citations."
           (insert-char ?\n)))))
 
    ;; Make West Headnotes a level 2 headline
-   (re-search-forward "West Headnotes") (org-toggle-heading 2) (forward-line -1)
+   (re-search-forward "West Headnotes") (org-toggle-heading 2)
+
+   ;; Make Attorneys and Law Firms and Opinion level 2 headlines
+   (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
+   (forward-line) (insert-char ?\n)
 
    ;; Delete the region between `All Citations" and the end of the document'
    (goto-char (point-max))
@@ -587,7 +591,7 @@ Also delete the final section after All Citations."
     (search-forward "West Headnotes") (forward-line)
 
     (cl-loop
-     until (looking-at-p "^Attorneys and Law Firms")
+     until (looking-at-p "^** Attorneys and Law Firms")
      do
 
      (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
