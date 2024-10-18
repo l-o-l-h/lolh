@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-18 05:14:17 lolh-mbp-16>
+;;; Time-stamp: <2024-10-18 08:58:01 lolh-mbp-16>
 ;;; Version: 0.0.2_2024-10-15T1040
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -95,12 +95,6 @@ But not `John Q.'")
 E.g. `24-0123456'")
 
 
-(defconst *helpers-date-rx* (rx bos
-                                (= 4 digit)
-                                (= 2 (seq "-" (= 2 digit)))
-                                eos))
-
-
 (defconst *helpers-notice-types* '(("RCW 59.18.650(2)(a)" 14  "Nonpayment of rent")
                                    ("RCW 59.18.650(2)(b)" 10  "Substantial lease violation")
                                    ("RCW 59.18.650(2)(c)" 3   "Waste, nuisance, or unlawful activity")
@@ -122,6 +116,23 @@ E.g. `24-0123456'")
 (defconst *helpers-judicial-depts* '((1  "Retsinas")
                                      (3  "Vanderwood")
                                      (11 "Sheldrick")))
+
+
+
+(defconst *helpers-date-rx* (rx bos
+                                (= 4 digit)
+                                (= 2 (seq "-" (= 2 digit)))
+                                eos))
+
+
+(defconst *helpers-cal-date-rx*
+  (rx (: bow (| "January" "February" "March" "April" "May" "June"
+                "July" "August" "September" "October" "November" "December")
+         eow space) (= 2 digit) ", " (= 4 digit) eow))
+
+
+(defun helpers-date-convert (date)
+  (format-time-string "%FT%R" (date-to-time date)))
 
 ;;;-------------------------------------------------------------------
 
@@ -601,6 +612,7 @@ real one.  It is equal to the first one (I think)."
     (re-search-forward "West Headnotes") (org-toggle-heading 2)
 
     (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
+    (beginning-of-line) (ensure-empty-lines)
     (forward-line) (insert-char ?\n)
 
     (re-search-forward "Opinion") (org-toggle-heading 2)
@@ -644,8 +656,9 @@ real one.  It is equal to the first one (I think)."
          (title (buffer-substring (+ 2 (pos-bol)) (pos-eol)))
          (kws '("case")) ; TODO: ask for a list of keywords at this point
          (sig (if (string-search "Supreme" title) "sc" "coa")) ; TODO check for unpublished cases also
-         (date (when (re-search-forward *helpers-date-rx*)
-                 (helpers-convert-date (match-string 0))))
+         (date (if (string-match *helpers-cal-date-rx* title )
+                   (helpers-date-convert (match-string 0 title))
+                 (error "Failed to find a date in %s" title)))
          (cit (save-excursion
                 (when (re-search-forward
                        (rx "Washington Citation:" (+ space) (group (+ nonl))))
@@ -656,7 +669,7 @@ real one.  It is equal to the first one (I think)."
     (let ((denote-rename-confirmations nil)
           (denote-save-buffers t))
       (denote-rename-file nfn title kws sig date))
-    ;; (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
+    (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
     ))
 
 
