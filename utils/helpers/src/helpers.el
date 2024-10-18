@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-17 08:18:02 lolh-mbp-16>
+;;; Time-stamp: <2024-10-18 05:14:17 lolh-mbp-16>
 ;;; Version: 0.0.2_2024-10-15T1040
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -488,104 +488,130 @@ Also delete the final section after All Citations."
   (interactive)
 
   (goto-char (point-min))
+  (replace-string-in-region " " "")
 
   (save-excursion
     (cl-loop
-     ;; start adding lines after Opinion starts
+     ;; start inserting blank lines between paragraphs after Opinion starts
      ;; op is t in the Opinion section
      with op = nil
-     until (eql (point) (point-max))
+     with op-pos = (helpers-find-opinion-start)
+
+     until (eobp)
+
      do
      (cond
+
       ;; first test is for the beginning of the Opinion section
-      ((looking-at-p (rx bol "Opinion" eol (= 2 ?\n)))
-       (setq op t) (open-line 1) (forward-line 2))
-      ;; remove certain characters
-      ((looking-at-p "^[| ]+$")
-       (delete-line)
-       (when (looking-at-p "\n") (delete-line)))
-      ((looking-at-p " ") (delete-char 1))
+      ((and (not op) (= (point) op-pos))
+       (setq op t) (set-marker op-pos nil)
+       (ensure-empty-lines))
+
       ;; remove double empty lines
-      ((looking-at-p "\n\n")
+      ((and (eql (following-char) ?\n)
+            (eql (char-after (+ 1 (point))) ?\n))
        (delete-char 1))
+
       ;; add lines between paragraphs in Opinion section
       (op
-       (if (looking-at-p "\n")
-           (forward-line)
+       (if (eql (following-char) ?\n)
+           (progn
+             (forward-line)
+             (while (eql (following-char) ?\n)
+               (delete-char 1)))
          (progn
            ;; check for a line number notation in this line of text
-           (helpers-paginate)
+           ;; (helpers-paginate)
            (forward-line)
-           (unless (looking-at-p "\n")
+           (unless (eql (following-char) ?\n)
              (insert-char ?\n)))))
       ;; don't add lines between paragraphs prior to Opinion section
-      (t (helpers-paginate) (forward-line))))
+      (t
+       ;; (helpers-paginate)
+       (forward-line))))
 
     ;; remove a first empty line, if any
     (goto-char (point-min))
     (when (looking-at-p "\n") (delete-line))))
 
 
+(defun helpers-find-opinion-start ()
+  "Find the beginning of the Opinion section and return a marker.
+
+There are several possible `opinion' words.  The trick is to find the
+real one.  It is equal to the first one (I think)."
+
+  (save-excursion
+    (goto-char (point-min))
+    (let ((op1 (and
+                (re-search-forward (rx (group bol (opt (: bow (1+ word) eow space)) "opinion")))
+                (match-string 1))))
+      (re-search-forward (format "^%s" op1))
+      (beginning-of-line)
+      (point-marker))))
+
+
 (defun helpers-process-sections ()
   "Process sections by combining or deleting regions."
 
+  (interactive)
 
   (save-excursion
 
-   ;; Combine the first two lines to make the title
-   (end-of-line) (insert " -- ") (delete-char 1) (org-toggle-heading 1)
+    ;; Combine the first two lines to make the title
+    (end-of-line) (insert " -- ") (delete-char 1) (org-toggle-heading 1)
 
-   ;; Delete section between `Document Details' and `Washington Citation:'
-   (delete-region (and (search-forward "Document Details") (pos-bol))
-                  (and (search-forward "washington Citation:") (pos-bol)))
+    ;; Delete section between `Document Details' and `Washington Citation:'
+    (delete-region (and (search-forward "Document Details") (pos-bol))
+                   (and (search-forward "washington Citation:") (pos-bol)))
 
-   ;; Combine Citation lines with their citations
-   (forward-line) (delete-line) (join-line) (beginning-of-line) (capitalize-word 1)
-   (forward-line 3) (delete-line) (join-line) (forward-line -1) (delete-line) (forward-line 2)
+    ;; Combine Citation lines with their citations
+    (forward-line) (delete-line) (join-line) (beginning-of-line) (capitalize-word 1)
+    (forward-line 3) (delete-line) (join-line) (forward-line -1) (delete-line) (forward-line 2)
 
-   ;; Delete section between `Search Details' and beginning of caption information
-   (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
+    ;; Delete section between `Search Details' and beginning of caption information
+    (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
 
-   ;; Center the caption lines
-   (cl-loop
-    until (looking-at "Synopsis")
-    do
+    ;; Center the caption lines
+    (cl-loop
+     until (looking-at "Synopsis")
+     do
 
-    (cond
-     ((looking-at-p "|") (delete-line))
-     ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
-     (t (center-line) (forward-line)))
+     (cond
+      ((looking-at-p "|") (delete-line))
+      ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
+      (t (center-line) (forward-line)))
 
-    finally
-    ;; Make `Synopsis' a level 2 headline
-    (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n))
+     finally
+     ;; Make `Synopsis' a level 2 headline
+     (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n))
 
-   ;; Separate the lines in the Synopsis section
-   (cl-loop
-    until (looking-at-p "West Headnotes")
-    do
-    (if (looking-at-p "\n")
-        (forward-line)
-      (progn
-        (forward-line)
-        (unless (looking-at-p "\n")
-          (insert-char ?\n)))))
+    ;; Separate the lines in the Synopsis section
+    (cl-loop
+     until (looking-at-p "West Headnotes")
+     do
+     (if (looking-at-p "\n")
+         (forward-line)
+       (progn
+         (forward-line)
+         (unless (looking-at-p "\n")
+           (insert-char ?\n)))))
 
-   ;; Make some headings Level 2 Headlines
-   (re-search-forward "West Headnotes") (org-toggle-heading 2)
+    ;; Make some headings Level 2 Headlines
+    (re-search-forward "West Headnotes") (org-toggle-heading 2)
 
-   (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
-   (forward-line) (insert-char ?\n)
+    (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
+    (forward-line) (insert-char ?\n)
 
-   (re-search-forward "Opinion") (org-toggle-heading 2)
+    (re-search-forward "Opinion") (org-toggle-heading 2)
 
-   (when (re-search-forward "dissenting" nil t)
-     (org-toggle-heading 2))
+    (when (re-search-forward "dissenting" nil t)
+      (org-toggle-heading 2))
 
-   ;; Delete the region between `All Citations" and the end of the document'
-   (goto-char (point-max))
-   (search-backward "All Citations")
-   (delete-region (pos-bol) (point-max))))
+    ;; Delete the region between `All Citations" and the end of the document'
+    (goto-char (point-max))
+    (search-backward "All Citations")
+    (delete-region (pos-bol) (point-max))))
 
 
 (defun helpers-process-headnotes ()
