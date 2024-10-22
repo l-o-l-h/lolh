@@ -1,6 +1,6 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-21 22:15:55 lolh-mbp-16>
-;;; Version: 0.0.3_2024-10-21T1015
+;;; Time-stamp: <2024-10-22 08:14:24 lolh-mbp-16>
+;;; Version: 0.0.4_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
 ;;; Author: LOLH
@@ -593,15 +593,15 @@ Return the citation as is or shortened, as necessary."
                        (goto-char (point-min))
                        (search-forward "washington citation :: ")
                        (buffer-substring-no-properties (point) (pos-eol))))
-           (citation-l (length citation))
+           ;; (citation-l (length citation))
            (pl (and (string-match *helpers-case-citation-rx* citation)
                     (match-string-no-properties 1 citation)))
-           (pl-l (length pl))
+           ;; (pl-l (length pl))
            (def (match-string-no-properties 2 citation))
-           (def-l (length def))
+           ;; (def-l (length def))
            (cite (match-string-no-properties 3 citation))
-           (cite-l (length cite))
-           new-citation
+           ;; (cite-l (length cite))
+           ;; new-citation
            )
       ;; (message "\nCitation: %s|%d\n\nPl: %s|%d\n\nDef: %s|%d\n\nCite: %s|%d\n\n"
       ;;          citation citation-l pl pl-l def def-l cite cite-l)
@@ -773,6 +773,7 @@ Also delete the final section after All Citations."
 
       ;; Delete section between `Search Details' and beginning of caption information
       (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
+      (beginning-of-line)
 
       ;; Center the caption lines
       ;; If the opinion is unpublished, there will be neither a Synopsis nor a section of Attorneys
@@ -784,11 +785,13 @@ Also delete the final section after All Citations."
        (cond
         ((looking-at-p "|") (delete-line))
         ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
+        ((looking-at-p "Only the Westlaw citation") (delete-line))
+        ((looking-at-p "\n") (forward-line))
         (t (center-line) (forward-line)))
 
        finally
        ;; Make `Synopsis' or `Opinion' a level 2 headline
-       (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line)
+       (ensure-empty-lines) (org-toggle-heading 2) (end-of-line)
        (unless (looking-at-p "\n\n") (insert-char ?\n)))
 
       ;; Separate the lines in the Synopsis section and make some headings
@@ -809,9 +812,13 @@ Also delete the final section after All Citations."
         (re-search-forward "West Headnotes")
         (org-toggle-heading 2)
 
+        ;; Turn attorney section into list,
+        ;; one item for attorneys for appellants
+        ;; and one item for attorneys for respondents
         (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
         (beginning-of-line) (ensure-empty-lines)
-        (forward-line) (insert-char ?\n)
+        (forward-line) (insert-char ?\n) (insert "- ")
+        (forward-line) (ensure-empty-lines) (insert "- ")
 
         (re-search-forward "Opinion") (org-toggle-heading 2))
 
@@ -853,8 +860,7 @@ Also delete the final section after All Citations."
 
 (defun helpers-save-file ()
   (save-excursion
-    (let* ((cb (current-buffer))
-           (citation (buffer-substring
+    (let* ((citation (buffer-substring
                       (progn
                         (goto-char (point-min))
                         (search-forward "Washington Citation :: ")
@@ -896,142 +902,6 @@ Also delete the final section after All Citations."
 
     (denote-rename-file nfn citation kws sig date)
     ;; (message "In helpers-denote-rename-file  Must Die: %s\n%s\n%s\n%s\n%s\n%s\n\n" must-die nfn citation kws sig date)
-    )
-  )
-
-
-(defun helpers-delete-empty-lines ()
-  "Delete empty lines through the first line of text."
-
-  (interactive)
-
-  ;; 0.
-  (goto-char (point-min))
-  (replace-regexp-in-region
-   (rx (group (: (+ "*") (+ digit))) space) "{\\1} ")
-
-  ;; 1.
-  (goto-char (point-min))
-  (delete-blank-lines) (delete-blank-lines)
-  (forward-line) (join-line)
-  (org-toggle-heading)
-
-  ;; 2.
-  (forward-line 2)
-  (let ((cp (point))
-        np)
-    (if
-        (re-search-forward "washington Citation:")
-        (setq np (match-beginning 0))
-      (error "Failed to find `washington Citation:'"))
-    (delete-region cp np))
-
-  ;; 3.
-  (capitalize-region (pos-bol) (pos-eol))
-
-  ;; 4.
-  (forward-line)
-  (delete-blank-lines)
-  (join-line)
-  (insert-char ?\s)
-  (forward-line)
-
-  ;; 5.
-  (let ((cp (point))
-        np)
-    (if
-        (re-search-forward *helpers-citation-rx*)
-        (setq np (match-beginning 0))
-      (error "Failed to find a Washington citation."))
-    (delete-region cp np))
-  (beginning-of-line)
-  (open-line 1) (forward-line)
-
-  ;; 6.
-  (cl-loop
-   until (looking-at "Synopsis")
-   do
-
-   (cond
-    ((looking-at-p "|") (delete-line))
-    ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
-    (t (center-line) (forward-line)))
-
-   finally
-   (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n))
-
-  ;; 7.
-  (re-search-forward "West Headnotes")
-  (org-toggle-heading 2)
-  (forward-line -1)
-  (delete-line)
-
-  ;; 8.
-  (cl-loop
-   until (looking-at-p "^Opinion")
-   do
-   (when (looking-at-p (rx bol "Attorneys and Law Firms"))
-     (org-toggle-heading 2)
-     (forward-line)
-     (open-line 1))
-   (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
-     (forward-line 1)
-     (delete-blank-lines)
-     (join-line)
-     (org-toggle-heading 3))
-   (forward-line)
-   (when (looking-at-p (rx bol eol))
-     (delete-blank-lines))
-   (when (looking-at-p (rx (| digit "(")))
-     (insert "- "))
-   finally
-   (org-toggle-heading 2)
-   (open-line 1) (forward-line)
-   )
-
-  ;; 9.
-  (let ((cp (point)))
-    (cl-loop
-     until (looking-at-p "All Citations")
-     do
-
-     (forward-line)
-
-     (let ((fc (following-char)))
-       (cond
-        ((eql fc ?\) (while (looking-at-p "") (delete-line)) (insert-char ?\n))
-         ((eql fc ?\n) (forward-line) (while (looking-at-p "\n") (delete-line)))
-         (t (insert-char ?\n))))
-
-       ;; 11.
-       finally (delete-region (point) (point-max)))
-
-     ;; 10.
-     (goto-char cp)
-     (when (re-search-forward "dissenting" nil t)
-       (org-toggle-heading 2)))
-
-    (goto-char (point-min))
-
-    ;; 12.
-    (let* ((bfn (buffer-file-name))
-           (title (buffer-substring (+ 2 (pos-bol)) (pos-eol)))
-           (kws '("case")) ; TODO: ask for a list of keywords at this point
-           (sig (if (string-search "Supreme" title) "sc" "coa")) ; TODO check for unpublished cases also
-           (date (when (re-search-forward *helpers-date-rx*)
-                   (helpers-convert-date (match-string 0))))
-           (cit (save-excursion
-                  (when (re-search-forward
-                         (rx "Washington Citation:" (+ space) (group (+ nonl))))
-                    (match-string 1))))
-           (nfn (file-name-concat (denote-directory) "law" (concat cit ".org")))
-           )
-      ;; (write-file nfn nil)
-      ;; (let ((denote-rename-confirmations nil)
-      ;;       (denote-save-buffers t))
-      ;;   (denote-rename-file nfn title kws sig date))
-      (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
-      )
     )
   )
 
