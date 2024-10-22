@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-10-14 13:16:13 lolh-mbp-16>
+;; Time-stamp: <2024-10-18 09:03:15 lolh-mbp-16>
 ;; Version: 0.1.21 [2024-09-26 23:20]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -1782,10 +1782,13 @@ The TXT documents will end up in /process."
 
   (cl-dolist (rtf (directory-files *lolh/downloads-dir* t ".rtf$"))
     (rename-file rtf (file-name-as-directory *lolh/process-dir*))
-    (let ((new-rtf (file-name-concat *lolh/process-dir* (file-name-nondirectory rtf))))
+    (let* ((new-rtf (file-name-concat *lolh/process-dir* (file-name-nondirectory rtf)))
+           (new-txt (file-name-concat (file-name-with-extension new-rtf "txt"))))
       (call-process-shell-command
        (format "textutil -convert txt \"%s\"" new-rtf))
-      (delete-file new-rtf t))))
+      (delete-file new-rtf t)
+      (helpers-process-text-case-file new-txt)
+      (delete-file new-txt t))))
 
 ;;;-------------------------------------------------------------------
 ;;; Macro with-main-note, with-client-note

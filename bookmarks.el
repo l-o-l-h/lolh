@@ -2,7 +2,13 @@
 ;;; This format is meant to be slightly human-readable;
 ;;; nevertheless, you probably don't want to edit it.
 ;;; -*- End Of Bookmark File Format Version Stamp -*-
-(("utils"
+(("HJP"
+ (filename . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/My Drive/HJP/")
+ (front-context-string)
+ (rear-context-string . "60 Oct  4 08:12 ")
+ (position . 476)
+ (last-modified 26386 36084 684643 0))
+("utils"
  (filename . "~/.local/src/emacs/lolh/utils/")
  (front-context-string . "extract\n  drwxr-")
  (rear-context-string . "28 Apr 29 15:13 ")

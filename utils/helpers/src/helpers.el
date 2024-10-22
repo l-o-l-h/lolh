@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-22 08:14:24 lolh-mbp-16>
+;;; Time-stamp: <2024-10-22 08:19:12 lolh-mbp-16>
 ;;; Version: 0.0.4_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -357,7 +357,7 @@ The values will be of the required type, and of the allowed number."
 (defun helpers-type ()
   "Ask for and return a type."
 
-  (read-from-minibufer "Give me a `type' "))
+  (read-from-minibuffer "Give me a `type' "))
 
 (defun helpers-judicial ()
   "Ask for and return a judicial dept."
