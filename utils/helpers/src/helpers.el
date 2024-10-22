@@ -1,6 +1,6 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-18 08:58:01 lolh-mbp-16>
-;;; Version: 0.0.2_2024-10-15T1040
+;;; Time-stamp: <2024-10-21 22:15:55 lolh-mbp-16>
+;;; Version: 0.0.3_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
 ;;; Author: LOLH
@@ -130,9 +130,9 @@ E.g. `24-0123456'")
                 "July" "August" "September" "October" "November" "December")
          eow space) (= 2 digit) ", " (= 4 digit) eow))
 
-
 (defun helpers-date-convert (date)
   (format-time-string "%FT%R" (date-to-time date)))
+
 
 ;;;-------------------------------------------------------------------
 
@@ -193,47 +193,48 @@ The values will be of the required type, and of the allowed number."
         (:type-notice (funcall *helpers-type-fn*))
         (:date (funcall *helpers-date-fn*))))))
 
-  ;; (cl-loop
-  ;;  for (component description number) in *helpers-case-vars*
-  ;;  append
-  ;;  (cons component
-  ;;        (cons
-  ;;         (pcase number
-  ;;           (:singular
-  ;;            (pcase description
-  ;;              ('(,and-or ,type1 ,type2)
-  ;;               (pcase and-or
-  ;;                 ('and (let* ((t1 (request type1))
-  ;;                              (t2 (request type2))
-  ;;                              (both (cons t1 t2)))))
-  ;;                 ('or (...))))
-  ;;              ((pred keywordp) (helpers-request description))))
-  ;;           (:plurual
-  ;;            (cl-loop
-  ;;             for keep-going = t
-  ;;             for count = 1 then (1+ count)
-  ;;             while keep-going
-  ;;             do (let* ((component-num (s-concat component (number-to-string count)))
-  ;;                       (answer (helpers-request component)))
-  ;;                  (if (string-empty-p answer)
-  ;;                      (setq keep-going nil)
-  ;;                    (cons component-num answer))))))))))
+;; (cl-loop
+;;  for (component description number) in *helpers-case-vars*
+;;  append
+;;  (cons component
+;;        (cons
+;;         (pcase number
+;;           (:singular
+;;            (pcase description
+;;              ('(,and-or ,type1 ,type2)
+;;               (pcase and-or
+;;                 ('and (let* ((t1 (request type1))
+;;                              (t2 (request type2))
+;;                              (both (cons t1 t2)))))
+;;                 ('or (...))))
+;;              ((pred keywordp) (helpers-request description))))
+;;           (:plurual
+;;            (cl-loop
+;;             for keep-going = t
+;;             for count = 1 then (1+ count)
+;;             while keep-going
+;;             do (let* ((component-num (s-concat component (number-to-string count)))
+;;                       (answer (helpers-request component)))
+;;                  (if (string-empty-p answer)
+;;                      (setq keep-going nil)
+;;                    (cons component-num answer))))))))))
 
 
 
 ;;;-------------------------------------------------------------------
-  ;;
+;;
 
 
-  (defun helpers-all-case-vars0 ()
-    "Loop through the *helpers-case-vars* and print them."
+(defun helpers-all-case-vars0 ()
+  "Loop through the *helpers-case-vars* and print them."
 
-    (interactive)
+  (interactive)
 
-    (cl-loop for (component description number) in *helpers-case-vars*
-             do (princ (format "component:\t%s\ndescription:\t%s\nnumber:\t\t%s\ntype:\t\t%s\n\n"
-                               component description number (atom description))
-                       (get-buffer "*scratch*"))))
+  (cl-loop for (component description number) in *helpers-case-vars*
+           do (princ (format "component:\t%s\ndescription:\t%s\nnumber:\t\t%s\ntype:\t\t%s\n\n"
+                             component description number (atom description))
+                     (get-buffer "*scratch*"))))
+
 
 (defun helpers-all-case-vars1 ()
   "Loop through the *helpers-case-vars* and do something with them."
@@ -400,6 +401,8 @@ The values will be of the required type, and of the allowed number."
            when (fboundp sym)
            when (string-match "^lolh/" (symbol-name sym))
            do (print sym (current-buffer))))
+
+
 ;;;-------------------------------------------------------------------
 
 
@@ -446,6 +449,193 @@ in the *Help* buffer."
                      (called-interactively-p 'interactive))
     (with-help-window (help-buffer)
       (mapcar describe-func (sort sym-list 'string<)))))
+
+
+;;;-------------------------------------------------------------------
+
+
+(defconst *helpers-citation-rx*
+  (rx bow
+      (:
+       (1+ digit)
+       (1+ space)
+       (| "Wash." "Wn." "WL")
+       (* (any space "App." "2d"))
+       (: (1+ space)
+          (1+ digit))
+       eow)
+      )
+  "Should catch any of:
+   - 123 Wash. 456
+   - 123 Wash.2d 456
+   - 123 Wn. 456
+   - 123 Wn.2d 456
+   - 123 Wn.App. 456
+   - 123 Wn. App. 456
+   - 123 Wn.App.2d 456
+   - 123 WL 456"
+  )
+
+
+(defconst *helpers-coa-id-rx*
+  (rx bow
+      (:
+       (= 5 digit)
+       "-"
+       digit
+       "-"
+       (** 1 3 "I")
+       )
+      eow)
+  "Finds a COA citation such as `85308-2-I'")
+
+
+(defconst *helpers-case-citation-rx*
+  (rx
+   (:
+    ;; party 1
+    (group (*? (any word space punct)))
+    " v. "
+    ;; party 2
+    (group (*? (any word space punct)))
+    ", "
+    ;; citation
+    (group (|
+            ;; COA id, eg: 83508-2-I
+            (:
+             bow
+             (= 5 digit)
+             "-"
+             digit
+             "-"
+             (** 1 3 "I")
+             eow)
+            ;; Wash or Wl citation, eg 123 Wash.2d 456 | 2024 Wl 456
+            (:
+             bow
+             (1+ digit)
+             (1+ space)
+             (| "Wash." "Wn." "WL")
+             (* (any space "App." "2d"))
+             (1+ digit)
+             eow)
+            )
+           (* nonl)
+           )
+    eol
+    )
+   )
+  "Finds a case title and divides it into appellant and respondent sections.
+
+Point is assumed to be directly after `Washington Citation :: *'")
+
+
+(defconst *helpers-in-re-rx*
+  (rx
+   bos
+   (:
+    (group-n 1 "in the matter of ")
+    (: "the " (group-n 2 (+ word) " of: "))
+    (group-n 3 (: (+ (not ",")) ", "))
+    (group-n 4 (: (+ word) ", "))
+    (group-n 5 (+ print))
+    (group-n 6 "appellant")
+    )
+   )
+  "Finds a case title of the form:
+- In the Matter of the BLAH of: NAME, blah, OTHER NAMES, Appellant
+and divides it into six sections.")
+
+(defconst *helpers-et-al-rx*
+  (rx
+   bos
+   (:
+    (group-n 1 (+ (not ";")))
+    "; "
+    (+ print)
+    (group-n 2 ", respondents")
+    "."
+    )
+   eos
+   )
+  "Finds a case title of the form:
+- NAME; NAME2; NAME3; ... NAMEn, Respondents
+and divides it into two sections.")
+
+
+(defun helpers-find-opinion-start ()
+  "Find the beginning of the Opinion section and return a marker.
+
+There are several possible `opinion' words.  The trick is to find the
+real one.  It is equal to the first one (I think)."
+
+  (save-excursion
+    (goto-char (point-min))
+    (let ((op1 (and
+                (re-search-forward (rx (group bol (opt (* not-newline)) "opinion") eol))
+                (match-string 1))))
+      (re-search-forward (format "^%s" op1))
+      (beginning-of-line)
+      (point-marker)))
+  )
+
+
+(defun helpers-process-long-citation ()
+  "Shorten a too-long citation.
+
+Find the citation at `Washington Citation: '
+Return the citation as is or shortened, as necessary."
+
+  (interactive)
+
+  (save-excursion
+    (let* ((citation (progn
+                       (goto-char (point-min))
+                       (search-forward "washington citation :: ")
+                       (buffer-substring-no-properties (point) (pos-eol))))
+           (citation-l (length citation))
+           (pl (and (string-match *helpers-case-citation-rx* citation)
+                    (match-string-no-properties 1 citation)))
+           (pl-l (length pl))
+           (def (match-string-no-properties 2 citation))
+           (def-l (length def))
+           (cite (match-string-no-properties 3 citation))
+           (cite-l (length cite))
+           new-citation
+           )
+      ;; (message "\nCitation: %s|%d\n\nPl: %s|%d\n\nDef: %s|%d\n\nCite: %s|%d\n\n"
+      ;;          citation citation-l pl pl-l def def-l cite cite-l)
+
+      (replace-region-contents
+       (point) (pos-eol)
+       (lambda ()
+         (concat
+          (mapconcat
+           (lambda (p)
+             (cond
+              ((string-match *helpers-in-re-rx* p)
+               (concat
+                "In re "
+                (match-string-no-properties 2 p)
+                (match-string-no-properties 3 p)
+                (match-string-no-properties 6 p)))
+              ((string-match *helpers-et-al-rx* p)
+               (concat
+                (match-string-no-properties 1 p)
+                " et al."
+                (match-string-no-properties 2 p)))
+              )
+             )
+           (list pl def) " v. ")
+          (format ", %s" cite)
+          )
+         )
+       )
+      )
+    (progn (goto-char (point-min)) (search-forward "washington citation :: ")
+           (buffer-substring (point) (pos-eol)))
+    )
+  )
 
 
 ;;;-------------------------------------------------------------------
@@ -543,23 +733,8 @@ Also delete the final section after All Citations."
 
     ;; remove a first empty line, if any
     (goto-char (point-min))
-    (when (looking-at-p "\n") (delete-line))))
-
-
-(defun helpers-find-opinion-start ()
-  "Find the beginning of the Opinion section and return a marker.
-
-There are several possible `opinion' words.  The trick is to find the
-real one.  It is equal to the first one (I think)."
-
-  (save-excursion
-    (goto-char (point-min))
-    (let ((op1 (and
-                (re-search-forward (rx (group bol (opt (: bow (1+ word) eow space)) "opinion")))
-                (match-string 1))))
-      (re-search-forward (format "^%s" op1))
-      (beginning-of-line)
-      (point-marker))))
+    (when (looking-at-p "\n") (delete-line)))
+  )
 
 
 (defun helpers-process-sections ()
@@ -569,61 +744,84 @@ real one.  It is equal to the first one (I think)."
 
   (save-excursion
 
-    ;; Combine the first two lines to make the title
-    (end-of-line) (insert " -- ") (delete-char 1) (org-toggle-heading 1)
+    ;; When a case is unpublished, many sections are missing or different,
+    ;; so treat them differently below.
+    ;; Delete the Note so it does not become part of the caption text.
+    (let ((unpub (save-excursion
+                   (when
+                       (word-search-forward-lax "note: unpublished opinion" nil t)
+                     (delete-line)
+                     t))))
 
-    ;; Delete section between `Document Details' and `Washington Citation:'
-    (delete-region (and (search-forward "Document Details") (pos-bol))
-                   (and (search-forward "washington Citation:") (pos-bol)))
+      ;; Combine the first two lines to make the initial headline
+      (end-of-line)
+      (insert " -- ") (delete-char 1) (org-toggle-heading 1)
 
-    ;; Combine Citation lines with their citations
-    (forward-line) (delete-line) (join-line) (beginning-of-line) (capitalize-word 1)
-    (forward-line 3) (delete-line) (join-line) (forward-line -1) (delete-line) (forward-line 2)
+      ;; Delete section between `Document Details' and `Washington Citation:'
+      (delete-region (and (search-forward "Document Details") (pos-bol))
+                     (and (search-forward "washington Citation:") (pos-bol)))
 
-    ;; Delete section between `Search Details' and beginning of caption information
-    (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
+      ;; Combine Citation lines with their citations and turn into lists
+      (backward-char) (insert-char ? ) (insert-char ?:)
+      (forward-line) (delete-line) (join-line)
+      (beginning-of-line) (insert "- ") (capitalize-word 1)
 
-    ;; Center the caption lines
-    (cl-loop
-     until (looking-at "Synopsis")
-     do
+      (forward-line 2) (insert "- ")
+      (end-of-line) (backward-char) (insert-char ? ) (insert-char ?:)
+      (forward-line) (delete-line) (join-line)
+      (forward-line 2)
 
-     (cond
-      ((looking-at-p "|") (delete-line))
-      ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
-      (t (center-line) (forward-line)))
+      ;; Delete section between `Search Details' and beginning of caption information
+      (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
 
-     finally
-     ;; Make `Synopsis' a level 2 headline
-     (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line) (insert-char ?\n))
+      ;; Center the caption lines
+      ;; If the opinion is unpublished, there will be neither a Synopsis nor a section of Attorneys
+      ;; In that case, stop at the Opinion section
+      (cl-loop
+       until (looking-at (rx bol (| "Synopsis" "Opinion")))
+       do
 
-    ;; Separate the lines in the Synopsis section
-    (cl-loop
-     until (looking-at-p "West Headnotes")
-     do
-     (if (looking-at-p "\n")
-         (forward-line)
-       (progn
-         (forward-line)
-         (unless (looking-at-p "\n")
-           (insert-char ?\n)))))
+       (cond
+        ((looking-at-p "|") (delete-line))
+        ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
+        (t (center-line) (forward-line)))
 
-    ;; Make some headings Level 2 Headlines
-    (re-search-forward "West Headnotes") (org-toggle-heading 2)
+       finally
+       ;; Make `Synopsis' or `Opinion' a level 2 headline
+       (open-line 1) (forward-line) (org-toggle-heading 2) (end-of-line)
+       (unless (looking-at-p "\n\n") (insert-char ?\n)))
 
-    (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
-    (beginning-of-line) (ensure-empty-lines)
-    (forward-line) (insert-char ?\n)
+      ;; Separate the lines in the Synopsis section and make some headings
+      ;; This will not work in an unpublished opinion.
+      ;; Check for an unpublished opion and skip if so.
+      (unless unpub
+        (cl-loop
+         until (looking-at-p "West Headnotes")
+         do
+         (if (looking-at-p "\n")
+             (forward-line)
+           (progn
+             (forward-line)
+             (unless (looking-at-p "\n")
+               (insert-char ?\n)))))
 
-    (re-search-forward "Opinion") (org-toggle-heading 2)
+        ;; Make some headings Level 2 Headlines
+        (re-search-forward "West Headnotes")
+        (org-toggle-heading 2)
 
-    (when (re-search-forward "dissenting" nil t)
-      (org-toggle-heading 2))
+        (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
+        (beginning-of-line) (ensure-empty-lines)
+        (forward-line) (insert-char ?\n)
 
-    ;; Delete the region between `All Citations" and the end of the document'
-    (goto-char (point-max))
-    (search-backward "All Citations")
-    (delete-region (pos-bol) (point-max))))
+        (re-search-forward "Opinion") (org-toggle-heading 2))
+
+      (when (re-search-forward "dissenting" nil t)
+        (org-toggle-heading 2))
+
+      ;; Delete the region between `All Citations" and the end of the document'
+      (goto-char (point-max))
+      (search-backward "All Citations")
+      (delete-region (pos-bol) (point-max)))))
 
 
 (defun helpers-process-headnotes ()
@@ -631,46 +829,75 @@ real one.  It is equal to the first one (I think)."
 
   (save-excursion
 
-    (search-forward "West Headnotes") (forward-line)
+    ;; An unpublished opinion will not have headnotes, so just return.
+    (when (search-forward "West Headnotes" nil t)
+      (forward-line)
 
-    (cl-loop
-     until (looking-at-p "^** Attorneys and Law Firms")
-     do
+      (cl-loop
+       until (looking-at-p "^** Attorneys and Law Firms")
+       do
 
-     (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
-       (forward-line 1)
-       (delete-blank-lines)
-       (join-line)
-       (org-toggle-heading 3))
-     (forward-line)
-     (when (looking-at-p (rx (| digit "(")))
-       (insert "- "))
-     ;; finally
-     ;; (org-toggle-heading 2)
-     ;; (forward-line) (insert-char ?\n)
-     )))
+       (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
+         (forward-line 1)
+         (delete-blank-lines)
+         (join-line)
+         (org-toggle-heading 3))
+       (forward-line)
+       (when (looking-at-p (rx (| digit "(")))
+         (insert "- "))
+       ;; finally
+       ;; (org-toggle-heading 2)
+       ;; (forward-line) (insert-char ?\n)
+       ))))
 
 
 (defun helpers-save-file ()
-  (let* ((bfn (buffer-file-name))
-         (title (buffer-substring (+ 2 (pos-bol)) (pos-eol)))
-         (kws '("case")) ; TODO: ask for a list of keywords at this point
-         (sig (if (string-search "Supreme" title) "sc" "coa")) ; TODO check for unpublished cases also
-         (date (if (string-match *helpers-cal-date-rx* title )
-                   (helpers-date-convert (match-string 0 title))
-                 (error "Failed to find a date in %s" title)))
-         (cit (save-excursion
-                (when (re-search-forward
-                       (rx "Washington Citation:" (+ space) (group (+ nonl))))
-                  (match-string 1))))
-         (nfn (file-name-concat (denote-directory) "law" (concat cit ".org")))
-         )
-    (write-file nfn nil)
-    (let ((denote-rename-confirmations nil)
-          (denote-save-buffers t))
-      (denote-rename-file nfn title kws sig date))
-    (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
-    ))
+  (save-excursion
+    (let* ((cb (current-buffer))
+           (citation (buffer-substring
+                      (progn
+                        (goto-char (point-min))
+                        (search-forward "Washington Citation :: ")
+                        (point))
+                      (pos-eol)))
+           (n-citation (if (> (length citation) 256)
+                           (helpers-process-long-citation)
+                         citation))
+           (unpub (if (save-excursion (search-forward "unpublished" nil t))
+                      "unpub" nil))
+           ;; TODO: ask for a list of keywords at this point
+           (kws '("case"))
+           (sig (let* ((sig-1 (progn
+                                (goto-char (point-min))
+                                (if (search-forward "Supreme" (pos-eol) t) "sc" "coa")))
+                       (sig-2 (if (string= sig-1 "coa")
+                                  (progn
+                                    (goto-char (point-min))
+                                    (when (re-search-forward (rx "Division " (group digit)))
+                                      (format " div%s" (match-string 1))))
+                                ""))
+                       (sig-3 (or unpub "")))
+                  (format "%s%s %s" sig-1 sig-2 sig-3)))
+           (date (if (and (goto-char (point-min))
+                          (re-search-forward *helpers-cal-date-rx*))
+                     (helpers-date-convert (match-string 0))
+                   (error "Failed to find a date in %s" n-citation)))
+           (nfn (file-name-concat (denote-directory) "law" (concat n-citation ".org"))))
+      (write-file nfn nil)
+      (helpers-denote-rename-file nfn n-citation kws sig date)
+      )
+    )
+  )
+
+
+(defun helpers-denote-rename-file (nfn citation kws sig date)
+  (let ((denote-rename-confirmations nil)
+        (denote-save-buffers t))
+
+    (denote-rename-file nfn citation kws sig date)
+    ;; (message "In helpers-denote-rename-file  Must Die: %s\n%s\n%s\n%s\n%s\n%s\n\n" must-die nfn citation kws sig date)
+    )
+  )
 
 
 (defun helpers-delete-empty-lines ()
@@ -772,38 +999,39 @@ real one.  It is equal to the first one (I think)."
 
      (let ((fc (following-char)))
        (cond
-        ((eql fc ?\ ) (while (looking-at-p " ") (delete-line)) (insert-char ?\n))
-        ((eql fc ?\n) (forward-line) (while (looking-at-p "\n") (delete-line)))
-        (t (insert-char ?\n))))
+        ((eql fc ?\) (while (looking-at-p "") (delete-line)) (insert-char ?\n))
+         ((eql fc ?\n) (forward-line) (while (looking-at-p "\n") (delete-line)))
+         (t (insert-char ?\n))))
 
-     ;; 11.
-     finally (delete-region (point) (point-max)))
+       ;; 11.
+       finally (delete-region (point) (point-max)))
 
-    ;; 10.
-    (goto-char cp)
-    (when (re-search-forward "dissenting" nil t)
-      (org-toggle-heading 2)))
+     ;; 10.
+     (goto-char cp)
+     (when (re-search-forward "dissenting" nil t)
+       (org-toggle-heading 2)))
 
-  (goto-char (point-min))
+    (goto-char (point-min))
 
-  ;; 12.
-  (let* ((bfn (buffer-file-name))
-         (title (buffer-substring (+ 2 (pos-bol)) (pos-eol)))
-         (kws '("case")) ; TODO: ask for a list of keywords at this point
-         (sig (if (string-search "Supreme" title) "sc" "coa")) ; TODO check for unpublished cases also
-         (date (when (re-search-forward *helpers-date-rx*)
-                 (helpers-convert-date (match-string 0))))
-         (cit (save-excursion
-                (when (re-search-forward
-                       (rx "Washington Citation:" (+ space) (group (+ nonl))))
-                  (match-string 1))))
-         (nfn (file-name-concat (denote-directory) "law" (concat cit ".org")))
-         )
-    ;; (write-file nfn nil)
-    ;; (let ((denote-rename-confirmations nil)
-    ;;       (denote-save-buffers t))
-    ;;   (denote-rename-file nfn title kws sig date))
-    (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
+    ;; 12.
+    (let* ((bfn (buffer-file-name))
+           (title (buffer-substring (+ 2 (pos-bol)) (pos-eol)))
+           (kws '("case")) ; TODO: ask for a list of keywords at this point
+           (sig (if (string-search "Supreme" title) "sc" "coa")) ; TODO check for unpublished cases also
+           (date (when (re-search-forward *helpers-date-rx*)
+                   (helpers-convert-date (match-string 0))))
+           (cit (save-excursion
+                  (when (re-search-forward
+                         (rx "Washington Citation:" (+ space) (group (+ nonl))))
+                    (match-string 1))))
+           (nfn (file-name-concat (denote-directory) "law" (concat cit ".org")))
+           )
+      ;; (write-file nfn nil)
+      ;; (let ((denote-rename-confirmations nil)
+      ;;       (denote-save-buffers t))
+      ;;   (denote-rename-file nfn title kws sig date))
+      (message "%s\n%s\n%s\n%s\n%s" nfn title kws sig date)
+      )
     )
   )
 

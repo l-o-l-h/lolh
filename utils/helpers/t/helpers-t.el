@@ -1,5 +1,5 @@
 ;;; helpers-t.el --- Helpers Texts -*- mode: elisp; lexical-binding: t; -*-
-;;; Time-stamp: <2024-06-22 18:54:32 lolh-mbp-16>
+;;; Time-stamp: <2024-10-19 08:01:08 lolh-mbp-16>
 ;;; Version: 0.0.1 [2024-06-21T2010]
 ;;; Package-requires: ((emacs "24.1"))
 
@@ -45,6 +45,17 @@
                 :singular))
     (should (eq (cv-number-value n2)
                 :plural))))
+
+(ert-deftest test-helpers-citation-rx ()
+  (should (string-match-p *helpers-citation-rx* "123 Wash. 456"))
+  (should (string-match-p *helpers-citation-rx* "123 Wash.2d 456"))
+  (should (string-match-p *helpers-citation-rx* "123 Wn. 456"))
+  (should (string-match-p *helpers-citation-rx* "123 Wn.2d 456"))
+  (should (string-match-p *helpers-citation-rx* "123 Wn.App. 456"))
+  (should (string-match-p *helpers-citation-rx* "123 Wn. App. 456"))
+  (should (string-match-p *helpers-citation-rx* "123 Wn.App.2d 456"))
+  (should (string-match-p *helpers-citation-rx* "123 Wn. App. 2d 456"))
+  (should (string-match-p *helpers-citation-rx* "123 WL 456")))
 
 (provide 'helpers-t)
 
