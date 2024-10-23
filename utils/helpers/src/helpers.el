@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-23 02:30:31 lolh-mbp-16>
+;;; Time-stamp: <2024-10-23 05:34:14 lolh-mbp-16>
 ;;; Version: 0.0.4_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -654,6 +654,44 @@ Return the citation as is or shortened, as necessary."
         ts2)))
 
 
+(defconst *helpers-west-key-number-rx*
+  (rx (:
+       (group-n 1 (** 1 3 digit) (opt upper))
+       "k"
+       (group-n 2 (** 1 4 digit))
+       (group-n 3 (+ nonl))))
+  "NOTE: `case-fold-search' must be set to nil.
+Matches a West Key Number Citation, such as
+- 233k1051Blah
+TODO: But see:
+- 268k122.1(4)Weight and sufficiency")
+
+
+(defconst *helpers-west-topic-rx*
+  (rx (:
+       (group (+ nonl) lower)
+       (group upper (+ nonl))
+       eol))
+
+  "NOTE: `'case-fold-search' must be set to nil.
+Matches a topic ending with a lower case letter followed by a topic
+beginning with an upper case letter (two phrases stuck together).
+E.g. Landlord and TenantDefenses and grounds of opposition in general")
+
+
+(defun helpers-west-topic-split ()
+  "Return the position of two West topic phrases connected without a space.
+This is essentially a lower case letter directly followed by an upper case
+letter.  E.g.
+Landlord and TenantDefenses and grounds of opposition in general
+                   ^
+                  123"
+  (interactive)
+  (let ((case-fold-search nil))
+    (when (looking-at *helpers-west-topic-rx*)
+      (match-beginning 2))))
+
+
 ;;;-------------------------------------------------------------------
 ;;; Text Case Processing Utility Helpers
 
@@ -818,8 +856,10 @@ Also delete the final section after All Citations."
        (cl-loop
         until (looking-at (rx bol (opt (* (any word blank))) (| "synopsis" "opinion")))
         do
-        (when (looking-at-p (rx nonl)) (insert "- "))
-        (forward-line)
+        (when (looking-at-p (rx nonl))
+          (if (eql (following-char) ?|)
+              (delete-line)
+            (progn (insert "- ") (forward-line))))
 
         finally
         (ensure-empty-lines) (org-toggle-heading 2) (end-of-line)
@@ -842,19 +882,21 @@ Also delete the final section after All Citations."
            (progn
              (forward-line)
              (unless (looking-at-p "\n")
-               (insert-char ?\n)))))
-
-        ;; Make some headings Level 2 Headlines
-        (re-search-forward "West Headnotes")
-        (org-toggle-heading 2)
+               (insert-char ?\n))))
+         finally
+         (org-toggle-heading 2))
 
         ;; Turn attorney section into list,
         ;; one item for attorneys for appellants
         ;; and one item for attorneys for respondents
+        ;; and possibly one item for amicus curiae
         (re-search-forward "^Attorneys and Law Firms$") (org-toggle-heading 2)
         (beginning-of-line) (ensure-empty-lines)
         (forward-line) (insert-char ?\n) (insert "- ")
         (forward-line) (ensure-empty-lines) (insert "- ")
+        (forward-line)
+        (when (search-forward "amicus curiae" (pos-eol) t)
+          (beginning-of-line) (ensure-empty-lines) (insert "- ") (forward-line))
 
         (re-search-forward "Opinion") (org-toggle-heading 2))
 
@@ -876,22 +918,39 @@ Also delete the final section after All Citations."
     (when (search-forward "West Headnotes" nil t)
       (forward-line)
 
-      (cl-loop
-       until (looking-at-p "^** Attorneys and Law Firms")
-       do
+      (let ((m1 (make-marker))
+            (case-fold-search nil)
+            item)
+        (cl-loop
+         until (looking-at-p "^** Attorneys and Law Firms")
+         do
+         (forward-line)
 
-       (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
-         (forward-line 1)
-         (delete-blank-lines)
-         (join-line)
-         (org-toggle-heading 3))
-       (forward-line)
-       (when (looking-at-p (rx (| digit "(")))
-         (insert "- "))
-       ;; finally
-       ;; (org-toggle-heading 2)
-       ;; (forward-line) (insert-char ?\n)
-       ))))
+         ;; Make the next headnote a level 3 headline
+         (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
+           (set-marker m1 (point))
+           (forward-line 1)
+           (delete-blank-lines)
+           (join-line)
+           (goto-char (helpers-west-topic-split))
+           (insert " - ")
+           (set-marker m1 (point))
+           (setq item (buffer-substring-no-properties (point) (pos-eol)))
+           (org-toggle-heading 3))
+
+         (cond
+          ((looking-at *helpers-west-key-number-rx*)
+           (when (string-equal (match-string-no-properties 3)
+                               item)
+             (save-excursion
+               (goto-char m1)
+               (insert (format "%sk%s - "
+                               (match-string-no-properties 1)
+                               (match-string-no-properties 2)))))
+           (insert "- "))
+          ((looking-at-p (rx (| digit "(")))
+           (insert "- ")))
+         )))))
 
 
 (defun helpers-save-file ()
