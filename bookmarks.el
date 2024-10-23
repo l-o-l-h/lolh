@@ -2,7 +2,19 @@
 ;;; This format is meant to be slightly human-readable;
 ;;; nevertheless, you probably don't want to edit it.
 ;;; -*- End Of Bookmark File Format Version Stamp -*-
-(("HJP"
+(("process"
+ (filename . "~/Downloads/process/")
+ (front-context-string)
+ (rear-context-string . "48 Oct 21 22:20 ")
+ (position . 208)
+ (last-modified 26391 44650 342859 0))
+("Downloads"
+ (filename . "~/Downloads/")
+ (front-context-string . ".DS_Store\n  drwx")
+ (rear-context-string . "44 Oct 21 22:20 ")
+ (position . 206)
+ (last-modified 26391 44634 442349 0))
+("HJP"
  (filename . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/My Drive/HJP/")
  (front-context-string)
  (rear-context-string . "60 Oct  4 08:12 ")

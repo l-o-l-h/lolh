@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-10-18 09:03:15 lolh-mbp-16>
+;; Time-stamp: <2024-10-22 08:57:27 lolh-mbp-16>
 ;; Version: 0.1.21 [2024-09-26 23:20]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -251,6 +251,7 @@
 (keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
 (keymap-global-set "C-x p C" #'lolh/close-case)
+(keymap-global-set "C-x p R" #'lolh/textutil-rtf-to-txt-command)
 (keymap-global-set "M-A"     #'lolh/note-tree)
 (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
 (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
@@ -330,7 +331,9 @@
                      (error "No SOURCE property found")))
          ;; find the list of document data to extract
          (exs (assoc-delete-all "SOURCE" (copy-alist nps)))
-         (attach-dir (lolh/attach-dir "Notices & Lease")))
+         ;; NOTE: this variable is not used
+         ;; (attach-dir (lolh/attach-dir "Notices & Lease"))
+         )
 
     (when nps ; don't process if nps is nil (no note properties found)
       ;; copy the source into ~/Downloads/process directory
@@ -374,14 +377,14 @@
         (delete-file complaint)))))
 
 
-(defun lolh/add-file-to-gd (file dest)
-  "Place a FILE found in *lolh/process-dir* into DEST in the Google Drive.
+;; (defun lolh/add-file-to-gd (file dest)
+;;   "Place a FILE found in *lolh/process-dir* into DEST in the Google Drive.
 
-  Also attach it."
+;;   Also attach it."
 
-  (interactive)
+;;   (interactive)
 
-  ...)
+;;   ...)
 
 
 (defun lolh/update-pleadings (&optional move-first)
@@ -441,7 +444,7 @@
     (mapc (lambda (pleading)
             (unless
                 (string-match "^[[:digit:]]+" pleading)
-              (error "Something is wrong with %" pleading)) ; find the docket number
+              (error "Something is wrong with %s" pleading)) ; find the docket number
             (let* ((f (match-string 0 pleading)) ; docket number
                    (old-dir (file-name-concat court-file pleading)) ; file to be deleted
                    ;; file in attachment dir with asterisk that is to be deleted
@@ -723,7 +726,7 @@ and move the notes into the /closed Denote directory."
 
 
 (defun lolh/close-dir-file (file-to-close cause)
-  "Update all DIR links in FILE-TO-CLOSE to point to the 00_YEAR_Closed Cases directory."
+  "Update all DIR links in FILE-TO-CLOSE to the 00_YEAR_Closed Cases directory."
 
   (with-temp-buffer
     (insert-file-contents file-to-close)
@@ -863,7 +866,7 @@ This returns all directories rooted in the gd-cause-dir for the current note."
    (goto-char (point-min))
    (if (looking-at *lolh/title-rx*)
        (message "%s" (match-string-no-properties 1))
-     (error "Could not find a title."))))
+     (error "Could not find a title"))))
 
 
 (defun lolh/note-p (note type)

@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-22 08:19:12 lolh-mbp-16>
+;;; Time-stamp: <2024-10-23 02:30:31 lolh-mbp-16>
 ;;; Version: 0.0.4_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -371,7 +371,7 @@ The values will be of the required type, and of the allowed number."
   (interactive)
   (let (a)
     (while-let ((b
-                 (let (c (read-from-minibuffer "Enter c: "))
+                 (let ((c (read-from-minibuffer "Enter c: ")))
                    (if (string-empty-p c) nil (push c a)))))
       (print (format "a is %s" a) t))))
 
@@ -638,6 +638,22 @@ Return the citation as is or shortened, as necessary."
   )
 
 
+(defun date-p ()
+  "Predicate function for finding a date string in a line of text."
+  (let (;; October 14, 2024 | Oct. 14, 2024
+        (ts1 (parse-time-string (buffer-substring (pos-bol) (pos-eol))))
+        ;; 10/14/2024 | 10-14-2024
+        (ts2 (when (save-excursion
+                     (re-search-forward
+                      (rx (: (= 2 (= 2 digit) (any "-" "/")) (= 4 digit)))
+                      (pos-eol) t))
+               t)))
+    (or (and (integerp (cl-fourth ts1))
+             (integerp (cl-fifth ts1))
+             (integerp (cl-sixth ts1)))
+        ts2)))
+
+
 ;;;-------------------------------------------------------------------
 ;;; Text Case Processing Utility Helpers
 
@@ -746,6 +762,10 @@ Also delete the final section after All Citations."
 
     ;; When a case is unpublished, many sections are missing or different,
     ;; so treat them differently below.
+    ;; NOTE: some unpub cases have information after the citation and before
+    ;;       the opinion, but some don't.
+    ;; NOTE: the citation ends with a date on a line by itself (I think)
+    ;;       or Rehearing Denied DATA
     ;; Delete the Note so it does not become part of the caption text.
     (let ((unpub (save-excursion
                    (when
@@ -778,8 +798,11 @@ Also delete the final section after All Citations."
       ;; Center the caption lines
       ;; If the opinion is unpublished, there will be neither a Synopsis nor a section of Attorneys
       ;; In that case, stop at the Opinion section
+      ;; NOTE: pattern seems to be a date followed by one of Synopsis|Opinion|Appeal
+      ;;       the date comes in various forms and can occur in a sentence or alone
       (cl-loop
-       until (looking-at (rx bol (| "Synopsis" "Opinion")))
+       ;; until (looking-at (rx bol (opt (* (any word space))) (| "Synopsis" "Opinion")))
+       until (date-p)
        do
 
        (cond
@@ -790,9 +813,22 @@ Also delete the final section after All Citations."
         (t (center-line) (forward-line)))
 
        finally
-       ;; Make `Synopsis' or `Opinion' a level 2 headline
-       (ensure-empty-lines) (org-toggle-heading 2) (end-of-line)
-       (unless (looking-at-p "\n\n") (insert-char ?\n)))
+       (center-line) (forward-line) (insert-char ?\n)
+
+       (cl-loop
+        until (looking-at (rx bol (opt (* (any word blank))) (| "synopsis" "opinion")))
+        do
+        (when (looking-at-p (rx nonl)) (insert "- "))
+        (forward-line)
+
+        finally
+        (ensure-empty-lines) (org-toggle-heading 2) (end-of-line)
+        (unless (looking-at-p "\n\n") (insert-char ?\n))
+
+        ;; Make `Synopsis' or `Opinion' a level 2 headline
+        ;; (ensure-empty-lines) (org-toggle-heading 2) (end-of-line)
+        ;; (unless (looking-at-p "\n\n") (insert-char ?\n)))
+        ))
 
       ;; Separate the lines in the Synopsis section and make some headings
       ;; This will not work in an unpublished opinion.
