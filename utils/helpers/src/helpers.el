@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-23 23:03:56 lolh-mbp-16>
+;;; Time-stamp: <2024-10-23 23:58:00 lolh-mbp-16>
 ;;; Version: 0.0.5_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -951,7 +951,9 @@ Also delete the final section after All Citations."
 
       (let ((m1 (make-marker))
             (case-fold-search nil)
+            (c 0) ; count
             item)
+
         (cl-loop
          until (looking-at-p "^** Attorneys and Law Firms")
          do
@@ -959,6 +961,7 @@ Also delete the final section after All Citations."
 
          ;; Make the next headnote a level 3 headline
          (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
+           (setq c 0)
            (forward-line 1)
            (delete-blank-lines)
            (join-line)
@@ -973,17 +976,20 @@ Also delete the final section after All Citations."
           ;; now process the list of West key number head notes
           ((looking-at *helpers-west-key-number-rx*)
            (save-match-data
-             (when (string-equal (match-string-no-properties 3)
-                                 item)
+             (when (and
+                    (eql c 0)
+                    (string-equal (match-string-no-properties 3)
+                                  item))
                (save-excursion
                  ;; jump into the headline to add the West key number
+                 (cl-incf c)
                  (goto-char m1)
                  ;; the rest of the underline surrounding the West key number
-                 (insert (format "%sk%s_ "
+                 (insert (format "%s-k-%s_ "
                                  (match-string-no-properties 1)
                                  (match-string-no-properties 2))))))
            ;; format the current line item headnote
-           (insert (format "- _%sk%s_ *%s*"
+           (insert (format "- _%s-k-%s_ *%s*"
                            (match-string-no-properties 1)
                            (match-string-no-properties 2)
                            (match-string-no-properties 3)))
@@ -991,26 +997,35 @@ Also delete the final section after All Citations."
 
           ((looking-at-p (rx digit))
            (cond
+            ((looking-at-p (rx (+ digit) space "Case"))
+             (newline) (insert "- ") (end-of-line))
+
             ((looking-at *helpers-west-key-number-2-rx*)
-             (insert (format "- %s %s %s %s [2]"
+             (insert (format "- %s-%s%s /%s/"
                              (match-string-no-properties 1)
                              (match-string-no-properties 2)
                              (match-string-no-properties 3)
                              (match-string-no-properties 4))))
+
             ((looking-at *helpers-west-key-number-1-rx*)
-             (insert (format "- %s %s %s [1]"
+             (insert (format "- %s-%s /%s/"
                              (match-string-no-properties 1)
                              (match-string-no-properties 2)
                              (match-string-no-properties 3))))
+
             ((looking-at *helpers-west-key-number-0-rx*)
-             (insert (format "- %s %s [0]"
+             (insert (format "- %s /%s/"
                              (match-string-no-properties 1)
                              (match-string-no-properties 2))))
             )
            (delete-region (point) (pos-eol)))
+
           ((looking-at-p (rx "("))
-           (insert "- ")))
-         )))))
+           (insert "- "))
+
+          ((looking-at-p (rx eol)))
+
+          ))))))
 
 
 (defun helpers-save-file ()
