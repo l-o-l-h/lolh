@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-24 16:00:29 lolh-mbp-16>
+;;; Time-stamp: <2024-10-24 16:42:17 lolh-mbp-16>
 ;;; Version: 0.0.5_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -954,7 +954,7 @@ Also delete the final section after All Citations."
             (m2 (make-marker))
             (case-fold-search nil)
             (c 0) ; count
-            num item)
+            num1 num2 item)
 
         (cl-loop
          until (looking-at-p "^** Attorneys and Law Firms")
@@ -962,8 +962,9 @@ Also delete the final section after All Citations."
          (forward-line)
 
          ;; Make the next headnote a level 3 headline
-         (when (looking-at (rx bol (group "[" (+ digit) "]") eol)) ; e.g. [1] Blah...
-           (setq num (match-string-no-properties 1)) ; "[1]"
+         (when (looking-at (rx bol (group "[" (group (+ digit)) "]") eol)) ; e.g. [1] Blah...
+           (setq num1 (match-string-no-properties 1)) ; "[1]"
+           (setq num2 (match-string-no-properties 2)) ; "1"
            (setq c t) ; add only 1 West key number (sometimes there are multiple)
            (forward-line 1)
            (delete-blank-lines)
@@ -987,9 +988,9 @@ Also delete the final section after All Citations."
              (when (and c (string-equal subtopic item))
                (save-excursion
                  (goto-char m1) ; jump to marker m1 to add the West key number as a link
-                 (insert (format " [[%s]]  " formatted))
-                 (when (search-forward num) ; find the link location and add a target
-                   (insert (format " <<%s>>" formatted)))
+                 (insert (format " [[%s: %s][%s]]  " num2 formatted formatted))
+                 (when (search-forward num1) ; find the link location and add a target
+                   (insert (format " <<%s: %s>>" num2 formatted)))
 
                  ;; don't add any more West key numbers into the headline after this one
                  (setq c nil))
