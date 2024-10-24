@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-23 23:58:00 lolh-mbp-16>
+;;; Time-stamp: <2024-10-24 16:00:29 lolh-mbp-16>
 ;;; Version: 0.0.5_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -676,7 +676,7 @@ TODO: But see:
        (group (** 1 3 digit) (?? upper))
        (group upper (+ nonl))
        eol))
-  )
+  "233Landlord and Tenant")
 
 
 (defconst *helpers-west-key-number-1-rx*
@@ -685,17 +685,18 @@ TODO: But see:
        (group (** 1 4 (any "I" "V" "X")))
        (group upper (+ nonl))
        eol))
-  )
+  "233VIIIReentry and ...")
 
 
 (defconst *helpers-west-key-number-2-rx*
   (rx (:
        (group (** 1 3 digit) (?? upper))
        (group (** 1 4 (any "I" "V" "X")))
-       (group (: "(" nonl ")"))
+       (group (: "(" upper ")" (opt digit)))
        (group upper (+ nonl))
        eol))
-  )
+  "233VIII(D)Actions for Unlawful Detainer
+   92VI(C)2Necessity of Determination")
 
 
 (defconst *helpers-west-topic-rx*
@@ -950,9 +951,10 @@ Also delete the final section after All Citations."
       (forward-line)
 
       (let ((m1 (make-marker))
+            (m2 (make-marker))
             (case-fold-search nil)
             (c 0) ; count
-            item)
+            num item)
 
         (cl-loop
          until (looking-at-p "^** Attorneys and Law Firms")
@@ -960,69 +962,73 @@ Also delete the final section after All Citations."
          (forward-line)
 
          ;; Make the next headnote a level 3 headline
-         (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
-           (setq c 0)
+         (when (looking-at (rx bol (group "[" (+ digit) "]") eol)) ; e.g. [1] Blah...
+           (setq num (match-string-no-properties 1)) ; "[1]"
+           (setq c t) ; add only 1 West key number (sometimes there are multiple)
            (forward-line 1)
            (delete-blank-lines)
            (join-line)
            (goto-char (helpers-west-topic-split))
-           ;; underline the West key number
-           (insert " _")
+           (insert-char ?\ )
+           ;; establish a link using the West key number at this point
            (set-marker m1 (point))
+           ;; `item' is the West key number subtopic text; save it for comparison
            (setq item (buffer-substring-no-properties (point) (pos-eol)))
            (org-toggle-heading 3))
 
+         ;; Run through the list of West key number items
          (cond
-          ;; now process the list of West key number head notes
+          ;; looking at the main note
           ((looking-at *helpers-west-key-number-rx*)
-           (save-match-data
-             (when (and
-                    (eql c 0)
-                    (string-equal (match-string-no-properties 3)
-                                  item))
+           (let ((formatted (format "%s-k-%s"
+                                    (match-string-no-properties 1) ; main no. 233
+                                    (match-string-no-properties 2))) ; sub no. 1787
+                 (subtopic (match-string-no-properties 3))) ; sub text Blah
+             (when (and c (string-equal subtopic item))
                (save-excursion
-                 ;; jump into the headline to add the West key number
-                 (cl-incf c)
-                 (goto-char m1)
-                 ;; the rest of the underline surrounding the West key number
-                 (insert (format "%s-k-%s_ "
-                                 (match-string-no-properties 1)
-                                 (match-string-no-properties 2))))))
-           ;; format the current line item headnote
-           (insert (format "- _%s-k-%s_ *%s*"
-                           (match-string-no-properties 1)
-                           (match-string-no-properties 2)
-                           (match-string-no-properties 3)))
-           (delete-region (point) (pos-eol)))
+                 (goto-char m1) ; jump to marker m1 to add the West key number as a link
+                 (insert (format " [[%s]]  " formatted))
+                 (when (search-forward num) ; find the link location and add a target
+                   (insert (format " <<%s>>" formatted)))
 
+                 ;; don't add any more West key numbers into the headline after this one
+                 (setq c nil))
+               )
+             (insert (format "- *%s %s*" formatted subtopic)) ; back to the list to create an item
+             (delete-region (point) (pos-eol))))
+
+          ;; looking at other West key number items (not a main note); each starts with a number
           ((looking-at-p (rx digit))
            (cond
             ((looking-at-p (rx (+ digit) space "Case"))
              (newline) (insert "- ") (end-of-line))
 
+            ;; the following are different levels of West key number outline items
             ((looking-at *helpers-west-key-number-2-rx*)
-             (insert (format "- %s-%s%s /%s/"
+             (insert (format "- /%s-%s%s %s/"
                              (match-string-no-properties 1)
                              (match-string-no-properties 2)
                              (match-string-no-properties 3)
                              (match-string-no-properties 4))))
 
             ((looking-at *helpers-west-key-number-1-rx*)
-             (insert (format "- %s-%s /%s/"
+             (insert (format "- /%s-%s %s/"
                              (match-string-no-properties 1)
                              (match-string-no-properties 2)
                              (match-string-no-properties 3))))
 
             ((looking-at *helpers-west-key-number-0-rx*)
-             (insert (format "- %s /%s/"
+             (insert (format "- /%s %s/"
                              (match-string-no-properties 1)
-                             (match-string-no-properties 2))))
-            )
+                             (match-string-no-properties 2)))))
+
            (delete-region (point) (pos-eol)))
 
+          ;; looking at (Formerly ...)
           ((looking-at-p (rx "("))
-           (insert "- "))
+           (insert "- /") (goto-char (pos-eol)) (insert-char ?/) (beginning-of-line))
 
+          ;; looking at a blank line
           ((looking-at-p (rx eol)))
 
           ))))))
