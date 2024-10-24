@@ -1,6 +1,6 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-23 05:34:14 lolh-mbp-16>
-;;; Version: 0.0.4_2024-10-21T1015
+;;; Time-stamp: <2024-10-23 23:03:56 lolh-mbp-16>
+;;; Version: 0.0.5_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
 ;;; Author: LOLH
@@ -459,8 +459,8 @@ in the *Help* buffer."
       (:
        (1+ digit)
        (1+ space)
-       (| "Wash." "Wn." "WL")
-       (* (any space "App." "2d"))
+       (| "Wash." "Wn." "WL" "P.")
+       (* (any space "App." "2d" "3d"))
        (: (1+ space)
           (1+ digit))
        eow)
@@ -473,7 +473,8 @@ in the *Help* buffer."
    - 123 Wn.App. 456
    - 123 Wn. App. 456
    - 123 Wn.App.2d 456
-   - 123 WL 456"
+   - 123 WL 456
+   - 550 P.3d 64"
   )
 
 
@@ -545,6 +546,7 @@ Point is assumed to be directly after `Washington Citation :: *'")
   "Finds a case title of the form:
 - In the Matter of the BLAH of: NAME, blah, OTHER NAMES, Appellant
 and divides it into six sections.")
+
 
 (defconst *helpers-et-al-rx*
   (rx
@@ -658,13 +660,42 @@ Return the citation as is or shortened, as necessary."
   (rx (:
        (group-n 1 (** 1 3 digit) (opt upper))
        "k"
-       (group-n 2 (** 1 4 digit))
+       (group-n 2 (** 1 4 digit) (opt (* (any "(" ")" "." digit))))
        (group-n 3 (+ nonl))))
   "NOTE: `case-fold-search' must be set to nil.
 Matches a West Key Number Citation, such as
 - 233k1051Blah
+- 322Hk3Blah
 TODO: But see:
-- 268k122.1(4)Weight and sufficiency")
+- 268k122.1(4)Weight and sufficiency
+- 179k21(.5)In general")
+
+
+(defconst *helpers-west-key-number-0-rx*
+  (rx (:
+       (group (** 1 3 digit) (?? upper))
+       (group upper (+ nonl))
+       eol))
+  )
+
+
+(defconst *helpers-west-key-number-1-rx*
+  (rx (:
+       (group (** 1 3 digit) (?? upper))
+       (group (** 1 4 (any "I" "V" "X")))
+       (group upper (+ nonl))
+       eol))
+  )
+
+
+(defconst *helpers-west-key-number-2-rx*
+  (rx (:
+       (group (** 1 3 digit) (?? upper))
+       (group (** 1 4 (any "I" "V" "X")))
+       (group (: "(" nonl ")"))
+       (group upper (+ nonl))
+       eol))
+  )
 
 
 (defconst *helpers-west-topic-rx*
@@ -928,27 +959,56 @@ Also delete the final section after All Citations."
 
          ;; Make the next headnote a level 3 headline
          (when (looking-at-p (rx bol "[" (+ digit) "]" eol))
-           (set-marker m1 (point))
            (forward-line 1)
            (delete-blank-lines)
            (join-line)
            (goto-char (helpers-west-topic-split))
-           (insert " - ")
+           ;; underline the West key number
+           (insert " _")
            (set-marker m1 (point))
            (setq item (buffer-substring-no-properties (point) (pos-eol)))
            (org-toggle-heading 3))
 
          (cond
+          ;; now process the list of West key number head notes
           ((looking-at *helpers-west-key-number-rx*)
-           (when (string-equal (match-string-no-properties 3)
-                               item)
-             (save-excursion
-               (goto-char m1)
-               (insert (format "%sk%s - "
-                               (match-string-no-properties 1)
-                               (match-string-no-properties 2)))))
-           (insert "- "))
-          ((looking-at-p (rx (| digit "(")))
+           (save-match-data
+             (when (string-equal (match-string-no-properties 3)
+                                 item)
+               (save-excursion
+                 ;; jump into the headline to add the West key number
+                 (goto-char m1)
+                 ;; the rest of the underline surrounding the West key number
+                 (insert (format "%sk%s_ "
+                                 (match-string-no-properties 1)
+                                 (match-string-no-properties 2))))))
+           ;; format the current line item headnote
+           (insert (format "- _%sk%s_ *%s*"
+                           (match-string-no-properties 1)
+                           (match-string-no-properties 2)
+                           (match-string-no-properties 3)))
+           (delete-region (point) (pos-eol)))
+
+          ((looking-at-p (rx digit))
+           (cond
+            ((looking-at *helpers-west-key-number-2-rx*)
+             (insert (format "- %s %s %s %s [2]"
+                             (match-string-no-properties 1)
+                             (match-string-no-properties 2)
+                             (match-string-no-properties 3)
+                             (match-string-no-properties 4))))
+            ((looking-at *helpers-west-key-number-1-rx*)
+             (insert (format "- %s %s %s [1]"
+                             (match-string-no-properties 1)
+                             (match-string-no-properties 2)
+                             (match-string-no-properties 3))))
+            ((looking-at *helpers-west-key-number-0-rx*)
+             (insert (format "- %s %s [0]"
+                             (match-string-no-properties 1)
+                             (match-string-no-properties 2))))
+            )
+           (delete-region (point) (pos-eol)))
+          ((looking-at-p (rx "("))
            (insert "- ")))
          )))))
 
