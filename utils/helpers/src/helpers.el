@@ -1,6 +1,6 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-25 01:50:22 lolh-mbp-16>
-;;; Version: 0.0.6_2024-10-21T1015
+;;; Time-stamp: <2024-10-25 01:52:07 lolh-mbp-16>
+;;; Version: 0.0.7_2024-10-25T0150
 ;;; Package-Requires: ((emacs "24.3"))
 
 ;;; Author: LOLH
