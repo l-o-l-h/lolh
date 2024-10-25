@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-24 23:25:08 lolh-mbp-16>
+;;; Time-stamp: <2024-10-25 01:50:22 lolh-mbp-16>
 ;;; Version: 0.0.6_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -765,6 +765,7 @@ Landlord and TenantDefenses and grounds of opposition in general
   (helpers-process-sections)
   (helpers-process-headnotes)
   (helpers-save-file)
+  (helpers-process-footnotes)
   )
 
 
@@ -1099,9 +1100,36 @@ TODO: In one instance, a headnote links to a West Key Number Outline
         (denote-save-buffers t))
 
     (denote-rename-file nfn citation kws sig date)
-    ;; (message "In helpers-denote-rename-file  Must Die: %s\n%s\n%s\n%s\n%s\n%s\n\n" must-die nfn citation kws sig date)
     )
   )
+
+
+(defun helpers-process-footnotes ()
+  "Convert footnotes into Org footnote syntax."
+
+  (save-restriction
+    (widen)
+    (save-excursion
+      (re-search-forward (rx bol (+ "*") (+ nonl) "Opinion"))
+      ;; numbers on lines by themselves should be footnotes
+      (while (re-search-forward (rx bol (group (+ digit)) eol) nil t)
+        (let* ((m (make-marker)) ; remember this position
+               (num (match-string-no-properties 1))
+               (numrx (format "[[:alnum:]]\\s.+\\(%s\\)[[:space:]]" num)))
+          (set-marker m (match-beginning 0))
+          (replace-match "[fn:\\&] ") ; create the footnote syntax
+          (while (looking-at-p (rx eol)) (delete-char 1)) ; join the number with the text
+          (beginning-of-line)
+          ;; place two empty lines before and after the footnote text
+          (ensure-empty-lines 2)
+          (while (looking-at-p (rx nonl))
+            (forward-line))
+          (insert-char ?\n)
+          (goto-char m) ; jump back to just before the footnote syntax
+          ;; look backward to find the matching number
+          (re-search-backward numrx)
+          (replace-match "[fn:\\1]" nil nil nil 1)))))
+  (save-buffer))
 
 
 (provide 'helpers)
