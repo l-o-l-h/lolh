@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-24 16:44:48 lolh-mbp-16>
+;;; Time-stamp: <2024-10-24 23:25:08 lolh-mbp-16>
 ;;; Version: 0.0.6_2024-10-21T1015
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -760,11 +760,28 @@ Landlord and TenantDefenses and grounds of opposition in general
 
   ;; 1.
   (find-file text-file)
+  (helpers-process-text)
   (helpers-single-space-text)
   (helpers-process-sections)
   (helpers-process-headnotes)
   (helpers-save-file)
   )
+
+
+(defun helpers-process-text ()
+  "Do some basic text processing on each line first."
+
+  (interactive)
+
+  (save-excursion
+    (cl-loop
+     until (eobp)
+     do
+     (replace-string-in-region " " "" (pos-bol) (pos-eol))
+     (replace-regexp-in-region
+      (rx symbol-start (+ "*") (+ digit) word-end) "{{\\&}}"
+      (pos-bol) (pos-eol))
+     (forward-line))))
 
 
 (defun helpers-single-space-text ()
@@ -773,9 +790,6 @@ Landlord and TenantDefenses and grounds of opposition in general
 Also delete the final section after All Citations."
 
   (interactive)
-
-  (goto-char (point-min))
-  (replace-string-in-region " " "")
 
   (save-excursion
     (cl-loop
@@ -835,7 +849,7 @@ Also delete the final section after All Citations."
     ;; NOTE: some unpub cases have information after the citation and before
     ;;       the opinion, but some don't.
     ;; NOTE: the citation ends with a date on a line by itself (I think)
-    ;;       or Rehearing Denied DATA
+    ;;       or Rehearing Denied DATE
     ;; Delete the Note so it does not become part of the caption text.
     (let ((unpub (save-excursion
                    (when
@@ -894,7 +908,11 @@ Also delete the final section after All Citations."
             (progn (insert "- ") (forward-line))))
 
         finally
-        (ensure-empty-lines) (org-toggle-heading 2) (end-of-line)
+        ;; add a Brief heading
+        (ensure-empty-lines 3)
+        (backward-char 2) (insert "Brief") (org-toggle-heading 2) (forward-line 2)
+        ;; turn Synopsis or Opinion into a level 2 heading
+        (org-toggle-heading 2) (end-of-line)
         (unless (looking-at-p "\n\n") (insert-char ?\n))
 
         ;; Make `Synopsis' or `Opinion' a level 2 headline
@@ -942,7 +960,10 @@ Also delete the final section after All Citations."
 
 
 (defun helpers-process-headnotes ()
-  "Make headnotes readable and linked to the body text."
+  "Make headnotes readable and linked to the body text.
+TODO: In one instance, a headnote links to a West Key Number Outline
+      instead of a key number cite, and so there is no link.
+      See Foisy v. Wyman, 83 Wash.2d 22 (1973) Headnote 11."
 
   (save-excursion
 
