@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-10-22 08:57:27 lolh-mbp-16>
+;; Time-stamp: <2024-10-29 17:50:35 lolh-mbp-16>
 ;; Version: 0.1.21 [2024-09-26 23:20]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -1775,6 +1775,7 @@ this function will ask for a client."
 ;;;-------------------------------------------------------------------
 ;;; textutil
 
+
 (defun lolh/textutil-rtf-to-txt-command ()
   "Convert a set of RTF documents into same-named TXT documents.
 
@@ -1790,8 +1791,9 @@ The TXT documents will end up in /process."
       (call-process-shell-command
        (format "textutil -convert txt \"%s\"" new-rtf))
       (delete-file new-rtf t)
-      (helpers-process-text-case-file new-txt)
-      (delete-file new-txt t))))
+      ;; (helpers-process-text-case-file new-txt)
+      ;; (delete-file new-txt t)
+      )))
 
 ;;;-------------------------------------------------------------------
 ;;; Macro with-main-note, with-client-note

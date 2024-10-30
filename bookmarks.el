@@ -2,7 +2,13 @@
 ;;; This format is meant to be slightly human-readable;
 ;;; nevertheless, you probably don't want to edit it.
 ;;; -*- End Of Bookmark File Format Version Stamp -*-
-(("process"
+(("init-local.el"
+ (filename . "~/.local/src/System-Inits/init-local.el")
+ (front-context-string . "\n\n\n;;;;;;;;;;;;;")
+ (rear-context-string . "n-numbers nil)))")
+ (position . 8208)
+ (last-modified 26397 37154 982819 0))
+("process"
  (filename . "~/Downloads/process/")
  (front-context-string)
  (rear-context-string . "48 Oct 21 22:20 ")
@@ -32,12 +38,6 @@
  (rear-context-string . "46 Jan 25 13:18 ")
  (position . 202)
  (last-modified 26148 31761 968303 0))
-("emacs-lolh"
- (filename . "~/.local/share/emacs/utils/")
- (front-context-string . ".DS_Store\n  drwx")
- (rear-context-string . "48 Nov 19 10:01 ")
- (position . 200)
- (last-modified 26176 56647 596404 0))
 ("Lincoln Harvey 2023"
  (filename . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/My Drive/2023 UD Case Prep/Lincoln Harvey 2023/")
  (front-context-string . ".DS_Store\n  drwx")

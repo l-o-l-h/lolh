@@ -1,6 +1,6 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-25 01:52:07 lolh-mbp-16>
-;;; Version: 0.0.7_2024-10-25T0150
+;;; Time-stamp: <2024-10-30 09:33:46 lolh-mbp-16>
+;;; Version: 0.0.8_2024-10-25T0150
 ;;; Package-Requires: ((emacs "24.3"))
 
 ;;; Author: LOLH
@@ -454,6 +454,27 @@ in the *Help* buffer."
 ;;;-------------------------------------------------------------------
 
 
+(defun helpers-delete-until-char ()
+  "From point forward delete empty lines.
+
+Point must be on an empty line or at the end of a line."
+
+  (while (eolp) (delete-char 1)))
+
+
+(defun helpers-remove-strange-underscores ()
+  "Delete all of the strange underscores in a file."
+
+  (goto-char (point-min))
+  (save-excursion
+    (cl-loop
+     until (eobp)
+     do
+     (if (eql (following-char) 160)
+         (delete-char 1)
+       (forward-char)))))
+
+
 (defconst *helpers-citation-rx*
   (rx bow
       (:
@@ -647,7 +668,7 @@ Return the citation as is or shortened, as necessary."
         ;; 10/14/2024 | 10-14-2024
         (ts2 (when (save-excursion
                      (re-search-forward
-                      (rx (: (= 2 (= 2 digit) (any "-" "/")) (= 4 digit)))
+                      (rx (: (= 2 (** 1 2 digit) (any "-" "/")) (= 4 digit)))
                       (pos-eol) t))
                t)))
     (or (and (integerp (cl-fourth ts1))
@@ -769,11 +790,59 @@ Landlord and TenantDefenses and grounds of opposition in general
   )
 
 
+(defun helpers-get-rcw-text-files ()
+  "Place all RCW text files found in /process into a list."
+  (interactive)
+
+  (find-file-other-window
+   (directory-files *lolh/process-dir* t ".*.txt" t 1)))
+
+
+(defun helpers-process-rcw-file ()
+  "Clean up and process all RCW files in /process."
+
+  (interactive)
+
+  (cl-dolist (curfile (directory-files *lolh/process-dir* t ".*.txt" t))
+    (with-temp-buffer
+      (insert-file-contents curfile)
+      (helpers-remove-strange-underscores)
+      (helpers-delete-until-char)
+
+      (insert "RCW ") (org-toggle-heading 1)
+
+      (forward-line) (delete-line)
+      (helpers-delete-until-char)
+      (delete-region (point) (and (search-forward "West") (pos-bol)))
+      (beginning-of-line) (delete-line) (ensure-empty-lines)
+
+      (cl-loop
+       until (looking-at-p "Currentness")
+       do
+       (when (looking-at "West’s RCWA") (replace-match "RCW"))
+       (center-line) (forward-line)
+       finally (delete-line) (helpers-delete-until-char) (ensure-empty-lines 2))
+
+      (helpers-single-space-rcw-text)
+
+      ;; Create a new filename like "RCW-59.18.040 Blah.org
+      (write-file
+       (let ((bn (file-name-base curfile)))
+         (file-name-concat *lolh/process-dir*
+                           (concat "RCW"
+                                   (format " %s.%s.%s"
+                                           (substring bn 0 2)
+                                           (substring bn 2 4)
+                                           (substring bn 4))
+                                   ".org")))))))
+
+
 (defun helpers-process-text ()
   "Do some basic text processing on each line first."
 
   (interactive)
 
+  (goto-char (point-min))
   (save-excursion
     (cl-loop
      until (eobp)
@@ -836,6 +905,42 @@ Also delete the final section after All Citations."
     (goto-char (point-min))
     (when (looking-at-p "\n") (delete-line)))
   )
+
+
+(defun helpers-single-space-rcw-text ()
+  "Make sure there is one and only one line between paragraphs."
+
+  ;; (clone-indirect-buffer-other-window "**temp**" t t)
+
+  (save-excursion
+    (cl-loop
+     with notes = nil
+     until (eobp)
+     do
+
+     (cond
+      ((looking-at-p (rx eol)) (forward-line) (helpers-delete-until-char))
+      ((looking-at-p "end of document") (delete-region (and (search-backward "West") (point)) (point-max)))
+      ((looking-at-p "Credits") (org-toggle-heading 1) (forward-line))
+      ((looking-at-p "Official Notes") (org-toggle-heading 1) (setq notes t) (forward-line))
+      ((looking-at-p (rx  (| "Findings--Intent" "Effective"))) (org-toggle-heading 2)
+       (when (search-forward "“" (pos-eol)) (delete-char -1) (insert "\n\n")
+             (save-excursion (when (search-forward "”") (delete-char -1)))))
+      ((looking-at-p (rx nonl))
+
+       (unless notes
+         (cond
+          ((looking-at (rx bol "(" (+ digit) ")" space))
+           (goto-char (match-end 0)) (delete-char -1) (newline) (forward-line -1)
+           (org-toggle-heading 2) (forward-line 1))
+          ((looking-at (rx bol "(" (+ (| "i" "v" "x")) ")" space))
+           (goto-char (match-end 0)) (delete-char -1) (newline) (forward-line -1)
+           (org-toggle-heading 4) (forward-line 1))
+          ((looking-at (rx bol "(" (+ alpha) ")" space))
+           (goto-char (match-end 0)) (delete-char -1) (newline) (forward-line -1)
+           (org-toggle-heading 3) (forward-line 1))
+          ))
+       (forward-line))))))
 
 
 (defun helpers-process-sections ()
@@ -903,10 +1008,11 @@ Also delete the final section after All Citations."
        (cl-loop
         until (looking-at (rx bol (opt (* (any word blank))) (| "synopsis" "opinion")))
         do
-        (when (looking-at-p (rx nonl))
-          (if (eql (following-char) ?|)
-              (delete-line)
-            (progn (insert "- ") (forward-line))))
+        (if (looking-at-p (rx nonl))
+            (progn (if (eql (following-char) ?|)
+                       (delete-line)
+                     (progn (insert "- ") (forward-line))))
+          (forward-line))
 
         finally
         ;; add a Brief heading
@@ -915,10 +1021,6 @@ Also delete the final section after All Citations."
         ;; turn Synopsis or Opinion into a level 2 heading
         (org-toggle-heading 2) (end-of-line)
         (unless (looking-at-p "\n\n") (insert-char ?\n))
-
-        ;; Make `Synopsis' or `Opinion' a level 2 headline
-        ;; (ensure-empty-lines) (org-toggle-heading 2) (end-of-line)
-        ;; (unless (looking-at-p "\n\n") (insert-char ?\n)))
         ))
 
       ;; Separate the lines in the Synopsis section and make some headings
@@ -1068,7 +1170,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
            (n-citation (if (> (length citation) 256)
                            (helpers-process-long-citation)
                          citation))
-           (unpub (if (save-excursion (search-forward "unpublished" nil t))
+           (unpub (if (save-excursion (search-forward "Not Reported" nil t))
                       "unpub" nil))
            ;; TODO: ask for a list of keywords at this point
            (kws '("case"))
@@ -1113,10 +1215,24 @@ TODO: In one instance, a headnote links to a West Key Number Outline
       (re-search-forward (rx bol (+ "*") (+ nonl) "Opinion"))
       ;; numbers on lines by themselves should be footnotes
       (while (re-search-forward (rx bol (group (+ digit)) eol) nil t)
-        (let* ((m (make-marker)) ; remember this position
+        (let* ((m1 (make-marker)) ; remember this position
+               (m2 (make-marker)) ; use as an upper bound for a look backward
                (num (match-string-no-properties 1))
-               (numrx (format "[[:alnum:]]\\s.+\\(%s\\)[[:space:]]" num)))
-          (set-marker m (match-beginning 0))
+               ;; ISSUES: this form catches incorrect locations, but catches a lot
+               ;; other forms catch fewer correct, or simply don't finish
+               ;; TODO: work on a better regex to solve these problems.
+               ;; until then, will have to manually correct the footnotes
+               ;; one thought is to exclude anything in a citation.
+               ;; many of the wrong footnotes are in citations.
+               (numrx (format "[[:alnum:])]\\s.*\\(%s\\)[[:space:]]" num)))
+
+          (save-match-data
+            ;; set a marker just before the footnote as a placeholder to come back to
+            (set-marker m1 (match-beginning 0))
+            ;; set a marker at the beginning of the prior paragraph as an upper bound
+            (forward-line -2) (re-search-backward paragraph-start)
+            (setq m2 (point)) (goto-char m1))
+
           (replace-match "[fn:\\&] ") ; create the footnote syntax
           (while (looking-at-p (rx eol)) (delete-char 1)) ; join the number with the text
           (beginning-of-line)
@@ -1125,9 +1241,10 @@ TODO: In one instance, a headnote links to a West Key Number Outline
           (while (looking-at-p (rx nonl))
             (forward-line))
           (insert-char ?\n)
-          (goto-char m) ; jump back to just before the footnote syntax
+          (goto-char m1) ; jump back to just before the footnote syntax
           ;; look backward to find the matching number
-          (re-search-backward numrx)
+          ;; TODO: limit search to prior paragraph only
+          (re-search-backward numrx m2 t)
           (replace-match "[fn:\\1]" nil nil nil 1)))))
   (save-buffer))
 
