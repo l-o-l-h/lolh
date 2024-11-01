@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-11-01 08:37:38 lolh-mbp-16>
+;; Time-stamp: <2024-11-01 11:17:57 lolh-mbp-16>
 ;; Version: 0.2.0 [2024-11-01 08:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -873,12 +873,14 @@ This returns all directories rooted in the gd-cause-dir for the current note."
 
 TYPE can be either `main' or `client'."
 
-  (cl-subsetp
-   (denote-extract-keywords-from-path note)
-   (cl-ecase type
-     ((main) *lolh/main-note*)
-     ((client) *lolh/client-note*))
-   :test #'string=))
+  (cl-member type
+             (cl-intersection
+              (cl-ecase type
+                ((main) *lolh/main-note*)
+                ((client) *lolh/client-note*))
+              (denote-extract-keywords-from-path note)
+              :test #'string=)
+             :test #'string=))
 
 
 (defun lolh/main-note ()
