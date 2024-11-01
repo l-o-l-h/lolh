@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-10-29 17:50:35 lolh-mbp-16>
-;; Version: 0.1.21 [2024-09-26 23:20]
+;; Time-stamp: <2024-11-01 08:37:38 lolh-mbp-16>
+;; Version: 0.2.0 [2024-11-01 08:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -211,11 +211,11 @@
   "A title.")
 
 
-(defconst *lolh/main-note* '("case" "main" "rtc")
+(defconst *lolh/main-note* '("case" "main" "rtc" "hjp")
   "The keyword attributes of a Main note.")
 
 
-(defconst *lolh/client-note* '("client" "main" "rtc")
+(defconst *lolh/client-note* '("client" "main" "rtc" "hjp")
   "The keyword attributes of a Client note.")
 
 
@@ -540,7 +540,6 @@ NOTE: A singled prefix argument sets BODY-P to 4, while a double prefix
 argument sets BODY-P to 16."
 
   (interactive
-   ;; (setq-local completion-ignore-case t)
    (let ((completion-ignore-case t))
      (list (read-directory-name
             "Destination Dir? "
@@ -574,7 +573,7 @@ argument sets BODY-P to 16."
              (of (file-name-concat *lolh/process-dir* file))) ; old file path
         (push nf new-files)
         (push of old-files)))
-    (lolh/send-to-gd-and-maybe-attach old-files new-files dest attach-hl)))
+    (lolh/send-to-gd-and-maybe-attach old-files new-files attach-hl)))
 
 
 ;; M-U
@@ -872,13 +871,13 @@ This returns all directories rooted in the gd-cause-dir for the current note."
 (defun lolh/note-p (note type)
   "Predicate to test the TYPE of a NOTE.
 
-TYPE can be either 'main or 'client."
+TYPE can be either `main' or `client'."
 
   (cl-subsetp
-   (cl-ecase type
-     ('main *lolh/main-note*)
-     ('client *lolh/client-note*))
    (denote-extract-keywords-from-path note)
+   (cl-ecase type
+     ((main) *lolh/main-note*)
+     ((client) *lolh/client-note*))
    :test #'string=))
 
 
@@ -892,12 +891,13 @@ Return an error if a main note cannot be found."
   (let ((bfn (buffer-file-name))) ; watch out for (buffer-file-name) returning NIL
     (if (lolh/note-p bfn 'main)
         bfn
-      (let ((blb (denote-link-return-backlinks))
-            f)
+      (let ((blb (denote-link-return-backlinks)))
         (or (cl-dolist (b blb) ; returns 'nil' if no Main note is found
               (when (lolh/note-p b 'main)
                 (cl-return b)))         ; returns a found Main note
-            (error "Failed to find a Main note for %s" bfn))))))
+            (prog1
+                (message "Failed to find a Main note for %s" bfn)
+              (error "Failed to find a Main note for %s" bfn)))))))
 
 
 (defun lolh/client-note ()
@@ -963,7 +963,7 @@ Return an alist of (client-name . client-note) pairs."
 
 (defun lolh/cause-plaintiffs-defendants ()
   "Return a list of the full, cause, plaintiffs, and defendants of the main note.
-'(full, cause, plaintiffs, defendants)"
+`(full, cause, plaintiffs, defendants)'"
   ;; Do this without calling (lolh/gd-cause-dir)
   ;; use: (denote-retrieve-title-or-filename (buffer-file-name) 'org)
   (with-main-note
@@ -1004,17 +1004,19 @@ An error will be called if something goes wrong."
 ;;; Notes, Headlines, and Properties
 
 
-(defun lolh/note-type-to-hl (type)
-  "Input a document TYPE and return the headline to which it applies.
+;;; This function is not going to work, so comment it out at this time.
+;;; Maybe it can be salvaged
+;; (defun lolh/note-type-to-hl (type)
+;;   "Input a document TYPE and return the headline to which it applies.
 
-For example, a `LEDGER' type returns the element for headline `LEDGERS'.
-If no headline is found, create it in the note tree."
+;; For example, a `LEDGER' type returns the element for headline `LEDGERS'.
+;; If no headline is found, create it in the note tree."
 
-  (interactive
-   (list (completing-read "Enter a document type: " *lolh/doc-types* nil t nil t *lolh/doc-types*)))
-  (let ((hl (lolh/get-headline-element type)))
-    (or (message "Found the headling %s" hl)
-        (lolh/add-headline-element type))))
+;;   (interactive
+;;    (list (completing-read "Enter a document type: " *lolh/doc-types* nil t nil t *lolh/doc-types*)))
+;;   (let ((hl (lolh/get-headline-element type)))
+;;     (or (message "Found the headling %s" hl)
+;;         (lolh/add-headline-element type))))
 
 
 (defun lolh/note-property (property &optional hl)
@@ -1023,18 +1025,19 @@ If no headline is found, create it in the note tree."
 Return NIL if there is no PROPERTY."
 
   (lolh/note-tree)
-  (org-element-map *lolh/note-tree* 'node-property
-    (lambda (np) (when (string= (org-element-property :key np) property)
-                   (setq val (string-trim-left (org-element-property :value np) "-- "))
-                   (if hl
-                       (let* ((p1 (org-element-property :parent np)) ; property-drawer
-                              (p2 (org-element-property :parent p1)) ; section
-                              (p3 (org-element-property :parent p2)) ; headline
-                              (v (org-element-property :raw-value p3))
-                              (in-hl (string= v hl)))
-                         (and in-hl val))
-                     val)))
-    nil t t))
+  (let (val)
+    (org-element-map *lolh/note-tree* 'node-property
+      (lambda (np) (when (string= (org-element-property :key np) property)
+                     (setq val (string-trim-left (org-element-property :value np) "-- "))
+                     (if hl
+                         (let* ((p1 (org-element-property :parent np)) ; property-drawer
+                                (p2 (org-element-property :parent p1)) ; section
+                                (p3 (org-element-property :parent p2)) ; headline
+                                (v (org-element-property :raw-value p3))
+                                (in-hl (string= v hl)))
+                           (and in-hl val))
+                       val)))
+      nil t t)))
 
 
 ;;;-------------------------------------------------------------------
@@ -1150,7 +1153,8 @@ the new headline.  The benefit of this method is that there is nothing
 for the user to do and there is no need to try to get the syntax correct."
 
   (let* ((p (lolh/get-headline-element parent-hl))
-         (pe (org-element-property :end p))(l (org-element-property :level p))
+         (pe (org-element-property :end p))
+         (l (org-element-property :level p))
          (e (org-element-create 'headline
                                 `(:raw-value
                                   ,new-hl
@@ -1193,10 +1197,11 @@ If optional SKIP is non-NIL, don't run lolh/note-tree."
          (p-hl (org-element-map s-hl 'property-drawer #'identity nil t t))
          (n-p (org-element-contents p-hl)))
     (cl-dolist (n n-p)
-      (let ((key (org-element-property :key n))
-            (val (org-element-property :value n))
+      (let ((val (org-element-property :value n))
             (beg (org-element-property :begin n))
-            (end (org-element-property :end n)))
+            (end (org-element-property :end n))
+;(key (org-element-property :key n))
+            )
         (when (string= "-- [DATE]" val)
           (setq n
                 (org-element-put-property n
@@ -1321,7 +1326,7 @@ If FILTER is set to a regexp, attach the matched files."
   (interactive)
 
   (let* ((defs (lolh/defs))
-         (def (if (length= defs 1) (car defss)
+         (def (if (length= defs 1) (car defs)
                 (completing-read "Pick a Defendant (M-n): " defs nil t nil nil)))
          (def-slugged (downcase (string-replace " " "*" def))))
     (string-trim-right
@@ -1398,7 +1403,7 @@ If a name does not exist, return nil."
   (let ((ln (lolh/def-last-name def t))
         (fn (lolh/def-first-name def)))
     (when ln
-      (format "%s,%s" (lolh/def-last-name def t) (lolh/def-first-name def)))))
+      (format "%s,%s" ln fn))))
 
 
 (defun lolh/both-def-names ()
@@ -1473,8 +1478,8 @@ something seriously wrong with it."
 
 
 
-(defun lolh/send-to-gd-and-maybe-attach (old-files new-files dest attach-hl)
-  "Send the OLD-FILES to DEST as NEW-FILES and attach if ATTACH-HL gives
+(defun lolh/send-to-gd-and-maybe-attach (old-files new-files attach-hl)
+  "Rename (move) the OLD-FILES to NEW-FILES and attach if ATTACH-HL gives
 a headline.
 
 ATTACH-HL is a headline element under which the new files should be attached.
@@ -1489,9 +1494,9 @@ If it is nil, do not attach anything."
         (lolh/set-note-property-in-headline attach-hl "DIR" attach-dir)
         (lolh/put-tag-in-headline "ATTACH" attach-hl)
         (let ((res (make-directory attach-dir t)))
-          (pcase res
-            (null (message "% successfully created" attach-dir))
-            (_ (message "%s already existed" attach-dir))))))
+          (cl-case res
+            ((nil) (message "% successfully created" attach-dir))
+            ((t) (message "%s already existed" attach-dir))))))
     (dolist (o old-files)
       (setf n (expand-file-name (car new-files)))
       (unless (file-exists-p n)
@@ -1555,7 +1560,7 @@ EXT is the file's extension (mandatory), and will be either `pdf' or `docx'."
 (defun lolh/extract-file-name-parts (file-name)
   "Given a FILE-NAME, extract and return its parts as a plist.
 
-0 -- :full 02) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- Document Name
+0 -- :full 02) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb -- DocName
 1 -- :docket 02) or 02*) | empty-string
 2 -- :cause 24-2-09999-06 | nil
 3 -- :date-b [2024-05-04] | nil
@@ -1776,13 +1781,13 @@ this function will ask for a client."
 ;;; textutil
 
 
-(defun lolh/textutil-rtf-to-txt-command ()
+(defun lolh/textutil-rtf-to-txt-command (&optional p)
   "Convert a set of RTF documents into same-named TXT documents.
 
 The RTF documents should be in /Downloads.
 The TXT documents will end up in /process."
 
-  (interactive)
+  (interactive "p")
 
   (cl-dolist (rtf (directory-files *lolh/downloads-dir* t ".rtf$"))
     (rename-file rtf (file-name-as-directory *lolh/process-dir*))
@@ -1791,7 +1796,10 @@ The TXT documents will end up in /process."
       (call-process-shell-command
        (format "textutil -convert txt \"%s\"" new-rtf))
       (delete-file new-rtf t)
-      ;; (helpers-process-text-case-file new-txt)
+      (when (eql p 4)
+        (if (string-match-p (rx bos (= 7 digit)) (file-name-base new-txt))
+            (helpers-process-text-rcw-file)
+          (helpers-process-text-case-file new-txt)))
       ;; (delete-file new-txt t)
       )))
 
@@ -1800,13 +1808,10 @@ The TXT documents will end up in /process."
 
 
 (defmacro with-main-note (&rest body)
-  (save-excursion
-    ;; TODO: fix this error
-    ;; (get-file-buffer FILENNAME) returns NIL if there is no associated buffer;
-    ;; this NIL causes an error down the line;
-    ;; this only seems to happen during testing, however,
-    ;; but it should probably be found to avoid that error later on.
-    `(with-current-buffer (get-file-buffer ,(lolh/main-note))
+  "Process BODY with the MAIN note active."
+
+  `(save-excursion
+     (with-current-buffer (get-file-buffer (lolh/main-note))
        ,@body)))
 
 
@@ -1816,8 +1821,8 @@ The TXT documents will end up in /process."
 CLIENT is the full string name of the client as found in the title
 of that client note."
 
-  (save-excursion
-    `(with-current-buffer (find-file-noselect ,(lolh/client-note))
+  `(save-excursion
+     (with-current-buffer (find-file-noselect (lolh/client-note))
        ,@body)))
 
 
