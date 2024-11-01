@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-01 10:21:12 lolh-mbp-16>
+;;; Time-stamp: <2024-11-01 11:28:38 lolh-mbp-16>
 ;;; Version: 0.0.8_2024-10-25T0150
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -137,6 +137,7 @@ E.g. `24-0123456'")
 ;;;-------------------------------------------------------------------
 
 
+;;; TODO: Finish this function
 (defun helpers-loop-input (category description number)
   "Given a CATEGORY, DESCRIPTION, and NUMBER, return the user's answers.
 
@@ -275,6 +276,7 @@ The values will be of the required type, and of the allowed number."
                      (get-buffer "*scratch*"))))
 
 
+;;; TODO: finish this command
 (defun helpers-all-case-vars3 ()
   "Loop through the *helpers-case-vars* and do something with them."
 
@@ -288,6 +290,7 @@ The values will be of the required type, and of the allowed number."
                 (atom (princ (format "Found an atom: %s\n\n" atom) (get-buffer "*scratch*"))))))
 
 
+;;; TODO: finish this command
 (defun helpers-all-case-vars4 ()
   "Loop through the *helpers-case-vars* and do something with them."
 
@@ -311,6 +314,7 @@ The values will be of the required type, and of the allowed number."
                           (get-buffer "*scratch*"))))))
 
 
+;;; TODO: finish this command
 (defun helpers-all-case-vars5 ()
   "Loop through the *helpers-case-vars* and do something with them."
 
@@ -811,7 +815,7 @@ Landlord and TenantDefenses and grounds of opposition in general
       (cl-loop
        until (looking-at-p "Currentness")
        do
-       (debug)
+       ;; (debug)
        (when (looking-at "West’s RCWA") (replace-match "RCW"))
        (center-line) (forward-line)
        finally (delete-line) (helpers-delete-until-char) (ensure-empty-lines 2))
@@ -1085,7 +1089,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
       (forward-line)
 
       (let ((m1 (make-marker))
-            (m2 (make-marker))
+            ;;(m2 (make-marker))
             (case-fold-search nil)
             (c 0) ; count
             num1 num2 item)
