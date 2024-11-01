@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-10-30 09:33:46 lolh-mbp-16>
+;;; Time-stamp: <2024-11-01 10:21:12 lolh-mbp-16>
 ;;; Version: 0.0.8_2024-10-25T0150
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -785,20 +785,12 @@ Landlord and TenantDefenses and grounds of opposition in general
   (helpers-single-space-text)
   (helpers-process-sections)
   (helpers-process-headnotes)
-  (helpers-save-file)
+  (helpers-save-case-file)
   (helpers-process-footnotes)
   )
 
 
-(defun helpers-get-rcw-text-files ()
-  "Place all RCW text files found in /process into a list."
-  (interactive)
-
-  (find-file-other-window
-   (directory-files *lolh/process-dir* t ".*.txt" t 1)))
-
-
-(defun helpers-process-rcw-file ()
+(defun helpers-process-text-rcw-file ()
   "Clean up and process all RCW files in /process."
 
   (interactive)
@@ -819,26 +811,41 @@ Landlord and TenantDefenses and grounds of opposition in general
       (cl-loop
        until (looking-at-p "Currentness")
        do
+       (debug)
        (when (looking-at "West’s RCWA") (replace-match "RCW"))
        (center-line) (forward-line)
        finally (delete-line) (helpers-delete-until-char) (ensure-empty-lines 2))
 
       (helpers-single-space-rcw-text)
 
-      ;; Create a new filename like "RCW-59.18.040 Blah.org
+      ;; create a new filename like "rcw-59.18.040 blah.org
       (write-file
        (let ((bn (file-name-base curfile)))
          (file-name-concat *lolh/process-dir*
-                           (concat "RCW"
+                           (concat "rcw"
                                    (format " %s.%s.%s"
                                            (substring bn 0 2)
                                            (substring bn 2 4)
                                            (substring bn 4))
-                                   ".org")))))))
+                                   ".org"))))))
+  ;; (cl-dolist
+  ;;     (curfile
+  ;;      (directory-files *lolh/process-dir* nil
+  ;;                       (rx bos "rcw" (+ nonl) ".org" eos)))
+  ;;   (debug)
+  ;;   (let ((nfn (file-name-concat (denote-directory) "law" curfile))
+  ;;         (citation curfile)
+  ;;         (kws (list "rcw5918" "statute" "rlta"))
+  ;;         (sig "rcw")
+  ;;         (date (format-time-string "%ft%r"))) ;; current date-time
+  ;;     (rename-file curfile nfn)
+  ;;     (helpers-denote-rename-file nfn citation kws sig date)
+  ;;     ))
+  )
 
 
 (defun helpers-process-text ()
-  "Do some basic text processing on each line first."
+  "do some basic text processing on each line first."
 
   (interactive)
 
@@ -857,14 +864,14 @@ Landlord and TenantDefenses and grounds of opposition in general
 (defun helpers-single-space-text ()
   "Remove unnecessary empty lines and add lines between paragraphs.
 
-Also delete the final section after All Citations."
+Also delete the final section after all citations."
 
   (interactive)
 
   (save-excursion
     (cl-loop
-     ;; start inserting blank lines between paragraphs after Opinion starts
-     ;; op is t in the Opinion section
+     ;; start inserting blank lines between paragraphs after opinion starts
+     ;; op is t in the opinion section
      with op = nil
      with op-pos = (helpers-find-opinion-start)
 
@@ -873,7 +880,7 @@ Also delete the final section after All Citations."
      do
      (cond
 
-      ;; first test is for the beginning of the Opinion section
+      ;; first test is for the beginning of the opinion section
       ((and (not op) (= (point) op-pos))
        (setq op t) (set-marker op-pos nil)
        (ensure-empty-lines))
@@ -883,7 +890,7 @@ Also delete the final section after All Citations."
             (eql (char-after (+ 1 (point))) ?\n))
        (delete-char 1))
 
-      ;; add lines between paragraphs in Opinion section
+      ;; add lines between paragraphs in opinion section
       (op
        (if (eql (following-char) ?\n)
            (progn
@@ -896,7 +903,7 @@ Also delete the final section after All Citations."
            (forward-line)
            (unless (eql (following-char) ?\n)
              (insert-char ?\n)))))
-      ;; don't add lines between paragraphs prior to Opinion section
+      ;; don't add lines between paragraphs prior to opinion section
       (t
        ;; (helpers-paginate)
        (forward-line))))
@@ -911,6 +918,7 @@ Also delete the final section after All Citations."
   "Make sure there is one and only one line between paragraphs."
 
   ;; (clone-indirect-buffer-other-window "**temp**" t t)
+  ;; (debug)
 
   (save-excursion
     (cl-loop
@@ -922,7 +930,9 @@ Also delete the final section after All Citations."
       ((looking-at-p (rx eol)) (forward-line) (helpers-delete-until-char))
       ((looking-at-p "end of document") (delete-region (and (search-backward "West") (point)) (point-max)))
       ((looking-at-p "Credits") (org-toggle-heading 1) (forward-line))
-      ((looking-at-p "Official Notes") (org-toggle-heading 1) (setq notes t) (forward-line))
+      ((looking-at "official notes")
+       (replace-match (capitalize (match-string-no-properties 0)) t)
+       (org-toggle-heading 1) (setq notes t) (forward-line))
       ((looking-at-p (rx  (| "Findings--Intent" "Effective"))) (org-toggle-heading 2)
        (when (search-forward "“" (pos-eol)) (delete-char -1) (insert "\n\n")
              (save-excursion (when (search-forward "”") (delete-char -1)))))
@@ -1159,7 +1169,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
           ))))))
 
 
-(defun helpers-save-file ()
+(defun helpers-save-case-file ()
   (save-excursion
     (let* ((citation (buffer-substring
                       (progn
