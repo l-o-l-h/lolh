@@ -1,7 +1,7 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-08 03:33:16 lolh-mbp-16>
+;;; Time-stamp: <2024-11-08 12:04:46 lolh-mbp-16>
 
-;;; Version: 0.0.1
+;;; Version: 0.0.2
 ;;; Author:   LOLH
 ;;; Created:  2024-11-07
 ;;; URL:      http://www.example.com
@@ -17,9 +17,17 @@
 
 (require 'cl-lib)
 
+(keymap-global-set "C-x p R" #'textproc-textutil)
+
 (defconst textproc-downloads "~/Downloads")
 (defconst textproc-process "~/Downloads/process")
 (defconst textproc-save "~/Downloads/save")
+
+(defconst textproc-case-page-re (rx (:
+                                     symbol-start
+                                     (** 1 2 "*")
+                                     (+ digit)
+                                     eow)))
 
 
 (defun textproc-textutil-command (file)
@@ -44,16 +52,28 @@ Return the name of the NEW FILE."
     new-file)) ; return the new name
 
 
-(defmacro textproc-delete-underscores ()
-  "Delete all non-breaking spaces (ASCII 160) in the line."
+(defmacro textproc-mark-case-pages-in-line ()
+  "Mark all case page numbers as {{ *123 }}."
 
-  `(replace-string-in-region " " "" (pos-bol) (pos-eol)))
+  `(when (re-search-forward textproc-case-page-re (pos-eol) t)
+     (replace-match "<<\\&>>")
+     (beginning-of-line)))
+
+
+(defmacro textproc-delete-underscores-mark-pages ()
+  "Delete all non-breaking spaces (ASCII 160) in the line.
+
+Mark all page numbers as {{ **123 }}."
+
+  `(progn
+     (replace-string-in-region " " "" (pos-bol) (pos-eol))
+     (textproc-mark-case-pages-in-line)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun textproc-textutil (file)
-  "Convert the `.rft' FILE into a `txt' file using `textutil' and scrub."
+  "Convert the `.rtf' FILE into a `txt' file using `textutil' and scrub."
 
   ;; if a FILE is not provided, ask for one in the DOWNLOADS directory.
   (interactive (list
@@ -71,31 +91,53 @@ Return the name of the NEW FILE."
     (textproc-scrub-all-lines txt-file)))  ; scrub the txt file
 
 
-(defun textproc-scrub-all-lines (file)
-  "Delete all non-breaking spaces and ensure a single space between paragraphs in FILE."
+(defun textproc-scrub-all-lines (file &optional inter)
+  "Delete all non-breaking spaces and ensure a single space between paragraphs in FILE.
+
+Optional INTER indicates whether the call was made interactively, in
+which case the FILE is expanded to include `textproc-process'.
+
+The region from the End of Document to the end of the buffer is deleted.
+The region describing the Search Details is also deleted."
+
+  (interactive (list
+                (read-file-name "Enter a file: "
+                                textproc-process
+                                (car (directory-files textproc-process nil ".txt$"))
+                                t)))
 
   ;; FILE is a `txt' file, probably in `process'
-  (with-current-buffer (find-file-noselect file)
-    (save-excursion
-      (goto-char (point-min))
-      (cl-loop until (eobp)
-               do
-               (textproc-delete-underscores)
-               (if (eolp)
-                   (delete-char 1)
-                 (progn
-                   (forward-line)
-                   (textproc-delete-underscores)
-                   (when (eolp)
-                     (forward-line))))
-               finally
-               (cl-loop until (not (eolp))
-                        do
-                        (forward-line -1)
-                        (when (eolp)
-                          (delete-char 1)))))
-    (write-file file)))
+  (let ((file (or inter (expand-file-name file textproc-process) file)))
+    (with-current-buffer (find-file-noselect file)
+      (save-excursion
+        (goto-char (point-min))
+        (cl-loop until (eobp)
+                 do
+                 (textproc-delete-underscores-mark-pages)
+                 (if (eolp)
+                     (delete-char 1)
+                   (progn
+                     (forward-line)
+                     (textproc-delete-underscores-mark-pages)
+                     (when (eolp)
+                       (forward-line))))
+                 finally
+                 ;; delete the lines from `End of Document' to end of buffer
+                 (delete-region (point-max) (search-backward "End of Document"))
+                 ;; delete the Search Details section
+                 (let* ((p1 (and (goto-char (point-min)) (search-forward "search details") (- (pos-bol) 1)))
+                        (p2 (and (goto-char p1) (search-forward "status icons") (+ (pos-eol) 1))))
+                   (delete-region p1 p2))))
+      (write-file file))))
 
+(defun textproc-remove-search-details ()
+  "Remove all lines between `Search Details' and `Status Icons'."
+
+  (cl-loop until (looking-at-p "^Status Icons")
+           do
+           (delete-line)
+           finally
+           (delete-line)))
 
 (provide 'textproc)
 
