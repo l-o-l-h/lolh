@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-11-01 11:17:57 lolh-mbp-16>
+;; Time-stamp: <2024-11-08 09:29:48 lolh-mbp-16>
 ;; Version: 0.2.0 [2024-11-01 08:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -1438,11 +1438,11 @@ Then call update."
 (defun lolh/copy-new-files-into-process-dir ()
   "Copy new documents from `~/Downloads' into `~/Downloads/process'.
 
-'New' is defined to be any document placed into `~/Downloads' within the
+`New' is defined to be any document placed into `~/Downloads' within the
 last minute.
 
 After copying the files into `process-dir', make sure they can be read by
-`lolh/process-dir' by running `'lolh/make-file-name-in-process-dir' next."
+`lolh/process-dir' by running `lolh/make-file-name-in-process-dir' next."
 
   (interactive)
 
