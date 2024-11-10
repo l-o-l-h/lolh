@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-09 14:34:22 lolh-mbp-16>
-;;; Version: 0.0.3
+;;; Time-stamp: <2024-11-10 11:18:04 lolh-mbp-16>
+;;; Version: 0.0.4
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -19,9 +19,12 @@
 
 (keymap-global-set "C-x p R" #'textproc-textutil)
 
-(defconst textproc-downloads "~/Downloads")
-(defconst textproc-process "~/Downloads/process")
-(defconst textproc-save "~/Downloads/save")
+(defconst textproc-downloads "~/Downloads/")
+(defconst textproc-process "~/Downloads/process/")
+(defconst textproc-save "~/Downloads/save/")
+(defconst textproc-save-rtf "~/Downloads/save/rtf/")
+(defconst textproc-save-txt "~/Downloads/save/txt/")
+(defconst textproc-save-org "~/Downloads/save/org/")
 
 (defconst textproc-case-page-re (rx (:
                                      symbol-start
@@ -112,24 +115,46 @@ TODO: But see:
 
 (defun textproc-textutil-command (file)
   "Use `textutil' to convert FILE to `txt' format."
-  (call-process-shell-command
-   (format "textutil -convert txt \"%s\"" file)))
+  (condition-case err
+      (call-process-shell-command
+       (format "textutil -convert txt \"%s\"" file))
+    (file-missing (message "Ignoring the error %s" (error-message-string err)))))
 
 
-(defun textproc-move-to-process (file directory)
-  "Move the FILE in DIRECTORY into the `process' directory.
+(defun textproc-move-to-process (file)
+  "Move the FILE into the `process' directory.
 
-Return the name of the NEW FILE."
+Hardlink the FILE into `save/rtf'.
+Return the NEW-FILE name."
 
-  (let ((old-file
-         (expand-file-name file directory))
-        (new-file
-         (expand-file-name file textproc-process))
-        (save-file
-         (expand-file-name file textproc-save)))
-    (add-name-to-file old-file save-file t) ; create hard link in `save'
-    (rename-file old-file new-file) ; move `rtf' into `process'
+  (let* ((base-file (file-name-nondirectory file))
+         (new-file (expand-file-name base-file textproc-process)))
+    (textproc-bkup-file file textproc-save-rtf 'link)
+    (rename-file file new-file) ; move `rtf' into `process'
     new-file)) ; return the new name
+
+
+(defun textproc-bkup-file (file dir type &optional num)
+  "Backup FILE into DIR by TYPE of backup.
+
+TYPE can be 'copy or 'link (hardlink)."
+
+  (let ((new-file (expand-file-name (file-name-nondirectory file) dir))
+        (num (or num 0)))
+    (condition-case err
+        (pcase type
+          ('copy (copy-file file new-file t))
+          ('link (add-name-to-file file new-file t)))
+      (file-missing (make-directory dir)
+                    (textproc-bkup-file file dir type (cl-incf num))))))
+
+
+(defun textproc-save-as-org-file (file)
+  "Save FILE as an `org' file.
+
+The visited FILE is not saved and so remains as it was before processing."
+
+  (write-file (file-name-with-extension "org")))
 
 
 (defmacro textproc-mark-case-pages-in-line ()
@@ -183,119 +208,51 @@ real one.  It is equal to the first one (I think)."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(defun textproc-case (file &optional inter)
-  "Process a case found in FILE.
+(defun textproc-textutil-case (file)
+  "Convert a case FILE by running `textutil', scrubbing, and then processing it."
 
-INTER is `non-nil' when the command is called interactively.  In that
-case, find the file in a buffer and make it displayed."
+  (interactive (list
+                (read-file-name "Enter a file: "
+                                textproc-downloads
+                                nil t)))
 
-  (interactive
-   (list
-    (read-file-name "Enter a file: "
-                    textproc-process
-                    (car (directory-files textproc-downloads nil ".rtf$"))
-                    t)))
-  (let ((file (or inter (expand-file-name file textproc-process) file)))
-    (with-current-buffer (find-file-noselect file)
-      (let* ((buf (current-buffer))
-             (unpub (textproc-unpub-p))
-             (c (make-marker)))
-        (save-excursion
-          (goto-char (point-min))
-          ;; join the first and second lines to create the main heading
-          (insert "* ") (end-of-line) (insert " -- ") (delete-char 1)
-          ;; locate Document Details; create a table of contents
-          ;; TODO: link the contents to the document structure
-          (search-forward "document details")
-          (set-marker-insertion-type c t)
-          (beginning-of-line) (insert "** ") (set-marker c (pos-bol))
-          (forward-line 2)
-          (textproc-create-list-items)
-          ;; combine citations and move underneath the main headline
-          (cl-loop with m1 = (make-marker) with m2 = (make-marker)
-                   repeat 2 do
-                   (re-search-forward "citation") (set-marker m1 (pos-bol))
-                   (capitalize-word -2)
-                   (end-of-line) (insert-char 32) (delete-char 2)
-                   (set-marker m2 (+ 1 (pos-eol)))
-                   (goto-char c)
-                   (insert "- " (delete-and-extract-region m1 m2))
-                   (goto-char m1) (delete-char 1)
-                   finally (goto-char c) (insert-char 10))
-          ;; if there is a KeyCite section, create it as a section with a list
-          (when (search-forward "keycite:")
-            (beginning-of-line) (insert "** ") (forward-line 2)
-            (textproc-create-list-items)
-            (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
-            (beginning-of-line))
-          ;; center the caption
-          (insert "* Case" 10)
-          (cl-loop
-           ;; until (looking-at (rx bol (opt (* (any word space))) (| "Synopsis" "Opinion")))
-           until (textproc-date-p)
-           do
-           (cond
-            ((looking-at-p "|") (delete-line))
-            ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
-            ((looking-at-p "Only the Westlaw citation") (delete-line))
-            ((looking-at-p "\n") (forward-line))
-            (t (center-line) (forward-line)))
-           finally
-           (center-line) (forward-line) (insert-char ?\n))
-          ;; Add list items until either the Synopsis or Option section is encountered
-          (cl-loop
-           until (looking-at (rx bol (opt (* (any word blank))) (| "synopsis" "opinion")))
-           do
-           (if (looking-at-p (rx nonl))
-               (progn (if (eql (following-char) ?|)
-                          (delete-line)
-                        (progn (insert "- ") (forward-line))))
-             (forward-line))
-           finally
-           ;; add a Brief heading (brief to be completed manually)
-           (ensure-empty-lines 3)
-           (backward-char 2) (insert "** Brief") (forward-line 2)
-           ;; turn Synopsis or Opinion into a level 2 heading
-           (insert "** ")
-           (end-of-line) (unless (looking-at-p "\n\n") (insert-char ?\n)))
-          ;; unless this is an unpublished case,
-          ;; turn Headnotes and Attorneys sections into headlines
-          (unless unpub
-            (search-forward "West Headnotes") (beginning-of-line) (insert "** ")
-            ;; process Headnotes here
-            (textproc-process-headnotes)
-            ;; find the Attorneys Section; turn into a level 2 headline
-            (search-forward "Attorneys and Law Firms")
-            (beginning-of-line) (insert "** ") (forward-line) (ensure-empty-lines)
-            (textproc-create-list-items)
-            ;; turn Opinion section into level 2 headline
-            (re-search-forward "Opinion") (beginning-of-line) (insert "** "))
-          ;; turn possible dissenting section into level 2 headling
-          (when (re-search-forward "dissenting" nil t)
-            (beginning-of-line) (insert "** "))
-          ;; delete the All Citations section at the end of the buffer
-          (goto-char (point-max))
-          (search-backward "All Citations")
-          (delete-region (- (pos-bol) 1) (point-max)))))))
+  (rename-file ; this will end up in the same dir as FILE originally came from
+   (textproc-case (textproc-textutil file))
+   (file-name-with-extension file "org"))
+  (textproc-bkup-file (file-name-with-extension file "org") textproc-save-org 'link))
 
 
 (defun textproc-textutil (file)
-  "Convert the `.rtf' FILE into a `txt' file using `textutil' and scrub."
+  "Convert the `rtf' FILE into a `txt' file using `textutil' and scrub.
+
+The `rtf' FILE is first moved into the `process' directory.  The FILE is
+hardlinked into the `save/rtf' directory.  Then it is converted into a `txt'
+file by the `textutil' command.  The `txt' file is saved into the `save/txt'
+directory.  The `rtf' file is deleted and the `txt' file is scrubbed.
+Finally, this scrubbed `txt' file is copied into `save/txt' directory.'"
 
   ;; if a FILE is not provided, ask for one in the DOWNLOADS directory.
   (interactive (list
                 (read-file-name "Enter a file: "
                                 textproc-downloads
-                                (car (directory-files textproc-downloads nil ".rtf$"))
+                                nil
                                 t)))
 
-  (let ((moved-file (textproc-move-to-process file textproc-downloads))
-        (txt-file (expand-file-name (file-name-with-extension file "txt") textproc-process))
-        (save-file (expand-file-name (file-name-with-extension file "txt") textproc-save)))
-    (textproc-textutil-command moved-file) ; convert to txt
-    (copy-file txt-file save-file t)       ; save the txt file
-    (delete-file moved-file)               ; delete the rtf file
-    (textproc-scrub-all-lines txt-file)))  ; scrub the txt file
+  (let* ((rtf-file (textproc-move-to-process file)) ; move the `rtf' into `process' dir
+         (base-file (file-name-nondirectory file))
+         (txt-file (expand-file-name (file-name-with-extension base-file "txt") textproc-process))
+         (save-file (expand-file-name (file-name-with-extension base-file "txt") textproc-save-txt)))
+    ;; create hardlink to the `rtf' in `save' dir
+    (add-name-to-file rtf-file textproc-save-rtf t)
+    (textproc-textutil-command rtf-file) ; convert to `txt'
+    (delete-file rtf-file)               ; delete the `rtf' file
+    (textproc-bkup-file txt-file textproc-save-txt 'copy) ; copy the new `txt' file to `save/txt' dir
+    ;; scrub the `txt' file
+    (let ((scrubbed-file (textproc-scrub-all-lines txt-file)))
+      ;; hardlink the scrubbed `txt' file into `save/txt' dir
+      (textproc-bkup-file scrubbed-file textproc-save-txt 'link)
+      (delete-file txt-file)
+      scrubbed-file)))
 
 
 (defun textproc-scrub-all-lines (file &optional inter)
@@ -314,8 +271,11 @@ The region describing the Search Details is also deleted."
                                 t)))
 
   ;; FILE is a `txt' file, probably in `process'
-  (let ((file (or inter (expand-file-name file textproc-process) file)))
-    (with-current-buffer (find-file-noselect file)
+  (let ((real-file (expand-file-name file textproc-process))
+        (scrubbed-file (expand-file-name
+                        (format "%s (scrubbed).txt" (file-name-base file))
+                        textproc-process)))
+    (with-current-buffer (find-file-noselect real-file)
       (save-excursion
         (goto-char (point-min))
         (cl-loop until (eobp)
@@ -338,7 +298,109 @@ The region describing the Search Details is also deleted."
                  (let* ((p1 (and (goto-char (point-min)) (search-forward "search details") (- (pos-bol) 1)))
                         (p2 (and (goto-char p1) (search-forward "status icons") (+ (pos-eol) 1))))
                    (delete-region p1 p2))))
-      (write-file file))))
+      (write-file scrubbed-file)
+      scrubbed-file)))
+
+
+(defun textproc-case (file)
+  "Process a case found in FILE.
+
+Return the name of the processed FILE."
+
+  (interactive
+   (list
+    (read-file-name "Enter a file: "
+                    textproc-process
+                    nil t)))
+
+  (with-current-buffer (find-file-noselect file)
+    (let* ((proc-file (string-replace "scrubbed" "processed" file))
+           (buf (current-buffer))
+           (unpub (textproc-unpub-p))
+           (c (make-marker)))
+      (save-excursion
+        (goto-char (point-min))
+        ;; join the first and second lines to create the main heading
+        (insert "* ") (end-of-line) (insert " -- ") (delete-char 1)
+        ;; locate Document Details; create a table of contents
+        ;; TODO: link the contents to the document structure
+        (search-forward "document details")
+        (set-marker-insertion-type c t)
+        (beginning-of-line) (insert "** ") (set-marker c (pos-bol))
+        (forward-line 2)
+        (textproc-create-list-items)
+        ;; combine citations and move underneath the main headline
+        (cl-loop with m1 = (make-marker) with m2 = (make-marker)
+                 repeat 2 do
+                 (re-search-forward "citation") (set-marker m1 (pos-bol))
+                 (capitalize-word -2)
+                 (end-of-line) (insert-char 32) (delete-char 2)
+                 (set-marker m2 (+ 1 (pos-eol)))
+                 (goto-char c)
+                 (insert "- " (delete-and-extract-region m1 m2))
+                 (goto-char m1) (delete-char 1)
+                 finally (goto-char c) (insert-char 10))
+        ;; Add a Brief subheading here
+        (ensure-empty-lines 3)
+        (backward-char 2) (insert "** Brief") (forward-line 2)
+        ;; if there is a KeyCite section, create it as a section with a list
+        (when (search-forward "keycite:")
+          (beginning-of-line) (insert "** ") (forward-line 2)
+          (textproc-create-list-items)
+          (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
+          (beginning-of-line))
+        ;; center the caption
+        (insert "* Case" 10)
+        (cl-loop
+         ;; until (looking-at (rx bol (opt (* (any word space))) (| "Synopsis" "Opinion")))
+         until (textproc-date-p)
+         do
+         (cond
+          ((looking-at-p "|") (delete-line))
+          ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
+          ((looking-at-p "Only the Westlaw citation") (delete-line))
+          ((looking-at-p "\n") (forward-line))
+          (t (center-line) (forward-line)))
+         finally
+         (center-line) (forward-line) (insert-char ?\n))
+        ;; Add list items until either the Synopsis or Option section is encountered
+        (cl-loop
+         until (looking-at (rx bol (opt (* (any word blank))) (| "synopsis" "opinion")))
+         finally (insert-char 10)
+         do
+         (if (looking-at-p (rx nonl))
+             (progn (if (eql (following-char) ?|)
+                        (delete-line)
+                      (progn (insert "- ") (forward-line))))
+           (forward-line))
+         finally
+         ;; turn Synopsis or Opinion into a level 2 heading
+         (insert "** ")
+         (end-of-line) (unless (looking-at-p "\n\n") (insert-char ?\n)))
+        ;; unless this is an unpublished case,
+        ;; turn Headnotes and Attorneys sections into headlines
+        (unless unpub
+          (search-forward "West Headnotes") (beginning-of-line) (insert "** ")
+          ;; process Headnotes here
+          (textproc-process-headnotes)
+          ;; find the Attorneys Section; turn into a level 2 headline
+          (search-forward "Attorneys and Law Firms")
+          (beginning-of-line) (insert "** ") (forward-line) (ensure-empty-lines)
+          (textproc-create-list-items)
+          ;; turn Opinion section into level 2 headline
+          (re-search-forward "Opinion") (beginning-of-line) (insert "** "))
+        ;; turn possible dissenting section into level 2 headling
+        (when (re-search-forward "dissenting" nil t)
+          (beginning-of-line) (insert "** "))
+        ;; delete the All Citations section at the end of the buffer
+        (goto-char (point-max))
+        (search-backward "All Citations")
+        (delete-region (- (pos-bol) 1) (point-max)))
+      (write-file proc-file)
+      (textproc-bkup-file proc-file textproc-save-txt 'link)
+      (kill-buffer)
+      (delete-file file)
+      proc-file)))
 
 
 (defun textproc-remove-search-details ()
