@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-10 11:18:04 lolh-mbp-16>
+;;; Time-stamp: <2024-11-11 08:10:48 lolh-mbp-16>
 ;;; Version: 0.0.4
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -17,7 +17,9 @@
 
 (require 'cl-lib)
 
-(keymap-global-set "C-x p R" #'textproc-textutil)
+
+(keymap-global-set "C-x p R" #'textproc-text-to-org)
+
 
 (defconst textproc-downloads "~/Downloads/")
 (defconst textproc-process "~/Downloads/process/")
@@ -134,27 +136,18 @@ Return the NEW-FILE name."
     new-file)) ; return the new name
 
 
-(defun textproc-bkup-file (file dir type &optional num)
+(defun textproc-bkup-file (file dir type &optional)
   "Backup FILE into DIR by TYPE of backup.
 
 TYPE can be 'copy or 'link (hardlink)."
 
-  (let ((new-file (expand-file-name (file-name-nondirectory file) dir))
-        (num (or num 0)))
+  (let ((new-file (expand-file-name (file-name-nondirectory file) dir)))
     (condition-case err
         (pcase type
           ('copy (copy-file file new-file t))
           ('link (add-name-to-file file new-file t)))
       (file-missing (make-directory dir)
-                    (textproc-bkup-file file dir type (cl-incf num))))))
-
-
-(defun textproc-save-as-org-file (file)
-  "Save FILE as an `org' file.
-
-The visited FILE is not saved and so remains as it was before processing."
-
-  (write-file (file-name-with-extension "org")))
+                    (textproc-bkup-file file dir type)))))
 
 
 (defmacro textproc-mark-case-pages-in-line ()
@@ -208,18 +201,55 @@ real one.  It is equal to the first one (I think)."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+
+
+(defun textproc-text-to-org (file)
+  "Convert the `rtf' FILE into an `org' file."
+
+  ;; TODO: change to provide only a list of `.rtf' files
+  (interactive (list
+                (read-file-name "Enter an .rtf case file: "
+                                textproc-downloads
+                                (car
+                                 (directory-files
+                                  textproc-downloads nil
+                                  (rx bos (not ".") (+ nonl) ".rtf" eos)))
+                                t)))
+
+  ;; send file to textproc-textutil-case to obtain a processed file
+  ;; calculate the name of the org-file
+  ;; rename the processed file as an `org' file
+  ;; create a hard link to the `org' file in `process/org'
+  ;; return the name of the `org' file
+  (let* ((proc-file (textproc-textutil-case file))
+         (org-file
+          (expand-file-name
+           (format "%s.org"
+                   (replace-regexp-in-string (rx space "(" (+ nonl) ")") ""
+                                             (file-name-base proc-file)))
+           textproc-downloads)))
+    (rename-file proc-file org-file)
+    (textproc-bkup-file org-file textproc-save-org 'link)
+    org-file))
+
+
 (defun textproc-textutil-case (file)
-  "Convert a case FILE by running `textutil', scrubbing, and then processing it."
+  "Convert a case FILE by running `textutil', scrubbing, and then processing it.
+
+Return the new FILE name."
 
   (interactive (list
-                (read-file-name "Enter a file: "
+                (read-file-name "Enter a .txt file: "
                                 textproc-downloads
                                 nil t)))
 
-  (rename-file ; this will end up in the same dir as FILE originally came from
-   (textproc-case (textproc-textutil file))
-   (file-name-with-extension file "org"))
-  (textproc-bkup-file (file-name-with-extension file "org") textproc-save-org 'link))
+  ;; run file through `textproc-textutil' to obtain a scrubbed file
+  ;; run the scrubbed file through `textproc-case' to obtain a processed file
+  ;; create a hard link of the processed file in `process/txt'
+  ;; return the name of the processed file
+  (let ((case-proc (textproc-case (textproc-textutil file))))
+    (textproc-bkup-file case-proc textproc-save-txt 'link)
+    case-proc))
 
 
 (defun textproc-textutil (file)
@@ -240,13 +270,12 @@ Finally, this scrubbed `txt' file is copied into `save/txt' directory.'"
 
   (let* ((rtf-file (textproc-move-to-process file)) ; move the `rtf' into `process' dir
          (base-file (file-name-nondirectory file))
-         (txt-file (expand-file-name (file-name-with-extension base-file "txt") textproc-process))
-         (save-file (expand-file-name (file-name-with-extension base-file "txt") textproc-save-txt)))
+         (txt-file (expand-file-name (file-name-with-extension base-file "txt") textproc-process)))
     ;; create hardlink to the `rtf' in `save' dir
-    (add-name-to-file rtf-file textproc-save-rtf t)
+    (textproc-bkup-file rtf-file textproc-save-rtf 'link)
     (textproc-textutil-command rtf-file) ; convert to `txt'
     (delete-file rtf-file)               ; delete the `rtf' file
-    (textproc-bkup-file txt-file textproc-save-txt 'copy) ; copy the new `txt' file to `save/txt' dir
+    (textproc-bkup-file txt-file textproc-save-txt 'copy)
     ;; scrub the `txt' file
     (let ((scrubbed-file (textproc-scrub-all-lines txt-file)))
       ;; hardlink the scrubbed `txt' file into `save/txt' dir
