@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-11 08:10:48 lolh-mbp-16>
-;;; Version: 0.0.4
+;;; Time-stamp: <2024-11-11 12:11:31 lolh-mbp-16>
+;;; Version: 0.0.5
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -16,6 +16,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'denote)
 
 
 (keymap-global-set "C-x p R" #'textproc-text-to-org)
@@ -99,6 +100,89 @@ TODO: But see:
    92VI(C)2Necessity of Determination")
 
 
+(defconst textproc-cal-date-re
+  (rx (: bow (| "January" "February" "March" "April" "May" "June"
+                "July" "August" "September" "October" "November" "December")
+         eow space) (= 2 digit) ", " (= 4 digit) eow)
+
+  "Regexp to find a calendar date such as
+- January 01, 2024")
+
+
+(defconst textproc-case-citation-re
+  (rx
+   (:
+    ;; party 1
+    (group (*? (any word space punct)))
+    " v. "
+    ;; party 2
+    (group (*? (any word space punct)))
+    ", "
+    ;; citation
+    (group (|
+            ;; COA id, eg: 83508-2-I
+            (:
+             bow
+             (= 5 digit)
+             "-"
+             digit
+             "-"
+             (** 1 3 "I")
+             eow)
+            ;; Wash or Wl citation, eg 123 Wash.2d 456 | 2024 Wl 456
+            (:
+             bow
+             (1+ digit)
+             (1+ space)
+             (| "Wash." "Wn." "WL")
+             (* (any space "App." "2d"))
+             (1+ digit)
+             eow)
+            )
+           (* nonl)
+           )
+    eol))
+
+  "Finds a case title and divides it into appellant and respondent sections.
+
+Point is assumed to be directly after `Washington Citation :: *'")
+
+
+(defconst textproc-in-re-re
+  (rx
+   bos
+   (:
+    (group-n 1 "in the matter of ")
+    (: "the " (group-n 2 (+ word) " of: "))
+    (group-n 3 (: (+ (not ",")) ", "))
+    (group-n 4 (: (+ word) ", "))
+    (group-n 5 (+ print))
+    (group-n 6 "appellant")
+    )
+   )
+
+  "Finds a case title of the form:
+- In the Matter of the BLAH of: NAME, blah, OTHER NAMES, Appellant
+and divides it into six sections.")
+
+
+(defconst textproc-et-al-re
+  (rx
+   bos
+   (:
+    (group-n 1 (+ (not ";")))
+    "; "
+    (+ print)
+    (group-n 2 ", respondents")
+    "."
+    )
+   eos)
+
+  "Finds a case title of the form:
+- NAME; NAME2; NAME3; ... NAMEn, Respondents
+and divides it into two sections.")
+
+
 (defun textproc-date-p ()
   "Predicate function for finding a date string in a line of text."
   (let (;; October 14, 2024 | Oct. 14, 2024
@@ -169,17 +253,104 @@ Mark all page numbers as {{ **123 }}."
 
 
 (defmacro textproc-unpub-p ()
-  "Return `t' if the current case is unpublished; `nil' otherwise."
+  "Return `unpub' if the current case is unpublished; `nil' otherwise."
 
   `(save-excursion
      (goto-char (point-min))
-     (if (search-forward "note: unpublished opinion" nil t) t)))
+     (if (search-forward "note: unpublished opinion" nil t) "unpub")))
 
 
 (defmacro textproc-create-list-items ()
   "Add list item dashes to the following lines."
 
   `(cl-loop until (eolp) do (insert "- ") (forward-line)))
+
+
+(defun textproc-case-citation ()
+  "Return the case citation from the ORG-FILE'.
+
+The case citation will be used as the Denote note file name.
+A too-long citation will be shortened.
+The org-file needs to be in a buffer for this operation, and its
+Washington Citation might be altered."
+
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward "Washington Citation: ")
+    (let ((citation (buffer-substring (point) (pos-eol))))
+      (when (> (length citation) 256)
+        (string-maatch textproc-case-citation-re citation)
+        (let ((pl (match-string-no-properties 1 citation))
+              (def (match-string-no-properties 2 citation))
+              (cite (match-string-no-properties 3 citation)))
+
+          (replace-region-contents
+           (point) (pos-eol)
+           (lambda ()
+             (concat
+              (mapconcat
+               (lambda (p)
+                 (cond
+                  ((string-match textproc-in-re-re p)
+                   (concat
+                    "In re "
+                    (match-string-no-properties 2 p)
+                    (match-string-no-properties 3 p)
+                    (match-string-no-properties 6 p)))
+                  ((string-match textproc-et-al-re p)
+                   (concat
+                    (match-string-no-properties 1 p)
+                    " et al."
+                    (match-string-no-properties 2 p)))))
+               (list pl def) " v. ")
+              (format ", %s" cite))))
+          (save-buffer)
+          (setf citation
+                (progn (goto-char (point-min)) (search-forward "washington citation :: ")
+                       (buffer-substring (point) (pos-eol))))))
+      citation)))
+
+
+(defun textproc-case-signature ()
+  "Return a signature from the ORG-FILE.
+
+A signature is one of:
+- sc
+- coadiv1|2|3 [unpub]"
+
+  (save-excursion
+    (let* ((sig-1 (progn (goto-char (point-min))
+                         (if (search-forward "Supreme" (pos-eol) t)
+                             "sc"
+                           "coa")))
+           (sig-2 (if (string= sig-1 "coa")
+                      (progn
+                        (goto-char (point-min))
+                        (when (re-search-forward (rx "Division " (group digit)))
+                          (format " div%s" (match-string 1))))
+                    ""))
+           (sig-3 (or (textproc-unpub-p) "")))
+      (format "%s%s %s" sig-1 sig-2 sig-3))))
+
+
+(defun textproc-case-date ()
+  "Return the date of the case found in ORG-FILE.
+
+Return `nil' if no date is found."
+
+  (save-excursion
+    (goto-char (point-min))
+    (ignore-errors
+      (re-search-forward textproc-cal-date-re))
+    (format-time-string "%FT%R" (date-to-time (match-string-no-properties 0)))))
+
+
+(defmacro textproc-note-file-name (citation)
+  "Return the Denote note file name created from a CITATION."
+
+  (file-name-concat
+   (denote-directory) "law"
+   (concat citation ".org")))
 
 
 (defun textproc-find-opinion-start ()
@@ -201,6 +372,43 @@ real one.  It is equal to the first one (I think)."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+(defun textproc-text-to-denote (file)
+  "Convert the `rtf' FILE into an 'org' file and save as a Denote note.
+
+- NFN :: org-file
+- CITATION :: title
+- KWS :: list of keywords
+- SIGNATURE :: the signature to use
+- DATE :: date of the case or nil (use today's date)"
+
+  (interactive (list
+                (read-file-name "Enter an .rtf case file: "
+                                textproc-downloads
+                                (car
+                                 (directory-files
+                                  textproc-downloads nil
+                                  (rx bos (not ".") (+ nonl) ".rtf" eos)))
+                                t)))
+
+  (let* ((org-file (textproc-text-to-org file)))
+    (with-current-buffer (find-file-noselect org-file)
+      (let* ((citation (textproc-case-citation))
+             (nfn (file-name-concat (denote-directory) "law"
+                                    (concat citation ".org")))
+             (kws '("case" "law"))
+             (signature (textproc-case-signature))
+             (date (textproc-case-date))
+             (denote-rename-confirmations nil)
+             (denote-save-buffers t))
+        (write-file nfn nil)
+        (let ((denote-file
+               (denote-rename-file  nfn
+                                    citation
+                                    kws
+                                    signature
+                                    date)))
+          (textproc-bkup-file denote-file textproc-save-org 'link))))
+    (delete-file org-file)))
 
 
 (defun textproc-text-to-org (file)
