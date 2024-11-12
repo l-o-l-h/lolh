@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-11 12:11:31 lolh-mbp-16>
+;;; Time-stamp: <2024-11-12 08:07:02 lolh-mbp-16>
 ;;; Version: 0.0.5
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -19,7 +19,7 @@
 (require 'denote)
 
 
-(keymap-global-set "C-x p R" #'textproc-text-to-org)
+(keymap-global-set "C-x p R" #'textproc-text-to-denote)
 
 
 (defconst textproc-downloads "~/Downloads/")
@@ -157,9 +157,7 @@ Point is assumed to be directly after `Washington Citation :: *'")
     (group-n 3 (: (+ (not ",")) ", "))
     (group-n 4 (: (+ word) ", "))
     (group-n 5 (+ print))
-    (group-n 6 "appellant")
-    )
-   )
+    (group-n 6 "appellant")))
 
   "Finds a case title of the form:
 - In the Matter of the BLAH of: NAME, blah, OTHER NAMES, Appellant
@@ -252,12 +250,15 @@ Mark all page numbers as {{ **123 }}."
      (textproc-mark-case-pages-in-line)))
 
 
-(defmacro textproc-unpub-p ()
+(defun textproc-unpub-p ()
   "Return `unpub' if the current case is unpublished; `nil' otherwise."
 
-  `(save-excursion
-     (goto-char (point-min))
-     (if (search-forward "note: unpublished opinion" nil t) "unpub")))
+  (save-excursion
+    (goto-char (point-min))
+    (when (search-forward "note: unpublished opinion" nil t)
+      (when (search-forward "unpublished opinion" (+ (point) 100) t)
+        (delete-line))
+      "unpub")))
 
 
 (defmacro textproc-create-list-items ()
@@ -276,10 +277,10 @@ Washington Citation might be altered."
 
   (save-excursion
     (goto-char (point-min))
-    (search-forward "Washington Citation: ")
+    (search-forward "washington citation :: ")
     (let ((citation (buffer-substring (point) (pos-eol))))
       (when (> (length citation) 256)
-        (string-maatch textproc-case-citation-re citation)
+        (string-match textproc-case-citation-re citation)
         (let ((pl (match-string-no-properties 1 citation))
               (def (match-string-no-properties 2 citation))
               (cite (match-string-no-properties 3 citation)))
@@ -557,8 +558,10 @@ Return the name of the processed FILE."
            (c (make-marker)))
       (save-excursion
         (goto-char (point-min))
+
         ;; join the first and second lines to create the main heading
         (insert "* ") (end-of-line) (insert " -- ") (delete-char 1)
+
         ;; locate Document Details; create a table of contents
         ;; TODO: link the contents to the document structure
         (search-forward "document details")
@@ -566,30 +569,34 @@ Return the name of the processed FILE."
         (beginning-of-line) (insert "** ") (set-marker c (pos-bol))
         (forward-line 2)
         (textproc-create-list-items)
+
         ;; combine citations and move underneath the main headline
         (cl-loop with m1 = (make-marker) with m2 = (make-marker)
                  repeat 2 do
                  (re-search-forward "citation") (set-marker m1 (pos-bol))
                  (capitalize-word -2)
-                 (end-of-line) (insert-char 32) (delete-char 2)
+                 (end-of-line) (backward-char) (insert " :")
+                 (forward-char) (insert-char 32) (delete-char 2)
                  (set-marker m2 (+ 1 (pos-eol)))
                  (goto-char c)
                  (insert "- " (delete-and-extract-region m1 m2))
                  (goto-char m1) (delete-char 1)
                  finally (goto-char c) (insert-char 10))
+
         ;; Add a Brief subheading here
         (ensure-empty-lines 3)
         (backward-char 2) (insert "** Brief") (forward-line 2)
+
         ;; if there is a KeyCite section, create it as a section with a list
         (when (search-forward "keycite:")
           (beginning-of-line) (insert "** ") (forward-line 2)
           (textproc-create-list-items)
           (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
           (beginning-of-line))
+
         ;; center the caption
         (insert "* Case" 10)
         (cl-loop
-         ;; until (looking-at (rx bol (opt (* (any word space))) (| "Synopsis" "Opinion")))
          until (textproc-date-p)
          do
          (cond
@@ -597,42 +604,55 @@ Return the name of the processed FILE."
           ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
           ((looking-at-p "Only the Westlaw citation") (delete-line))
           ((looking-at-p "\n") (forward-line))
-          (t (center-line) (forward-line)))
+          (t (center-line) (insert-char 10) (forward-line)))
          finally
-         (center-line) (forward-line) (insert-char ?\n))
+         (center-line) (forward-line))
+
         ;; Add list items until either the Synopsis or Option section is encountered
         (cl-loop
          until (looking-at (rx bol (opt (* (any word blank))) (| "synopsis" "opinion")))
-         finally (insert-char 10)
+         with l = nil
          do
          (if (looking-at-p (rx nonl))
              (progn (if (eql (following-char) ?|)
                         (delete-line)
-                      (progn (insert "- ") (forward-line))))
+                      (progn
+                        (when (null l)
+                          (insert-char 10) (setf l t))
+                        (insert "- ") (forward-line))))
            (forward-line))
-         finally
+
          ;; turn Synopsis or Opinion into a level 2 heading
+         finally
+         (when l (insert-char 10))
          (insert "** ")
          (end-of-line) (unless (looking-at-p "\n\n") (insert-char ?\n)))
+
         ;; unless this is an unpublished case,
         ;; turn Headnotes and Attorneys sections into headlines
         (unless unpub
           (search-forward "West Headnotes") (beginning-of-line) (insert "** ")
           ;; process Headnotes here
+
           (textproc-process-headnotes)
+
           ;; find the Attorneys Section; turn into a level 2 headline
           (search-forward "Attorneys and Law Firms")
           (beginning-of-line) (insert "** ") (forward-line) (ensure-empty-lines)
           (textproc-create-list-items)
+
           ;; turn Opinion section into level 2 headline
           (re-search-forward "Opinion") (beginning-of-line) (insert "** "))
+
         ;; turn possible dissenting section into level 2 headling
         (when (re-search-forward "dissenting" nil t)
           (beginning-of-line) (insert "** "))
+
         ;; delete the All Citations section at the end of the buffer
         (goto-char (point-max))
         (search-backward "All Citations")
         (delete-region (- (pos-bol) 1) (point-max)))
+
       (write-file proc-file)
       (textproc-bkup-file proc-file textproc-save-txt 'link)
       (kill-buffer)
