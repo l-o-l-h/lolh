@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-11-13 07:24:51 lolh-mbp-16>
+;; Time-stamp: <2024-11-13 08:09:29 lolh-mbp-16>
 ;; Version: 0.2.0 [2024-11-01 08:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -93,6 +93,7 @@
 
 ;;;===================================================================
 
+(require 'textproc)
 (require 'denote)
 (require 'org-attach)
 
@@ -116,8 +117,8 @@
 (defconst *lolh/process-dir*
   (expand-file-name "process" *lolh/downloads-dir*))
 
-(defconst *lolh/pdftk-jar-path*
-  (expand-file-name "~/.local/bin/pdftk-all.jar"))
+;; (defconst *lolh/pdftk-jar-path*
+;;   (expand-file-name "~/.local/bin/pdftk-all.jar"))
 
 ;; (defconst *lolh/pdftk-command*
 ;;   (combine-and-quote-strings
@@ -128,8 +129,8 @@
 
 ;;   "A string that will be used by `format' to create a command.")
 
-(defconst *lolh/pdftk-command*
-  (concat "java -jar " *lolh/pdftk-jar-path* " \'%s\' cat %s-%s output \'%s\'"))
+;; (defconst *lolh/pdftk-command*
+;;   (concat "java -jar " *lolh/pdftk-jar-path* " \'%s\' cat %s-%s output \'%s\'"))
 ;; "java -jar %s \'%s\' cat %s-%s output \'%s\'"
 
 (defconst *lolh/first-middle-last-name-rx*
@@ -362,7 +363,7 @@
                          (gd-file-name
                           (lolh/create-file-name
                            nil cause date name-pri name-sec (format "%s %s" key type) *lolh/pdf*)))
-                    (lolh/pdftk-cat (file-name-nondirectory complaint) beg end gd-file-name))))
+                    (textproc-pdftk-cat (file-name-nondirectory complaint) beg end gd-file-name))))
               exs)
 
         (lolh/set-note-property-in-headline "EXHIBITS" "DIR"
@@ -596,7 +597,7 @@ The unlocked files are moved into *lolh/downloads-dir*."
     (dolist (locked all-locked)
       (let ((unlocked (format "%s (unlocked).pdf"
                               (file-name-sans-extension locked))))
-        (lolh/pdftk-cat
+        (textproc-pdftk-cat
          (file-name-nondirectory locked)
          1 "end"
          (file-name-nondirectory unlocked))
@@ -1202,14 +1203,16 @@ If optional SKIP is non-NIL, don't run lolh/note-tree."
       (let ((val (org-element-property :value n))
             (beg (org-element-property :begin n))
             (end (org-element-property :end n))
-;(key (org-element-property :key n))
+                                        ;(key (org-element-property :key n))
             )
         (when (string= "-- [DATE]" val)
           (setq n
                 (org-element-put-property n
                                           :value (concat
                                                   "\t-- "
-                                                  (org-element-link-interpreter link date))))
+                                                  (org-element-link-interpreter
+                                                   link
+                                                   (format "Ledger dated %s" date)))))
           (save-excursion
             (goto-char beg)
             (delete-region beg (1- end))
@@ -1629,16 +1632,16 @@ PART must be one of *lolh/file-name-allowed-parts*."
 ;;;-------------------------------------------------------------------
 ;;; PDFTK
 
-(defun lolh/pdftk-cat (doc start end new-doc)
-  "Run pdftk on the DOC starting at page START, ending at page END, into NEW-DOC.
+;; (defun lolh/pdftk-cat (doc start end new-doc)
+;;   "Run pdftk on the DOC starting at page START, ending at page END, into NEW-DOC.
 
-All documents begin and end in *lolh/process-dir*"
+;; All documents begin and end in *lolh/process-dir*"
 
-  (call-process-shell-command
-   (format *lolh/pdftk-command*
-           (file-name-concat *lolh/process-dir* doc)
-           start end
-           (file-name-concat *lolh/process-dir* new-doc))))
+;;   (call-process-shell-command
+;;    (format *lolh/pdftk-command*
+;;            (file-name-concat *lolh/process-dir* doc)
+;;            start end
+;;            (file-name-concat *lolh/process-dir* new-doc))))
 
 
 (defun lolh/call-split-dismissal-old ()
@@ -1687,8 +1690,8 @@ All documents begin and end in *lolh/process-dir*"
          (old (format "%s -- %s %s%s (unlocked).pdf" first second fourth fifth))
          (process-file (file-name-concat *lolh/process-dir* full)))
     (copy-file file process-file)
-    (lolh/pdftk-cat full 1 1 dismissal)
-    (lolh/pdftk-cat full 2 3 old)
+    (textproc-pdftk-cat full 1 1 dismissal)
+    (textproc-pdftk-cat full 2 3 old)
     (delete-file process-file)
     (rename-file (file-name-concat *lolh/process-dir* dismissal)
                  (file-name-concat *lolh/downloads-dir* dismissal))

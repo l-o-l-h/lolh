@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-12 08:10:01 lolh-mbp-16>
+;;; Time-stamp: <2024-11-13 07:51:05 lolh-mbp-16>
 ;;; Version: 0.0.6
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -197,6 +197,26 @@ and divides it into two sections.")
         ts2)))
 
 
+(defconst textproc-pdftk-jar-path
+  (expand-file-name "~/.local/bin/pdftk-all.jar"))
+
+
+(defconst textproc-pdftk-command
+  (concat "java -jar " textproc-pdftk-jar-path " \'%s\' cat %s-%s output \'%s\'"))
+
+
+(defun textproc-pdftk-cat (doc start end new-doc)
+  "Run pdftk on the DOC starting at page START, ending at page END, into NEW-DOC.
+
+All documents begin and end in *lolh/process-dir*"
+
+  (call-process-shell-command
+   (format textproc-pdftk-command
+           (file-name-concat textproc-process doc)
+           start end
+           (file-name-concat textproc-process new-doc))))
+
+
 (defun textproc-textutil-command (file)
   "Use `textutil' to convert FILE to `txt' format."
   (condition-case err
@@ -218,13 +238,13 @@ Return the NEW-FILE name."
     new-file)) ; return the new name
 
 
-(defun textproc-bkup-file (file dir type &optional)
+(defun textproc-bkup-file (file dir type)
   "Backup FILE into DIR by TYPE of backup.
 
-TYPE can be 'copy or 'link (hardlink)."
+TYPE can be `copy' or `link' (hardlink)."
 
   (let ((new-file (expand-file-name (file-name-nondirectory file) dir)))
-    (condition-case err
+    (condition-case nil
         (pcase type
           ('copy (copy-file file new-file t))
           ('link (add-name-to-file file new-file t)))
@@ -374,13 +394,13 @@ real one.  It is equal to the first one (I think)."
 
 
 (defun textproc-text-to-denote (file)
-  "Convert the `rtf' FILE into an 'org' file and save as a Denote note.
+  "Convert the `rtf' FILE into an `org' file and save as a Denote note.
 
 - NFN :: org-file
 - CITATION :: title
 - KWS :: list of keywords
 - SIGNATURE :: the signature to use
-- DATE :: date of the case or nil (use today's date)"
+- DATE :: date of the case or nil (use todays date)"
 
   (interactive (list
                 (read-file-name "Enter an .rtf case file: "
@@ -493,7 +513,7 @@ Finally, this scrubbed `txt' file is copied into `save/txt' directory.'"
       scrubbed-file)))
 
 
-(defun textproc-scrub-all-lines (file &optional inter)
+(defun textproc-scrub-all-lines (file)
   "Delete non-breaking spaces and ensure a single space between paragraphs in FILE.
 
 Optional INTER indicates whether the call was made interactively, in
@@ -553,7 +573,6 @@ Return the name of the processed FILE."
 
   (with-current-buffer (find-file-noselect file)
     (let* ((proc-file (string-replace "scrubbed" "processed" file))
-           (buf (current-buffer))
            (unpub (textproc-unpub-p))
            (c (make-marker)))
       (save-excursion
