@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-11-08 09:29:48 lolh-mbp-16>
+;; Time-stamp: <2024-11-13 07:24:51 lolh-mbp-16>
 ;; Version: 0.2.0 [2024-11-01 08:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -170,9 +170,9 @@
                         (group-n 4 (= 10 (any digit "-"))) ; date or nil
                         "]"))
       (opt (0+ space) (group-n 5        ; all names combined or nil
-                        (group-n 6 (+ upper) "," upper (+ lower)) ; first name
+                        (group-n 6 (+ upper) (0+ "-" (1+ upper)) "," upper (+ lower)) ; first name
                         (0+ "-"
-                            (group-n 7 (0+ upper) "," upper (+ lower))))) ; Optional second name
+                            (group-n 7 (0+ upper) (0+ "-" (1+ upper)) "," upper (+ lower))))) ; Optional second name
       (opt " -- " (group-n 8 (* (any graph space)))) ; document name
       ;; nil if no " -- "
       ;; string-empty-p t if " -- " with no document name
@@ -251,7 +251,7 @@
 (keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
 (keymap-global-set "C-x p C" #'lolh/close-case)
-(keymap-global-set "C-x p R" #'lolh/textutil-rtf-to-txt-command)
+;;(keymap-global-set "C-x p R" #'lolh/textutil-rtf-to-txt-command)
 (keymap-global-set "M-A"     #'lolh/note-tree)
 (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
 (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
@@ -1517,7 +1517,7 @@ If it is nil, do not attach anything."
 
 
 (defun lolh/create-file-name-using-note-parts (file-name &optional no-doc)
-  "Grab the cause and names from the note,and add them to the FILE-NAME.
+  "Grab the cause and names from the note, and add them to the FILE-NAME.
 
 If document part does not exist, ask for it, unless NO-DOC is t."
 
@@ -1549,7 +1549,9 @@ If document part does not exist, ask for it, unless NO-DOC is t."
 
 DATE should be unbracketed: 2024-05-04
 NAME-PRI and NAME-SEC should be in LASTA,Firsta and LASTB,Firstb form.
-EXT is the file's extension (mandatory), and will be either `pdf' or `docx'."
+EXT is the file's extension (mandatory), and will be either `pdf' or `docx'.
+NOTE: EXT is optional above, but if it is not provided, then default to
+`pdf'."
 
   (concat (when docket   (format "%s "    docket))
           (when cause    (format "%s "    cause))
@@ -1557,7 +1559,7 @@ EXT is the file's extension (mandatory), and will be either `pdf' or `docx'."
           (when name-pri (format "%s%s"   (when date " ") name-pri))
           (when name-sec (format "-%s"    name-sec))
           (when document (format " -- %s" document))
-          (format "%s" ext)))
+          (format "%s" (or ext ".pdf"))))
 
 (defun lolh/extract-file-name-parts (file-name)
   "Given a FILE-NAME, extract and return its parts as a plist.
@@ -1783,27 +1785,27 @@ this function will ask for a client."
 ;;; textutil
 
 
-(defun lolh/textutil-rtf-to-txt-command (&optional p)
-  "Convert a set of RTF documents into same-named TXT documents.
+;; (defun lolh/textutil-rtf-to-txt-command (&optional p)
+;;   "Convert a set of RTF documents into same-named TXT documents.
 
-The RTF documents should be in /Downloads.
-The TXT documents will end up in /process."
+;; The RTF documents should be in /Downloads.
+;; The TXT documents will end up in /process."
 
-  (interactive "p")
+;;   (interactive "p")
 
-  (cl-dolist (rtf (directory-files *lolh/downloads-dir* t ".rtf$"))
-    (rename-file rtf (file-name-as-directory *lolh/process-dir*))
-    (let* ((new-rtf (file-name-concat *lolh/process-dir* (file-name-nondirectory rtf)))
-           (new-txt (file-name-concat (file-name-with-extension new-rtf "txt"))))
-      (call-process-shell-command
-       (format "textutil -convert txt \"%s\"" new-rtf))
-      (delete-file new-rtf t)
-      (when (eql p 4)
-        (if (string-match-p (rx bos (= 7 digit)) (file-name-base new-txt))
-            (helpers-process-text-rcw-file)
-          (helpers-process-text-case-file new-txt)))
-      ;; (delete-file new-txt t)
-      )))
+;;   (cl-dolist (rtf (directory-files *lolh/downloads-dir* t ".rtf$"))
+;;     (rename-file rtf (file-name-as-directory *lolh/process-dir*))
+;;     (let* ((new-rtf (file-name-concat *lolh/process-dir* (file-name-nondirectory rtf)))
+;;            (new-txt (file-name-concat (file-name-with-extension new-rtf "txt"))))
+;;       (call-process-shell-command
+;;        (format "textutil -convert txt \"%s\"" new-rtf))
+;;       (delete-file new-rtf t)
+;;       (when (eql p 4)
+;;         (if (string-match-p (rx bos (= 7 digit)) (file-name-base new-txt))
+;;             (helpers-process-text-rcw-file)
+;;           (helpers-process-text-case-file new-txt)))
+;;       ;; (delete-file new-txt t)
+;;       )))
 
 ;;;-------------------------------------------------------------------
 ;;; Macro with-main-note, with-client-note

@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-01 11:28:38 lolh-mbp-16>
+;;; Time-stamp: <2024-11-08 10:27:36 lolh-mbp-16>
 ;;; Version: 0.0.8_2024-10-25T0150
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -458,25 +458,25 @@ in the *Help* buffer."
 ;;;-------------------------------------------------------------------
 
 
-(defun helpers-delete-until-char ()
-  "From point forward delete empty lines.
+;; (defun helpers-delete-until-char ()
+;;   "From point forward delete empty lines.
 
-Point must be on an empty line or at the end of a line."
+;; Point must be on an empty line or at the end of a line."
 
-  (while (eolp) (delete-char 1)))
+;;   (while (eolp) (delete-char 1)))
 
 
-(defun helpers-remove-strange-underscores ()
-  "Delete all of the strange underscores in a file."
+;; (defun helpers-remove-strange-underscores ()
+;;   "Delete all of the strange underscores in a file."
 
-  (goto-char (point-min))
-  (save-excursion
-    (cl-loop
-     until (eobp)
-     do
-     (if (eql (following-char) 160)
-         (delete-char 1)
-       (forward-char)))))
+;;   (goto-char (point-min))
+;;   (save-excursion
+;;     (cl-loop
+;;      until (eobp)
+;;      do
+;;      (if (eql (following-char) 160)
+;;          (delete-char 1)
+;;        (forward-char)))))
 
 
 (defconst *helpers-citation-rx*

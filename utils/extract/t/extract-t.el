@@ -1,5 +1,5 @@
 ;;; extract-t.el --- Extract tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-09-30 08:55:34 lolh-mbp-16>
+;; Time-stamp: <2024-11-13 06:56:05 lolh-mbp-16>
 ;; Version: 0.0.2 [2024-09-26 Thu 23:20]
 
 ;; Package-Requires: ((emacs "24.1") (emacs "24.3") extract)
@@ -124,7 +124,9 @@
         (g1 "LASTA,Firsta-LASTB,Firstb.pdf")
         (g2 "02) 24-2-09999-06 [2024-05-04] LAST,First.pdf")
         (g3 "02) 24-2-09999-06 [2024-05-04] LASTA,Firsta-LASTB,Firstb.pdf")
-        (g4 "02) 24-2-09999-06 [2024-05-04].pdf"))
+        (g4 "02) 24-2-09999-06 [2024-05-04].pdf")
+        (g5 "02) 24-2-09999-06 [2024-11-13] LASTA-HYPHEN,Firsta-LASTB,Firstb.pdf")
+        (g6 "02) 24-2-09999-06 [2024-11-13] LASTA,Firsta-LASTB-HYPHEN,Firstb.pdf"))
     (should (eq 0 (string-match *lolh/case-file-name-rx* g0)))
     (should (string= "LAST,First" (match-string 5 g0)))
     (should (string= "LAST,First" (match-string 6 g0)))
@@ -143,6 +145,14 @@
     (should (string= "LASTB,Firstb" (match-string 7 g3)))
     (should (eq 0 (string-match *lolh/case-file-name-rx* g4)))
     (should (null (match-string 5 g4)))
+    (should (eq 0 (string-match *lolh/case-file-name-rx* g5)))
+    (should (string= "LASTA-HYPHEN,Firsta-LASTB,Firstb" (match-string 5 g5)))
+    (should (string= "LASTA-HYPHEN,Firsta" (match-string 6 g5)))
+    (should (string= "LASTB,Firstb" (match-string 7 g5)))
+    (should (eq 0 (string-match *lolh/case-file-name-rx* g6)))
+    (should (string= "LASTA,Firsta-LASTB-HYPHEN,Firstb" (match-string 5 g6)))
+    (should (string= "LASTA,Firsta" (match-string 6 g6)))
+    (should (string= "LASTB-HYPHEN,Firstb" (match-string 7 g6)))
     ))
 
 (ert-deftest extract-t-rx-body ()
