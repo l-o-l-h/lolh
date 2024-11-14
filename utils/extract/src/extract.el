@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-11-13 08:09:29 lolh-mbp-16>
+;; Time-stamp: <2024-11-14 10:39:06 lolh-mbp-16>
 ;; Version: 0.2.0 [2024-11-01 08:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -249,19 +249,17 @@
 (keymap-global-set "C-x p a" #'lolh/court-files-attach)
 (keymap-global-set "C-x p h" #'lolh/extract-pdfs)
 (keymap-global-set "C-x p j" #'lolh/process-dir)
-(keymap-global-set "C-x p t" #'lolh/move-update-files-into-process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
 (keymap-global-set "C-x p C" #'lolh/close-case)
-;;(keymap-global-set "C-x p R" #'lolh/textutil-rtf-to-txt-command)
 (keymap-global-set "M-A"     #'lolh/note-tree)
-(keymap-global-set "M-C"     #'lolh/pbcopy-cause)
-(keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
+;; (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
+;; (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
 (keymap-global-set "M-H"     #'lolh/add-columns-header)
-(keymap-global-set "M-N"     #'lolh/pbcopy-client-name)
-(keymap-global-set "M-P"     #'lolh/pbcopy-client-phone)
+;; (keymap-global-set "M-N"     #'lolh/pbcopy-client-name)
+;; (keymap-global-set "M-P"     #'lolh/pbcopy-client-phone)
 (keymap-global-set "M-R"     #'lolh/simple-rename-using-note)
-(keymap-global-set "M-T"     #'lolh/pbcopy-title)
-(keymap-global-set "M-U"     #'lolh/unlock-docs)
+;; (keymap-global-set "M-T"     #'lolh/pbcopy-title)
+;; (keymap-global-set "M-U"     #'lolh/unlock-docs)
 (keymap-global-set "M-W"     #'lolh/return-cause-plaintiffs-defendants)
 
 
@@ -578,35 +576,35 @@ argument sets BODY-P to 16."
 
 
 ;; M-U
-(defun lolh/unlock-docs ()
-  "Unlock DOC, e.g. an OLD or Appointment.
+;; (defun lolh/unlock-docs ()
+;;   "Unlock DOC, e.g. an OLD or Appointment.
 
-DOC must be in *lolh/process-dir*, and so this command will first call
-`lolh/copy-new-files-into-process-dir'.  It will thereafter work on every
-file in *lolh/process-dir*.
-UNLOCKED will be the same file name but with (unlocked) added to the end.
+;; DOC must be in *lolh/process-dir*, and so this command will first call
+;; `lolh/copy-new-files-into-process-dir'.  It will thereafter work on every
+;; file in *lolh/process-dir*.
+;; UNLOCKED will be the same file name but with (unlocked) added to the end.
 
-The original (locked) files are deleted from *lolh/process-dir*.
-The unlocked files are moved into *lolh/downloads-dir*."
+;; The original (locked) files are deleted from *lolh/process-dir*.
+;; The unlocked files are moved into *lolh/downloads-dir*."
 
-  (interactive)
+;;   (interactive)
 
-  (lolh/copy-new-files-into-process-dir)
+;;   (lolh/copy-new-files-into-process-dir)
 
-  (let ((all-locked (directory-files *lolh/process-dir* t "^[^.]")))
-    (dolist (locked all-locked)
-      (let ((unlocked (format "%s (unlocked).pdf"
-                              (file-name-sans-extension locked))))
-        (textproc-pdftk-cat
-         (file-name-nondirectory locked)
-         1 "end"
-         (file-name-nondirectory unlocked))
-        (rename-file unlocked
-                     (file-name-concat *lolh/downloads-dir*
-                                       (file-name-nondirectory unlocked)))
-        (delete-file locked))))
+;;   (let ((all-locked (directory-files *lolh/process-dir* t "^[^.]")))
+;;     (dolist (locked all-locked)
+;;       (let ((unlocked (format "%s (unlocked).pdf"
+;;                               (file-name-sans-extension locked))))
+;;         (textproc-pdftk-cat
+;;          (file-name-nondirectory locked)
+;;          1 "end"
+;;          (file-name-nondirectory unlocked))
+;;         (rename-file unlocked
+;;                      (file-name-concat *lolh/downloads-dir*
+;;                                        (file-name-nondirectory unlocked)))
+;;         (delete-file locked))))
 
-  (message "Files unlocked"))
+;;   (message "Files unlocked"))
 
 
 ;;====================================================================
@@ -939,10 +937,27 @@ The associated cons cells is returned."
      ;; based upon those containing the linked client notes
      ;; keywords ("client" "main" "rtc")
      (cl-dolist (note linked-notes client-notes)
-       (when (cl-subsetp
-              *lolh/client-note*
-              (denote-extract-keywords-from-path note))
-         (push note client-notes))))))
+       ;; TODO: cl-subsetp is the wrong function here
+       ;; *lolh/client-note* includes both rtf and hjp
+       ;; having both prevents cl-subsetp from working correctly
+       ;; must eliminate the wrong one first
+       ;; or chose the right one (that is, create a second constant for hjp cases
+       ;; Use remq to obtain the correct list
+       (let* ((extracted-keywords (denote-extract-keywords-from-path note))
+              (note-keywords (rem-rtc-or-hjp extracted-keywords)))
+         (when (cl-subsetp
+                note-keywords
+                extracted-keywords)
+           (push note client-notes)))))))
+
+
+(defun rem-rtc-or-hjp (ex-kws)
+  "Remove from *lolh/client-note* hjp if rtc is found; remove rtc if hjp is found in EX-KWS"
+
+  (cond
+   ((member "rtc" ex-kws) (remove "hjp" *lolh/client-note*))
+   ((member "hjp" ex-kws) (remove "rtc" *lolh/client-note*))
+   (t (error "Failed to find either rtc or hjpt in %s" ex-kws))))
 
 
 (defun lolh/client-names-from-notes (client-notes)
@@ -992,13 +1007,13 @@ An error will be called if something goes wrong."
   (let ((ls (lolh/cause-plaintiffs-defendants)))
 
     (cond
-     ((eql which ?f) (and (lolh/pbcopy (cl-first ls))
+     ((eql which ?f) (and (textproc-pbcopy (cl-first ls))
                           (message (cl-first ls))))
-     ((eql which ?c) (and (lolh/pbcopy (cl-second ls))
+     ((eql which ?c) (and (textproc-pbcopy (cl-second ls))
                           (message (cl-second ls))))
-     ((eql which ?p) (and (lolh/pbcopy (cl-third ls))
+     ((eql which ?p) (and (textproc-pbcopy (cl-third ls))
                           (message (cl-third ls))))
-     ((eql which ?d) (and (lolh/pbcopy (cl-fourth ls))
+     ((eql which ?d) (and (textproc-pbcopy (cl-fourth ls))
                           (message (cl-fourth ls))))
      (t (error "Need one of '<f>ull '<c>ause '<p>laintiffs or '<d>efendants but received <%c> instead" which)))))
 
@@ -1564,6 +1579,7 @@ NOTE: EXT is optional above, but if it is not provided, then default to
           (when document (format " -- %s" document))
           (format "%s" (or ext ".pdf"))))
 
+
 (defun lolh/extract-file-name-parts (file-name)
   "Given a FILE-NAME, extract and return its parts as a plist.
 
@@ -1591,6 +1607,7 @@ NOTE: EXT is optional above, but if it is not provided, then default to
         :name-sec  (match-string 7 file-name)
         :document  (match-string 8 file-name)
         :ext       (match-string 9 file-name)))
+
 
 (defun lolh/file-name-part (file-name part)
   "Given a FILE-NAME, return a PART.
@@ -1644,78 +1661,78 @@ PART must be one of *lolh/file-name-allowed-parts*."
 ;;            (file-name-concat *lolh/process-dir* new-doc))))
 
 
-(defun lolh/call-split-dismissal-old ()
-  (interactive)
-  (setq-local default-directory *lolh/downloads-dir*)
-  (setq-local insert-default-directory t)
-  (call-interactively #'lolh/split-dismissal-old))
+;; (defun lolh/call-split-dismissal-old ()
+;;   (interactive)
+;;   (setq-local default-directory *lolh/downloads-dir*)
+;;   (setq-local insert-default-directory t)
+;;   (call-interactively #'lolh/split-dismissal-old))
 
 
 ;;; Split and rename a combined Stipulated Dismissal-OLD
 ;;; case [date] def-names -- Stipulated Dismisall-OLD.pdf
-(defun lolh/split-dismissal-old (file)
-  "Split into two documents a single stipulated dismissal-OLD."
+;; (defun lolh/split-dismissal-old (file)
+;;   "Split into two documents a single stipulated dismissal-OLD."
 
-  (interactive
-   (let ((default-directory *lolh/downloads-dir*)
-         (insert-default-directory nil)
-         (initial (directory-files *lolh/downloads-dir* nil "Stipulated Dismissal-OLD")))
-     (list
-      (read-file-name "File to split? "nil nil t (car initial)))))
+;;   (interactive
+;;    (let ((default-directory *lolh/downloads-dir*)
+;;          (insert-default-directory nil)
+;;          (initial (directory-files *lolh/downloads-dir* nil "Stipulated Dismissal-OLD")))
+;;      (list
+;;       (read-file-name "File to split? "nil nil t (car initial)))))
 
-  (lolh/clean-dirs)
+;;   (lolh/clean-dirs)
 
-  (let* ((bn-file (file-name-nondirectory file))
-         (full (and
-                (string-match (rx (seq
-                                   bos
-                                   (group (* ascii))
-                                   " -- "
-                                   (group "Stipulated")
-                                   (any space)
-                                   (group "Dismissal")
-                                   "-"
-                                   (group "OLD")
-                                   (group (* ascii))
-                                   ".pdf"
-                                   eos))
-                              bn-file)
-                (match-string 0 bn-file)))
-         (first (match-string 1 bn-file))
-         (second (match-string 2 bn-file))
-         (third (match-string 3 bn-file))
-         (fourth (match-string 4 bn-file))
-         (fifth (match-string 5 bn-file))
-         (dismissal (format "%s -- %s %s%s (unlocked).pdf" first second third fifth))
-         (old (format "%s -- %s %s%s (unlocked).pdf" first second fourth fifth))
-         (process-file (file-name-concat *lolh/process-dir* full)))
-    (copy-file file process-file)
-    (textproc-pdftk-cat full 1 1 dismissal)
-    (textproc-pdftk-cat full 2 3 old)
-    (delete-file process-file)
-    (rename-file (file-name-concat *lolh/process-dir* dismissal)
-                 (file-name-concat *lolh/downloads-dir* dismissal))
-    (rename-file (file-name-concat *lolh/process-dir* old)
-                 (file-name-concat *lolh/downloads-dir* old))))
+;;   (let* ((bn-file (file-name-nondirectory file))
+;;          (full (and
+;;                 (string-match (rx (seq
+;;                                    bos
+;;                                    (group (* ascii))
+;;                                    " -- "
+;;                                    (group "Stipulated")
+;;                                    (any space)
+;;                                    (group "Dismissal")
+;;                                    "-"
+;;                                    (group "OLD")
+;;                                    (group (* ascii))
+;;                                    ".pdf"
+;;                                    eos))
+;;                               bn-file)
+;;                 (match-string 0 bn-file)))
+;;          (first (match-string 1 bn-file))
+;;          (second (match-string 2 bn-file))
+;;          (third (match-string 3 bn-file))
+;;          (fourth (match-string 4 bn-file))
+;;          (fifth (match-string 5 bn-file))
+;;          (dismissal (format "%s -- %s %s%s (unlocked).pdf" first second third fifth))
+;;          (old (format "%s -- %s %s%s (unlocked).pdf" first second fourth fifth))
+;;          (process-file (file-name-concat *lolh/process-dir* full)))
+;;     (copy-file file process-file)
+;;     (textproc-pdftk-cat full 1 1 dismissal)
+;;     (textproc-pdftk-cat full 2 3 old)
+;;     (delete-file process-file)
+;;     (rename-file (file-name-concat *lolh/process-dir* dismissal)
+;;                  (file-name-concat *lolh/downloads-dir* dismissal))
+;;     (rename-file (file-name-concat *lolh/process-dir* old)
+;;                  (file-name-concat *lolh/downloads-dir* old))))
 
 ;;;-------------------------------------------------------------------
 ;;; pbcopy
 
 
-(defun lolh/pbcopy (thing)
-  "Copy a THING using pbcopy."
+;; (defun lolh/pbcopy (thing)
+;;   "Copy a THING using pbcopy."
 
-  (call-process-shell-command
-   (concat
-    "echo -n " (shell-quote-argument thing) " | " "pbcopy")))
+;;   (call-process-shell-command
+;;    (concat
+;;     "echo -n " (shell-quote-argument thing) " | " "pbcopy")))
 
 
-;; M-T
-(defun lolh/pbcopy-title ()
-  "pbcopy the string value of the main note's title."
+;; ;; M-T
+;; (defun lolh/pbcopy-title ()
+;;   "pbcopy the string value of the main note's title."
 
-  (interactive)
-  (lolh/pbcopy (lolh/title)))
+;;   (interactive)
+;;   (lolh/pbcopy (lolh/title)))
 
 
 (defun lolh/main-property (property)
@@ -1746,42 +1763,42 @@ the main note's title instead.  Should usually use
       (error "Failed to find a valid cause."))))
 
 
-;; M-C
-(defun lolh/pbcopy-cause ()
-  "Return the cause number of the current case."
+;; ;; M-C
+;; (defun lolh/pbcopy-cause ()
+;;   "Return the cause number of the current case."
 
-  (interactive)
-  (lolh/pbcopy (lolh/cause)))
-
-
-;; M-P
-(defun lolh/pbcopy-client-phone ()
-  (interactive)
-  (lolh/pbcopy-client-property "PHONE"))
+;;   (interactive)
+;;   (lolh/pbcopy (lolh/cause)))
 
 
-;; M-E
-(defun lolh/pbcopy-client-email ()
-  (interactive)
-  (lolh/pbcopy-client-property "EMAIL"))
+;; ;; M-P
+;; (defun lolh/pbcopy-client-phone ()
+;;   (interactive)
+;;   (lolh/pbcopy-client-property "PHONE"))
 
 
-;; M-N
-(defun lolh/pbcopy-client-name ()
-  (interactive)
-  (lolh/pbcopy-client-property "NAME"))
+;; ;; M-E
+;; (defun lolh/pbcopy-client-email ()
+;;   (interactive)
+;;   (lolh/pbcopy-client-property "EMAIL"))
 
 
-(defun lolh/pbcopy-client-property (property)
-  "pbcopy the client PROPERTY requested.
+;; ;; M-N
+;; (defun lolh/pbcopy-client-name ()
+;;   (interactive)
+;;   (lolh/pbcopy-client-property "NAME"))
 
-If point is not in a client note, and there are more than one clients,
-this function will ask for a client."
 
-  (with-client-note
-   (let ((property-value (lolh/note-property property)))
-     (message "%s: %s" property property-value)
-     (lolh/pbcopy property-value))))
+;; (defun lolh/pbcopy-client-property (property)
+;;   "pbcopy the client PROPERTY requested.
+
+;; If point is not in a client note, and there are more than one clients,
+;; this function will ask for a client."
+
+;;   (with-client-note
+;;    (let ((property-value (lolh/note-property property)))
+;;      (message "%s: %s" property property-value)
+;;      (lolh/pbcopy property-value))))
 
 
 ;;;-------------------------------------------------------------------

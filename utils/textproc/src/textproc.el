@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-13 07:51:05 lolh-mbp-16>
+;;; Time-stamp: <2024-11-14 08:59:56 lolh-mbp-16>
 ;;; Version: 0.0.6
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -19,21 +19,46 @@
 (require 'denote)
 
 
-(keymap-global-set "C-x p R" #'textproc-text-to-denote)
+(keymap-global-set "M-C"     #'textproc-pbcopy-cause)
+(keymap-global-set "M-E"     #'textproc-pbcopy-client-email)
+(keymap-global-set "M-N"     #'textproc-pbcopy-client-name)
+(keymap-global-set "M-P"     #'textproc-pbcopy-client-phone)
+(keymap-global-set "M-T"     #'textproc-pbcopy-title)
+(keymap-global-set "M-U"     #'textproc-unlock-docs)
+(keymap-global-set "C-x p t" #'textproc-text-to-denote)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Constants
 
 
 (defconst textproc-downloads "~/Downloads/")
-(defconst textproc-process "~/Downloads/process/")
-(defconst textproc-save "~/Downloads/save/")
-(defconst textproc-save-rtf "~/Downloads/save/rtf/")
-(defconst textproc-save-txt "~/Downloads/save/txt/")
-(defconst textproc-save-org "~/Downloads/save/org/")
+(defconst textproc-process   "~/Downloads/process/")
+(defconst textproc-save      "~/Downloads/save/")
+(defconst textproc-save-rtf  "~/Downloads/save/rtf/")
+(defconst textproc-save-txt  "~/Downloads/save/txt/")
+(defconst textproc-save-org  "~/Downloads/save/org/")
+
+
+(defconst textproc-pdftk-jar-path
+  (expand-file-name "~/.local/bin/pdftk-all.jar"))
+
+
+(defconst textproc-pdftk-command
+  (concat "java -jar " textproc-pdftk-jar-path " \'%s\' cat %s-%s output \'%s\'"))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Regular Expressions
+
 
 (defconst textproc-case-page-re (rx (:
                                      symbol-start
                                      (** 1 2 "*")
                                      (+ digit)
-                                     eow)))
+                                     eow))
+  "*23|**23")
+
 
 (defconst textproc-citation-re
   (rx bow
@@ -56,6 +81,7 @@
    - 123 Wn.App.2d 456
    - 123 WL 456
    - 550 P.3d 64")
+
 
 (defconst textproc-west-key-number-re
   (rx (:
@@ -181,6 +207,37 @@ and divides it into six sections.")
 and divides it into two sections.")
 
 
+(defconst textproc-dismissal-old-re
+  (rx (seq
+       bos
+       (group (* ascii))
+       " -- "
+       (group "Stipulated")
+       (any space)
+       (group "Dismissal")
+       "-"
+       (group "OLD")
+       (group (* ascii))
+       ".pdf"
+       eos))
+  "24-2-01234-06 [2024-01-01] LAST,First -- Stipulated Dismissal-OLD.pdf
+  {                 1                      }{    2    }{    3   }{4}{5}
+Used by pdftk-split-dismissal-old.")
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+(defun textproc-clean-dirs ()
+  "Remove backup files from downloads directory to avoid picking up spurious files."
+  (interactive)
+
+  (let ((files-to-delete (directory-files textproc-downloads t "^[~]")))
+    (dolist (file-to-delete files-to-delete)
+      (delete-file file-to-delete)
+      (message "%s deleted" file-to-delete))))
+
+
 (defun textproc-date-p ()
   "Predicate function for finding a date string in a line of text."
   (let (;; October 14, 2024 | Oct. 14, 2024
@@ -197,12 +254,66 @@ and divides it into two sections.")
         ts2)))
 
 
-(defconst textproc-pdftk-jar-path
-  (expand-file-name "~/.local/bin/pdftk-all.jar"))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; pbcopy
 
 
-(defconst textproc-pdftk-command
-  (concat "java -jar " textproc-pdftk-jar-path " \'%s\' cat %s-%s output \'%s\'"))
+(defun textproc-pbcopy (thing)
+  "Copy a THING using pbcopy."
+
+  (call-process-shell-command
+   (concat
+    "echo -n " (shell-quote-argument thing) " | " "pbcopy")))
+
+
+;; M-T
+(defun textproc-pbcopy-title ()
+  "pbcopy the string value of the main note's title."
+
+  (interactive)
+  (textproc-pbcopy (lolh/title)))
+
+
+;; M-C
+(defun textproc-pbcopy-cause ()
+  "Return the cause number of the current case."
+
+  (interactive)
+  (textproc-pbcopy (lolh/cause)))
+
+
+;; M-P
+(defun textproc-pbcopy-client-phone ()
+  (interactive)
+  (textproc-pbcopy-client-property "PHONE"))
+
+
+;; M-E
+(defun textproc-pbcopy-client-email ()
+  (interactive)
+  (textproc-pbcopy-client-property "EMAIL"))
+
+
+;; M-N
+(defun textproc-pbcopy-client-name ()
+  (interactive)
+  (textproc-pbcopy-client-property "NAME"))
+
+
+(defun textproc-pbcopy-client-property (property)
+  "pbcopy the client PROPERTY requested.
+
+If point is not in a client note, and there are more than one clients,
+this function will ask for a client."
+
+  (with-client-note
+   (let ((property-value (lolh/note-property property)))
+     (message "%s: %s" property property-value)
+     (textproc-pbcopy property-value))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; pdftk
 
 
 (defun textproc-pdftk-cat (doc start end new-doc)
@@ -212,9 +323,87 @@ All documents begin and end in *lolh/process-dir*"
 
   (call-process-shell-command
    (format textproc-pdftk-command
-           (file-name-concat textproc-process doc)
+           (expand-file-name doc textproc-process)
            start end
-           (file-name-concat textproc-process new-doc))))
+           (expand-file-name new-doc textproc-process))))
+
+
+(defun textproc-call-split-dismissal-old ()
+  (interactive)
+  (setq-local default-directory textproc-downloads)
+  (setq-local insert-default-directory t)
+  (call-interactively #'textproc-split-dismissal-old))
+
+
+;;; Split and rename a combined Stipulated Dismissal-OLD
+;;; case [date] def-names -- Stipulated Dismisall-OLD.pdf
+(defun textproc-split-dismissal-old (file)
+  "Split FILE containing a single stipulated dismissal-OLD into two documents."
+
+  (interactive
+   (let ((default-directory textproc-downloads)
+         (insert-default-directory nil)
+         (initial (directory-files textproc-downloads nil "Stipulated Dismissal-OLD")))
+     (list
+      (read-file-name "File to split? "nil nil t (car initial)))))
+
+  (textproc-clean-dirs)
+
+  (let* ((bn-file (file-name-nondirectory file))
+         (full (and (string-match textproc-dismissal-old-re bn-file)
+                    (match-string 0 bn-file)))
+         (first (match-string 1 bn-file))
+         (second (match-string 2 bn-file))
+         (third (match-string 3 bn-file))
+         (fourth (match-string 4 bn-file))
+         (fifth (match-string 5 bn-file))
+         (dismissal (format "%s -- %s %s%s (unlocked).pdf" first second third fifth))
+         (old (format "%s -- %s %s%s (unlocked).pdf" first second fourth fifth))
+         (process-file (file-name-concat textproc-process full)))
+    (copy-file file process-file)
+    (textproc-pdftk-cat full 1 1 dismissal)
+    (textproc-pdftk-cat full 2 3 old)
+    (delete-file process-file)
+    (rename-file (file-name-concat textproc-process dismissal)
+                 (file-name-concat textproc-downloads dismissal))
+    (rename-file (file-name-concat textproc-process old)
+                 (file-name-concat textproc-downloads old))))
+
+
+;; M-U
+(defun textproc-unlock-docs ()
+  "Unlock DOC, e.g. an OLD or Appointment.
+
+DOC must be in *lolh/process-dir*, and so this command will first call
+`lolh/copy-new-files-into-process-dir'.  It will thereafter work on every
+file in *lolh/process-dir*.
+UNLOCKED will be the same file name but with (unlocked) added to the end.
+
+The original (locked) files are deleted from *lolh/process-dir*.
+The unlocked files are moved into *lolh/downloads-dir*."
+
+  (interactive)
+
+  (lolh/copy-new-files-into-process-dir)
+
+  (let ((all-locked (directory-files textproc-process t "^[^.]")))
+    (dolist (locked all-locked)
+      (let ((unlocked (format "%s (unlocked).pdf"
+                              (file-name-sans-extension locked))))
+        (textproc-pdftk-cat
+         (file-name-nondirectory locked)
+         1 "end"
+         (file-name-nondirectory unlocked))
+        (rename-file unlocked
+                     (file-name-concat textproc-downloads
+                                       (file-name-nondirectory unlocked)))
+        (delete-file locked))))
+
+  (message "Files unlocked"))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; textutil
 
 
 (defun textproc-textutil-command (file)
@@ -391,8 +580,19 @@ real one.  It is equal to the first one (I think)."
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; textutil text procesing main commands
 
 
+;; textproc-textutil :: turns rtf into txt; scrubs
+;; textproc-scrub-all-lines :: removes _, single-spaces; deletes 2 unnecessary sections
+;; textproc-case :: main text processing command
+;; textproc-process-headnotes :: called by textproc-case
+;; textproc-textutil-case :: calls the main three preceding commands, so converts, scrubs, processes
+;; textproc-text-to-org :: calls the four preceding commands, then converts to an org file
+;; textproc-text-to-denote :: calls the five preceding commands, then converts to a denote file
+
+
+;;; C-x p t
 (defun textproc-text-to-denote (file)
   "Convert the `rtf' FILE into an `org' file and save as a Denote note.
 
@@ -515,9 +715,6 @@ Finally, this scrubbed `txt' file is copied into `save/txt' directory.'"
 
 (defun textproc-scrub-all-lines (file)
   "Delete non-breaking spaces and ensure a single space between paragraphs in FILE.
-
-Optional INTER indicates whether the call was made interactively, in
-which case the FILE is expanded to include `textproc-process'.
 
 The region from the End of Document to the end of the buffer is deleted.
 The region describing the Search Details is also deleted."
