@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-14 08:59:56 lolh-mbp-16>
+;;; Time-stamp: <2024-11-15 06:34:16 lolh-mbp-16>
 ;;; Version: 0.0.6
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -306,7 +306,7 @@ Used by pdftk-split-dismissal-old.")
 If point is not in a client note, and there are more than one clients,
 this function will ask for a client."
 
-  (with-client-note
+  (lolh/with-client-note
    (let ((property-value (lolh/note-property property)))
      (message "%s: %s" property property-value)
      (textproc-pbcopy property-value))))

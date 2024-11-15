@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-11-14 10:39:06 lolh-mbp-16>
+;; Time-stamp: <2024-11-15 07:32:39 lolh-mbp-16>
 ;; Version: 0.2.0 [2024-11-01 08:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -96,6 +96,34 @@
 (require 'textproc)
 (require 'denote)
 (require 'org-attach)
+
+
+;;;-------------------------------------------------------------------
+;;; Macro lolh/with-main-note, lolh/with-client-note
+
+
+(defmacro lolh/with-main-note (&rest body)
+  "Process BODY with the MAIN note active."
+
+  `(save-excursion
+     (with-current-buffer (get-file-buffer (lolh/main-note))
+       ,@body)))
+
+
+(defmacro lolh/with-client-note (&rest body)
+  "Process BODY with the CLIENT note active.
+
+CLIENT is the full string name of the client as found in the title
+of that client note."
+
+  `(save-excursion
+     (with-current-buffer (find-file-noselect (lolh/client-note))
+       ,@body)))
+
+
+;;;-------------------------------------------------------------------
+;;; Constants
+
 
 (defconst *lolh/gd* "GOOGLE_DRIVE")
 ;; GOOGLE_DRIVE = $HOME/Google Drive/My Drive"
@@ -860,7 +888,7 @@ This returns all directories rooted in the gd-cause-dir for the current note."
 
   (interactive)
 
-  (with-main-note
+  (lolh/with-main-note
    (goto-char (point-min))
    (if (looking-at *lolh/title-rx*)
        (message "%s" (match-string-no-properties 1))
@@ -902,12 +930,15 @@ Return an error if a main note cannot be found."
 
 
 (defun lolh/client-note ()
-  "Given a list of client names, pick one and return its associated filename.
+  "Return a client notes.
 
-lolh/client-notes retuns a list of client names.
+If the current note is as client note, return it.
+Otherwise, provide a list of client notes for the user to pick one from.
+
+lolh/client-notes returns a list of client names.
 lolh/client-names-from-notes returns an alist of (client-name . client-note)
 The user is presented with a list of client names and picks one.
-The associated cons cells is returned."
+The associated cons cell is returned."
 
   (interactive)
 
@@ -923,41 +954,27 @@ The associated cons cells is returned."
 
 
 (defun lolh/client-notes ()
-  "Return a list of the client files for the main note."
+  "Return a list of the main client files for the main note.
+
+Main client files contain the keywords _client _main
+These notes contain the names and client information for the clients."
 
 ;;; ==> denote-link-return-links (&optional file)
 ;;; ==> denote-extract-keywords-from-path (path)
 ;;; ==> _client.*_main.*_rtc
 
-  (with-main-note
+  (lolh/with-main-note
    (let ((linked-notes (denote-link-return-links))
-         client-notes)
+         client-notes) ; client-notes will be returned
 
-     ;; Return a list of just the client notes (as filenames)
-     ;; based upon those containing the linked client notes
-     ;; keywords ("client" "main" "rtc")
      (cl-dolist (note linked-notes client-notes)
-       ;; TODO: cl-subsetp is the wrong function here
-       ;; *lolh/client-note* includes both rtf and hjp
-       ;; having both prevents cl-subsetp from working correctly
-       ;; must eliminate the wrong one first
-       ;; or chose the right one (that is, create a second constant for hjp cases
-       ;; Use remq to obtain the correct list
-       (let* ((extracted-keywords (denote-extract-keywords-from-path note))
-              (note-keywords (rem-rtc-or-hjp extracted-keywords)))
-         (when (cl-subsetp
-                note-keywords
-                extracted-keywords)
-           (push note client-notes)))))))
-
-
-(defun rem-rtc-or-hjp (ex-kws)
-  "Remove from *lolh/client-note* hjp if rtc is found; remove rtc if hjp is found in EX-KWS"
-
-  (cond
-   ((member "rtc" ex-kws) (remove "hjp" *lolh/client-note*))
-   ((member "hjp" ex-kws) (remove "rtc" *lolh/client-note*))
-   (t (error "Failed to find either rtc or hjpt in %s" ex-kws))))
+       (when (cl-subsetp '("client" "main")
+                         (cl-intersection
+                          (denote-extract-keywords-from-path note)
+                          *lolh/client-note*
+                          :test #'string=)
+                         :test #'string=)
+         (push note client-notes))))))
 
 
 (defun lolh/client-names-from-notes (client-notes)
@@ -984,7 +1001,7 @@ Return an alist of (client-name . client-note) pairs."
 `(full, cause, plaintiffs, defendants)'"
   ;; Do this without calling (lolh/gd-cause-dir)
   ;; use: (denote-retrieve-title-or-filename (buffer-file-name) 'org)
-  (with-main-note
+  (lolh/with-main-note
    (let ((case-name (denote-retrieve-title-or-filename (buffer-file-name) 'org)))
      (if (string-match *lolh/cause-plaintiffs-defendants-rx* case-name)
          (list
@@ -1330,7 +1347,7 @@ If FILTER is set to a regexp, attach the matched files."
 
   (interactive)
 
-  (with-main-note
+  (lolh/with-main-note
    (let (defs)
      (cl-do* ((def-no 1 (1+ def-no))
               (def-val (lolh/note-property (format "DEF-%d" def-no))
@@ -1740,7 +1757,7 @@ PART must be one of *lolh/file-name-allowed-parts*."
 
   (interactive "sProperty")
 
-  (with-main-note
+  (lolh/with-main-note
    (let ((value (lolh/note-property property)))
      (and
       (message "%s: %s" property value)
@@ -1795,7 +1812,7 @@ the main note's title instead.  Should usually use
 ;; If point is not in a client note, and there are more than one clients,
 ;; this function will ask for a client."
 
-;;   (with-client-note
+;;   (lolh/with-client-note
 ;;    (let ((property-value (lolh/note-property property)))
 ;;      (message "%s: %s" property property-value)
 ;;      (lolh/pbcopy property-value))))
@@ -1826,28 +1843,6 @@ the main note's title instead.  Should usually use
 ;;           (helpers-process-text-case-file new-txt)))
 ;;       ;; (delete-file new-txt t)
 ;;       )))
-
-;;;-------------------------------------------------------------------
-;;; Macro with-main-note, with-client-note
-
-
-(defmacro with-main-note (&rest body)
-  "Process BODY with the MAIN note active."
-
-  `(save-excursion
-     (with-current-buffer (get-file-buffer (lolh/main-note))
-       ,@body)))
-
-
-(defmacro with-client-note (&rest body)
-  "Process BODY with the CLIENT note active.
-
-CLIENT is the full string name of the client as found in the title
-of that client note."
-
-  `(save-excursion
-     (with-current-buffer (find-file-noselect (lolh/client-note))
-       ,@body)))
 
 
 ;;--------------------------------------------------------------------
