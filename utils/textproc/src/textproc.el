@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-15 06:34:16 lolh-mbp-16>
+;;; Time-stamp: <2024-11-15 08:52:12 lolh-mbp-16>
 ;;; Version: 0.0.6
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -19,6 +19,7 @@
 (require 'denote)
 
 
+(keymap-global-set "M-B"     #'textproc-call-bifurcate-dismissal-old)
 (keymap-global-set "M-C"     #'textproc-pbcopy-cause)
 (keymap-global-set "M-E"     #'textproc-pbcopy-client-email)
 (keymap-global-set "M-N"     #'textproc-pbcopy-client-name)
@@ -284,18 +285,21 @@ Used by pdftk-split-dismissal-old.")
 
 ;; M-P
 (defun textproc-pbcopy-client-phone ()
+
   (interactive)
   (textproc-pbcopy-client-property "PHONE"))
 
 
 ;; M-E
 (defun textproc-pbcopy-client-email ()
+
   (interactive)
   (textproc-pbcopy-client-property "EMAIL"))
 
 
 ;; M-N
 (defun textproc-pbcopy-client-name ()
+
   (interactive)
   (textproc-pbcopy-client-property "NAME"))
 
@@ -327,17 +331,18 @@ All documents begin and end in *lolh/process-dir*"
            start end
            (expand-file-name new-doc textproc-process))))
 
+;; M-B
+(defun textproc-call-bifurcate-dismissal-old ()
 
-(defun textproc-call-split-dismissal-old ()
   (interactive)
-  (setq-local default-directory textproc-downloads)
-  (setq-local insert-default-directory t)
-  (call-interactively #'textproc-split-dismissal-old))
+  (let ((default-directory textproc-downloads)
+        (insert-default-directory t))
+    (call-interactively #'textproc-bifurcate-dismissal-old)))
 
 
 ;;; Split and rename a combined Stipulated Dismissal-OLD
 ;;; case [date] def-names -- Stipulated Dismisall-OLD.pdf
-(defun textproc-split-dismissal-old (file)
+(defun textproc-bifurcate-dismissal-old (file)
   "Split FILE containing a single stipulated dismissal-OLD into two documents."
 
   (interactive
