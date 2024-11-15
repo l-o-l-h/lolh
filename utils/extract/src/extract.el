@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-11-15 07:32:39 lolh-mbp-16>
-;; Version: 0.2.0 [2024-11-01 08:35]
+;; Time-stamp: <2024-11-15 07:36:53 lolh-mbp-16>
+;; Version: 0.2.1 [2024-11-15 07:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;; Author: LOLH <lolh@lolh.com>
