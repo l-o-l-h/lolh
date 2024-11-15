@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-15 08:52:12 lolh-mbp-16>
+;;; Time-stamp: <2024-11-15 09:09:58 lolh-mbp-16>
 ;;; Version: 0.0.6
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -590,8 +590,8 @@ real one.  It is equal to the first one (I think)."
 
 ;; textproc-textutil :: turns rtf into txt; scrubs
 ;; textproc-scrub-all-lines :: removes _, single-spaces; deletes 2 unnecessary sections
-;; textproc-case :: main text processing command
-;; textproc-process-headnotes :: called by textproc-case
+;; textproc-process-case :: main text processing command
+;; textproc-process-headnotes :: called by textproc-process-case
 ;; textproc-textutil-case :: calls the main three preceding commands, so converts, scrubs, processes
 ;; textproc-text-to-org :: calls the four preceding commands, then converts to an org file
 ;; textproc-text-to-denote :: calls the five preceding commands, then converts to a denote file
@@ -678,10 +678,10 @@ Return the new FILE name."
                                 nil t)))
 
   ;; run file through `textproc-textutil' to obtain a scrubbed file
-  ;; run the scrubbed file through `textproc-case' to obtain a processed file
+  ;; run the scrubbed file through `textproc-process-case' to obtain a processed file
   ;; create a hard link of the processed file in `process/txt'
   ;; return the name of the processed file
-  (let ((case-proc (textproc-case (textproc-textutil file))))
+  (let ((case-proc (textproc-process-case (textproc-textutil file))))
     (textproc-bkup-file case-proc textproc-save-txt 'link)
     case-proc))
 
@@ -762,7 +762,7 @@ The region describing the Search Details is also deleted."
       scrubbed-file)))
 
 
-(defun textproc-case (file)
+(defun textproc-process-case (file)
   "Process a case found in FILE.
 
 Return the name of the processed FILE."
