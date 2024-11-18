@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-15 09:09:58 lolh-mbp-16>
+;;; Time-stamp: <2024-11-17 23:57:29 lolh-mbp-16>
 ;;; Version: 0.0.6
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -66,8 +66,8 @@
       (:
        (1+ digit)
        (1+ space)
-       (| "Wash." "Wn." "WL" "P.")
-       (* (any space "App." "2d" "3d"))
+       (| "Wash." "Wn." "WL" "P." "Cal.")
+       (* (any space "App." "2d" "3d" "4th" "5th" "Supp."))
        (: (1+ space)
           (1+ digit))
        eow))
@@ -81,7 +81,8 @@
    - 123 Wn. App. 456
    - 123 Wn.App.2d 456
    - 123 WL 456
-   - 550 P.3d 64")
+   - 550 P.3d 64
+   - 29 Cal.App.5th Supp. 1")
 
 
 (defconst textproc-west-key-number-re
@@ -243,7 +244,7 @@ Used by pdftk-split-dismissal-old.")
   "Predicate function for finding a date string in a line of text."
   (let (;; October 14, 2024 | Oct. 14, 2024
         (ts1 (parse-time-string (buffer-substring (pos-bol) (pos-eol))))
-        ;; 10/14/2024 | 10-14-2024
+        ;; 10/14/2024 | 10-14-2024 | 9/17/2018
         (ts2 (when (save-excursion
                      (re-search-forward
                       (rx (: (= 2 (** 1 2 digit) (any "-" "/")) (= 4 digit)))
@@ -530,22 +531,48 @@ Washington Citation might be altered."
   "Return a signature from the ORG-FILE.
 
 A signature is one of:
+for WA
 - sc
-- coadiv1|2|3 [unpub]"
+- coadiv1|2|3 [unpub]
+for CA
+- calapp"
 
   (save-excursion
-    (let* ((sig-1 (progn (goto-char (point-min))
-                         (if (search-forward "Supreme" (pos-eol) t)
-                             "sc"
-                           "coa")))
-           (sig-2 (if (string= sig-1 "coa")
-                      (progn
-                        (goto-char (point-min))
-                        (when (re-search-forward (rx "Division " (group digit)))
-                          (format " div%s" (match-string 1))))
-                    ""))
-           (sig-3 (or (textproc-unpub-p) "")))
-      (format "%s%s %s" sig-1 sig-2 sig-3))))
+    (goto-char (point-min))
+    ;; juris == Washington | California
+    (let* ((juris (when (re-search-forward (rx (or "Washington" "California")))
+                    (match-string-no-properties 0)))
+           (court
+            (pcase juris
+              ("Washington" (progn
+                              (goto-char (point-min))
+                              (if (re-search-forward "Supreme" (pos-eol) t)
+                                  "sc"
+                                "coa")))
+              ("California" (progn
+                              (goto-char (point-min))
+                              (if (re-search-forward "Supreme" (pos-eol) t)
+                                  "cal"
+                                "calapp")))))
+           (subcourt
+            (pcase juris
+              ("Washington" (pcase court
+                              ("coa"
+                               (progn
+                                 (goto-char (point-min))
+                                 (when (re-search-forward (rx "Division " (group digit)) (pos-eol) t)
+                                   (format "div%s" (match-string 1)))))
+                              ("sc" "")))
+              ("California" (pcase court
+                              ("calapp"
+                               (progn
+                                 (goto-char (point-min))
+                                 (when (re-search-forward "Appellate" (pos-eol) t)
+                                   ;; TODO: add the county here somehow
+                                   "")))
+                              ("cal" "")))))
+           (unpub (or (textproc-unpub-p) "")))
+      (format "%s%s%s" court subcourt unpub))))
 
 
 (defun textproc-case-date ()
@@ -681,13 +708,30 @@ Return the new FILE name."
   ;; run the scrubbed file through `textproc-process-case' to obtain a processed file
   ;; create a hard link of the processed file in `process/txt'
   ;; return the name of the processed file
-  (let ((case-proc (textproc-process-case (textproc-textutil file))))
+  (let ((case-proc
+         (textproc-process-case
+          (textproc-textutil-scrub file))))
     (textproc-bkup-file case-proc textproc-save-txt 'link)
     case-proc))
 
 
+(defun textproc-textutil-scrub (file)
+  "After converting FILE into a `txt' file, scrub using `textproc-scrub-all-lines'."
+
+  ;; if a FILE is not provided, ask for one in the DOWNLOADS directory.
+  (interactive (list
+                (read-file-name "Enter a file: "
+                                textproc-downloads nil t)))
+
+  (let* ((scrubbed-file (textproc-scrub-all-lines
+                         (textproc-textutil file))))
+    ;; hardlink the scrubbed `txt' file into `save/txt' dir
+    (textproc-bkup-file scrubbed-file textproc-save-txt 'link)
+    scrubbed-file))
+
+
 (defun textproc-textutil (file)
-  "Convert the `rtf' FILE into a `txt' file using `textutil' and scrub.
+  "Convert the `rtf' FILE into a `txt' file using `textutil' and return.
 
 The `rtf' FILE is first moved into the `process' directory.  The FILE is
 hardlinked into the `save/rtf' directory.  Then it is converted into a `txt'
@@ -710,12 +754,8 @@ Finally, this scrubbed `txt' file is copied into `save/txt' directory.'"
     (textproc-textutil-command rtf-file) ; convert to `txt'
     (delete-file rtf-file)               ; delete the `rtf' file
     (textproc-bkup-file txt-file textproc-save-txt 'copy)
-    ;; scrub the `txt' file
-    (let ((scrubbed-file (textproc-scrub-all-lines txt-file)))
-      ;; hardlink the scrubbed `txt' file into `save/txt' dir
-      (textproc-bkup-file scrubbed-file textproc-save-txt 'link)
-      (delete-file txt-file)
-      scrubbed-file)))
+    ;; return the `txt' file
+    txt-file))
 
 
 (defun textproc-scrub-all-lines (file)
@@ -731,35 +771,39 @@ The region describing the Search Details is also deleted."
                                 t)))
 
   ;; FILE is a `txt' file, probably in `process'
-  (let ((real-file (expand-file-name file textproc-process))
+  (let ((txt-file (expand-file-name file textproc-process))
         (scrubbed-file (expand-file-name
                         (format "%s (scrubbed).txt" (file-name-base file))
                         textproc-process)))
-    (with-current-buffer (find-file-noselect real-file)
-      (save-excursion
-        (goto-char (point-min))
-        (cl-loop until (eobp)
-                 with op = (textproc-find-opinion-start)
-                 do
-                 (textproc-delete-underscores-mark-pages)
-                 (if (eolp)
-                     (delete-char 1)
-                   (progn
-                     (forward-line)
-                     (textproc-delete-underscores-mark-pages)
-                     ;; Add an empty line between paragraphs in the Opinion section
-                     (if (eolp)
-                         (forward-line)
-                       (when (>= (point) op) (insert-char 10)))))
-                 finally
-                 ;; delete the lines from `End of Document' to end of buffer
-                 (delete-region (point-max) (search-backward "End of Document"))
-                 ;; delete the Search Details section
-                 (let* ((p1 (and (goto-char (point-min)) (search-forward "search details") (- (pos-bol) 1)))
-                        (p2 (and (goto-char p1) (search-forward "status icons") (+ (pos-eol) 1))))
-                   (delete-region p1 p2))))
-      (write-file scrubbed-file)
-      scrubbed-file)))
+    (with-silent-modifications
+      (with-current-buffer (find-file-noselect txt-file)
+        (save-excursion
+          (goto-char (point-min))
+          (cl-loop until (eobp)
+                   with op = (textproc-find-opinion-start)
+                   do
+                   (textproc-delete-underscores-mark-pages)
+                   (if (eolp)
+                       (delete-char 1)
+                     (progn
+                       (forward-line)
+                       (textproc-delete-underscores-mark-pages)
+                       ;; Add an empty line between paragraphs in the Opinion section
+                       (if (eolp)
+                           (forward-line)
+                         (when (>= (point) op) (insert-char 10)))))
+                   finally
+                   ;; delete the lines from `End of Document' to end of buffer
+                   (delete-region (point-max) (search-backward "End of Document"))
+                   ;; delete the Search Details section
+                   (let* ((p1 (and (goto-char (point-min)) (search-forward "search details") (- (pos-bol) 1)))
+                          (p2 (and (goto-char p1) (search-forward "status icons") (+ (pos-eol) 1))))
+                     (delete-region p1 p2))))
+        (write-file scrubbed-file)
+        (textproc-bkup-file scrubbed-file textproc-save-txt 'link)
+        (delete-file txt-file)
+        (kill-buffer)))
+    scrubbed-file))
 
 
 (defun textproc-process-case (file)
@@ -812,7 +856,7 @@ Return the name of the processed FILE."
         (when (search-forward "keycite:")
           (beginning-of-line) (insert "** ") (forward-line 2)
           (textproc-create-list-items)
-          (delete-region (point) (and (re-search-forward *helpers-citation-rx*) (1- (pos-bol))))
+          (delete-region (point) (and (re-search-forward textproc-citation-re) (1- (pos-bol))))
           (beginning-of-line))
 
         ;; center the caption

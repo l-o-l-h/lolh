@@ -1,5 +1,5 @@
 ;;; textproc-t.el --- Textproc tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-11-14 07:05:10 lolh-mbp-16>
+;; Time-stamp: <2024-11-16 16:53:10 lolh-mbp-16>
 ;; Version: 0.0.1 [2024-11-13 Wed 18:00]
 
 ;; Package-Requires: ((emacs "24.3") extract)
@@ -72,8 +72,8 @@
 
 
 (ert-deftest textproc-t-pdftk-cat ()
-  (let ((fn0 "24-2-03382-06 [2024-11-14] LAST,First -- Stipulated Dismissal-OLD.pdf")
-        (fn1 (expand-file-name fn0 "./data/")))))
+  (let* ((fn0 "24-2-03382-06 [2024-11-14] LAST,First -- Stipulated Dismissal-OLD.pdf")
+         (fn1 (expand-file-name fn0 "./data/")))))
 
 
 (ert-deftest textproc-t-split-dismissal-old ()
@@ -81,15 +81,23 @@
          (fn1 (expand-file-name fn0 "./data/"))
          (fn2 (progn
                 (string-match textproc-dismissal-old-re fn0)
-                (first (match-string-no-properties 1 fn0))
-                (second (match-string-no-properties 2 fn0))
-                (third (match-string-no-properties 3 fn0))
-                (fourth (match-string-no-properties 4 fn0))
-                (fifth (match-string-no-properties 5 fn0))
+                (cl-first (match-string-no-properties 1 fn0))
+                (cl-second (match-string-no-properties 2 fn0))
+                (cl-third (match-string-no-properties 3 fn0))
+                (cl-fourth (match-string-no-properties 4 fn0))
+                (cl-fifth (match-string-no-properties 5 fn0))
                 (dismissal (format "%s -- %s %s%s (unlocked).pdf" first second third fifth))
                 (old (format "%s -- %s %s%s (unlocked).pdf" first second fourth fifth)))))
     (copy-file fn1 textproc-downloads)
     (textproc-pdftk-cat (expand-file-name fn0 textproc-downloads 1 1 ))))
+
+(ert-deftest textproc-t-case-signature ()
+  (with-current-buffer (find-file-noselect "./data/wa-sc.txt")
+    (should (string= (textproc-case-signature) "sc")))
+  (with-current-buffer (find-file-noselect "./data/wa-coadiv1.txt")
+    (should (string= (textproc-case-signature) "coadiv1")))
+  (with-current-buffer (find-file-noselect "./data/ca-app.txt")
+    (should (string= (textproc-case-signature) "calappdiv"))))
 
 (provide 'textproc-t)
 ;;; textproc-t.el ends here
