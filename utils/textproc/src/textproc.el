@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-17 23:57:29 lolh-mbp-16>
+;;; Time-stamp: <2024-11-18 09:40:27 lolh-mbp-16>
 ;;; Version: 0.0.6
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -455,6 +455,44 @@ TYPE can be `copy' or `link' (hardlink)."
      (beginning-of-line)))
 
 
+(defun textproc-delete-underscores-and-single-space ()
+  "Delete all non-breaking spaces (ASCII 160) in the line."
+
+  (save-excursion
+    (cl-loop
+     until (eobp)
+     do
+     (cl-loop
+      named second-loop
+      while (eolp)
+      do
+      (if (eobp)
+          (cl-return-from second-loop)
+        (delete-char 1)))
+     (when (looking-at-p (rx "document details"))
+       (cl-loop
+        until (looking-at-p "status icons:")
+        do (delete-line)
+        finally (delete-line)))
+     (cl-loop
+      until (eolp)
+      do
+      (if (eql (following-char) 160)
+          (delete-char 1)
+        (forward-char))
+      finally
+      (unless
+          (eql (char-before (- (point) 1)) 10)
+        (forward-char)
+        (while (eql (following-char) 160) (delete-char 1))
+        (when (eolp) (forward-char))))
+     finally
+     (delete-region (point)
+                    (and
+                     (search-backward "end of document")
+                     (pos-bol))))))
+
+
 (defmacro textproc-delete-underscores-mark-pages ()
   "Delete all non-breaking spaces (ASCII 160) in the line.
 
@@ -736,8 +774,7 @@ Return the new FILE name."
 The `rtf' FILE is first moved into the `process' directory.  The FILE is
 hardlinked into the `save/rtf' directory.  Then it is converted into a `txt'
 file by the `textutil' command.  The `txt' file is saved into the `save/txt'
-directory.  The `rtf' file is deleted and the `txt' file is scrubbed.
-Finally, this scrubbed `txt' file is copied into `save/txt' directory.'"
+directory.  The `rtf' file is deleted.  The `txt' file is returned."
 
   ;; if a FILE is not provided, ask for one in the DOWNLOADS directory.
   (interactive (list
@@ -804,6 +841,25 @@ The region describing the Search Details is also deleted."
         (delete-file txt-file)
         (kill-buffer)))
     scrubbed-file))
+
+
+(defun textproc-scrub-statute-lines (file)
+  "Delete from FILE non-breaking spaces and ensure a single space between paras."
+
+  (interactive "f")
+
+  (let ((txt-file (expand-file-name file))
+        (scrubbed-file (expand-file-name
+                        (format "%s (scrubbed).txt" (file-name-base file))
+                        textproc-process)))
+    (with-silent-modifications
+      (with-current-buffer (find-file-noselect txt-file)
+        (save-excursion
+          (goto-char (point-min))
+          (textproc-delete-underscores-and-single-space))
+        (write-file scrubbed-file)
+        (textproc-bkup-file scrubbed-file textproc-save-txt 'link)
+        (delete-file txt-file)))))
 
 
 (defun textproc-process-case (file)
