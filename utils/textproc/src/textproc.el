@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-20 01:38:36 lolh-mbp-16>
+;;; Time-stamp: <2024-11-20 03:53:57 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -26,7 +26,8 @@
 (keymap-global-set "M-P"     #'textproc-pbcopy-client-phone)
 (keymap-global-set "M-T"     #'textproc-pbcopy-title)
 (keymap-global-set "M-U"     #'textproc-unlock-docs)
-(keymap-global-set "C-x p t" #'textproc-text-to-denote)
+(keymap-global-set "C-x p R" #'textproc-statute-rtf-to-note)
+(keymap-global-set "C-x p T" #'textproc-text-to-denote)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1055,10 +1056,12 @@ TODO: In one instance, a headnote links to a West Key Number Outline
 
 (defconst textproc-lev1 (rx (: "(" (+ digit) ")"))
   "(1), (2), ... (10), ...")
-(defconst textproc-lev2 (rx (: "(" (+ alpha) ")"))
+(defconst textproc-lev2 (rx (: "(" (+ lower) ")"))
   "(a), (b), ...")
 (defconst textproc-lev3 (rx (: "(" (+ (any "i" "v" "x")) ")"))
   "(i), (ii), ... (v), ... (x), ...")
+(defconst textproc-lev4 (rx (: "(" (+ upper ")")))
+  "(A), (B), ...")
 (defconst textproc-levs (rx (: "(" (+ (any alnum "i" "v" "x")) ")"
                                (group
                                 "(" (+ (any alnum "i" "v" "x")))))
@@ -1162,7 +1165,8 @@ TODO: In one instance, a headnote links to a West Key Number Outline
                          (string-replace "scrubbed" "processed"
                                          (format "RCW %s"
                                                  (file-name-nondirectory file)))
-                         textproc-process)))
+                         textproc-process))
+        (case-fold-search nil))
     (with-silent-modifications
       (with-current-buffer (find-file-noselect scrubbed-file)
         (save-excursion
@@ -1172,22 +1176,25 @@ TODO: In one instance, a headnote links to a West Key Number Outline
            do
            (cond
             ((looking-at-p textproc-rcw-re)
-             (insert "* RCW ") (forward-line) (delete-line))
-            ((looking-at-p "keycite")
+             (insert "* RCW ") (forward-line) (delete-line) (insert-char 10))
+            ((looking-at-p "KeyCite")
              (insert "- " ) (forward-line)
              (delete-horizontal-space) (insert "- ") (end-of-line)
              (insert-char 10))
             ((looking-at-p "West’s")
-             (cl-loop until (looking-at-p "currentness") do
+             (insert-char 10)
+             (cl-loop until (looking-at-p "Currentness") do
                       (center-line) (forward-line)
                       finally (delete-line)))
+            ((looking-at-p textproc-lev4) (insert "***** ")
+             (textproc-split-headline))
             ((looking-at-p textproc-lev3) (insert "**** ")
              (textproc-split-headline))
             ((looking-at-p textproc-lev2) (insert "*** ")
              (textproc-split-headline))
             ((looking-at-p textproc-lev1) (insert "** ")
              (textproc-split-headline))
-            ((looking-at-p (rx (| "credits" "official" "notes")))
+            ((looking-at-p (rx (| "Credits" "OFFICIAL" "Notes")))
              (insert "* ")))
            (forward-line)))
         (write-file processed-file)
@@ -1226,31 +1233,35 @@ For an RCW txt file."
     (cl-loop ; main loop; by lines
      until (eobp)
      do
-     (cl-loop
-      named second-loop ; secondary loop; empty lines
-      while (eolp)
-      do
-      (if (eobp)
-          (cl-return-from second-loop)
-        (delete-char 1)))
-     (when (looking-at-p (rx "document details"))
-       (cl-loop ; intermediate small loop; deletes document details
+
+     ;; delete search details
+     (when (looking-at-p (rx "search details"))
+       (cl-loop
         until (looking-at-p "status icons:")
         do (delete-line)
         finally (delete-line)))
+
+     ;; split a double heading (_)(_)
      (when (looking-at textproc-levs) (goto-char (match-beginning 1)) (insert 32 10 10))
-     (cl-loop   ; third loop; a single line; delete nonbreaking spaces
-      until (eolp)
-      do
-      (if (eql (following-char) 160)
-          (delete-char 1)
-        (forward-char))
-      finally     ; end of third loop; single space between paragraphs
-      (unless
-          (eql (char-before (- (point) 1)) 10)
-        (forward-char)
-        (while (eql (following-char) 160) (delete-char 1))
-        (when (eolp) (forward-char))))
+
+     ;; remove non-breaking spaces and single-space
+     (cl-loop until (eolp) do
+              (if (eql (following-char) 160)
+                  (delete-char 1)
+                (forward-char))
+              finally
+              (if (bolp)
+                  (delete-char 1)
+                (forward-char)
+                (cl-loop until (eolp) do
+                         (if (eql (following-char) 160)
+                             (delete-char 1)
+                           (forward-char))
+                         finally
+                         (if (bolp)
+                             (forward-char)
+                           (forward-line)))))
+
      finally ; end of main loop; delete `end-of-document'
      (delete-region (point)
                     (and
