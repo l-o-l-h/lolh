@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-18 09:40:27 lolh-mbp-16>
-;;; Version: 0.0.6
+;;; Time-stamp: <2024-11-20 01:38:36 lolh-mbp-16>
+;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -455,44 +455,6 @@ TYPE can be `copy' or `link' (hardlink)."
      (beginning-of-line)))
 
 
-(defun textproc-delete-underscores-and-single-space ()
-  "Delete all non-breaking spaces (ASCII 160) in the line."
-
-  (save-excursion
-    (cl-loop
-     until (eobp)
-     do
-     (cl-loop
-      named second-loop
-      while (eolp)
-      do
-      (if (eobp)
-          (cl-return-from second-loop)
-        (delete-char 1)))
-     (when (looking-at-p (rx "document details"))
-       (cl-loop
-        until (looking-at-p "status icons:")
-        do (delete-line)
-        finally (delete-line)))
-     (cl-loop
-      until (eolp)
-      do
-      (if (eql (following-char) 160)
-          (delete-char 1)
-        (forward-char))
-      finally
-      (unless
-          (eql (char-before (- (point) 1)) 10)
-        (forward-char)
-        (while (eql (following-char) 160) (delete-char 1))
-        (when (eolp) (forward-char))))
-     finally
-     (delete-region (point)
-                    (and
-                     (search-backward "end of document")
-                     (pos-bol))))))
-
-
 (defmacro textproc-delete-underscores-mark-pages ()
   "Delete all non-breaking spaces (ASCII 160) in the line.
 
@@ -843,25 +805,6 @@ The region describing the Search Details is also deleted."
     scrubbed-file))
 
 
-(defun textproc-scrub-statute-lines (file)
-  "Delete from FILE non-breaking spaces and ensure a single space between paras."
-
-  (interactive "f")
-
-  (let ((txt-file (expand-file-name file))
-        (scrubbed-file (expand-file-name
-                        (format "%s (scrubbed).txt" (file-name-base file))
-                        textproc-process)))
-    (with-silent-modifications
-      (with-current-buffer (find-file-noselect txt-file)
-        (save-excursion
-          (goto-char (point-min))
-          (textproc-delete-underscores-and-single-space))
-        (write-file scrubbed-file)
-        (textproc-bkup-file scrubbed-file textproc-save-txt 'link)
-        (delete-file txt-file)))))
-
-
 (defun textproc-process-case (file)
   "Process a case found in FILE.
 
@@ -1094,6 +1037,225 @@ TODO: In one instance, a headnote links to a West Key Number Outline
         ((looking-at-p (rx eol)))
 
         )))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; RCW Statutes
+
+
+(defconst textproc-rcw-re (rx
+                           bos
+                           (group
+                            (opt (+ "*") space)
+                            (group (opt "RCW" space)
+                                   (group (= 3 (** 2 3 digit) "."))))
+                           space)
+  "[*]+ RCW ##.###.##. ")
+
+
+(defconst textproc-lev1 (rx (: "(" (+ digit) ")"))
+  "(1), (2), ... (10), ...")
+(defconst textproc-lev2 (rx (: "(" (+ alpha) ")"))
+  "(a), (b), ...")
+(defconst textproc-lev3 (rx (: "(" (+ (any "i" "v" "x")) ")"))
+  "(i), (ii), ... (v), ... (x), ...")
+(defconst textproc-levs (rx (: "(" (+ (any alnum "i" "v" "x")) ")"
+                               (group
+                                "(" (+ (any alnum "i" "v" "x")))))
+  "(_)(_)")
+(defconst textproc-lev-with-body (rx (: "(" (+ (any alnum)) ")" space nonl))
+  "(_) text")
+
+
+(defun textproc-split-headline ()
+  "If a level headline has text, move the text to the next line."
+
+  (when (looking-at textproc-lev-with-body)
+    (goto-char (match-end 0)) (backward-char) (insert-char 10)))
+
+
+(defun textproc-statute-signature ()
+  "Return the statute number as Denote SIGNATURE."
+
+  (save-excursion
+    (goto-char (point-min))
+    (re-search-forward textproc-rcw-re (pos-eol))
+    (format "%s" (match-string-no-properties 2))))
+
+
+(defun textproc-statute-title ()
+  "Return the first line of the statute (sans asterisks) as a Denote TITLE."
+
+  (save-excursion
+    (goto-char (point-min))
+    (buffer-substring-no-properties (+ (point) 2) (pos-eol))))
+
+
+(defun textproc-statute-date ()
+  "Return the date of the statute in the format YYYY-MM-DDT00:00."
+
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward "Effective: ")
+    (re-search-forward textproc-cal-date-re (pos-eol))
+    (format-time-string "%FT%R" (date-to-time (match-string-no-properties 0)))))
+
+
+(defun textproc-statute-rtf-to-note (file)
+  "Convert an `rtf' FILE into a Denote note."
+
+  (interactive "fRTF File: ")
+
+  (textproc-convert-statute-to-note
+   (textproc-convert-statute-to-org
+    (textproc-process-statute
+     (textproc-scrub-statute-lines
+      (textproc-textutil file))))))
+
+
+(defun textproc-convert-statute-to-note (file)
+  "Save org FILE as a Denote `note' file."
+
+  (interactive "fOrg file: ")
+
+  (let* ((org-file (expand-file-name file))
+         (nfn (expand-file-name
+               (file-name-nondirectory org-file) (file-name-concat (denote-directory) "law"))))
+    (with-current-buffer (find-file-noselect org-file)
+      (let ((cb (current-buffer))
+            (title (textproc-statute-title))
+            (kws (list "statute" "rcw" "law"))
+            (signature (textproc-statute-signature))
+            (date (textproc-statute-date))
+            (denote-rename-confirmations nil)
+            (denote-kill-buffers t))
+        (rename-file org-file nfn t)
+        (kill-buffer cb)
+        (textproc-bkup-file
+         (denote-rename-file nfn title kws signature date)
+         textproc-save-org 'link)))))
+
+
+(defun textproc-convert-statute-to-org (file)
+  "Save processed FILE as an `org' file."
+
+  (interactive "fProcessed file: ")
+
+  (let ((processed-file (expand-file-name file))
+        (org-file (expand-file-name
+                   (file-name-with-extension
+                    (string-replace " (processed)" "" (file-name-base file)) "org")
+                   textproc-process)))
+    (copy-file processed-file org-file)
+    (textproc-bkup-file org-file  textproc-save-org 'copy)
+    (delete-file processed-file)
+    org-file))
+
+
+(defun textproc-process-statute (file)
+  "Process a scrubbed statute FILE."
+
+  (interactive "fScrubbed file: ")
+
+  (let ((scrubbed-file (expand-file-name file))
+        (processed-file (expand-file-name
+                         (string-replace "scrubbed" "processed"
+                                         (format "RCW %s"
+                                                 (file-name-nondirectory file)))
+                         textproc-process)))
+    (with-silent-modifications
+      (with-current-buffer (find-file-noselect scrubbed-file)
+        (save-excursion
+          (goto-char (point-min))
+          (cl-loop
+           until (eobp)
+           do
+           (cond
+            ((looking-at-p textproc-rcw-re)
+             (insert "* RCW ") (forward-line) (delete-line))
+            ((looking-at-p "keycite")
+             (insert "- " ) (forward-line)
+             (delete-horizontal-space) (insert "- ") (end-of-line)
+             (insert-char 10))
+            ((looking-at-p "West’s")
+             (cl-loop until (looking-at-p "currentness") do
+                      (center-line) (forward-line)
+                      finally (delete-line)))
+            ((looking-at-p textproc-lev3) (insert "**** ")
+             (textproc-split-headline))
+            ((looking-at-p textproc-lev2) (insert "*** ")
+             (textproc-split-headline))
+            ((looking-at-p textproc-lev1) (insert "** ")
+             (textproc-split-headline))
+            ((looking-at-p (rx (| "credits" "official" "notes")))
+             (insert "* ")))
+           (forward-line)))
+        (write-file processed-file)
+        (textproc-bkup-file processed-file textproc-save-txt 'link)
+        (delete-file scrubbed-file)))
+    (kill-buffer (file-name-nondirectory processed-file))
+    processed-file))
+
+
+(defun textproc-scrub-statute-lines (file)
+  "Delete from FILE non-breaking spaces and ensure a single space between paras."
+
+  (interactive "fText file: ")
+
+  (let ((txt-file (expand-file-name file))
+        (scrubbed-file (expand-file-name
+                        (format "%s (scrubbed).txt" (file-name-base file))
+                        textproc-process)))
+    (with-silent-modifications
+      (with-current-buffer (find-file-noselect txt-file)
+        (save-excursion
+          (goto-char (point-min))
+          (textproc-delete-underscores-and-single-space))
+        (write-file scrubbed-file)
+        (textproc-bkup-file scrubbed-file textproc-save-txt 'link)
+        (delete-file txt-file)))
+    scrubbed-file))
+
+
+(defun textproc-delete-underscores-and-single-space ()
+  "Delete all non-breaking spaces (ASCII 160) in the line and single space.
+
+For an RCW txt file."
+
+  (save-excursion
+    (cl-loop ; main loop; by lines
+     until (eobp)
+     do
+     (cl-loop
+      named second-loop ; secondary loop; empty lines
+      while (eolp)
+      do
+      (if (eobp)
+          (cl-return-from second-loop)
+        (delete-char 1)))
+     (when (looking-at-p (rx "document details"))
+       (cl-loop ; intermediate small loop; deletes document details
+        until (looking-at-p "status icons:")
+        do (delete-line)
+        finally (delete-line)))
+     (when (looking-at textproc-levs) (goto-char (match-beginning 1)) (insert 32 10 10))
+     (cl-loop   ; third loop; a single line; delete nonbreaking spaces
+      until (eolp)
+      do
+      (if (eql (following-char) 160)
+          (delete-char 1)
+        (forward-char))
+      finally     ; end of third loop; single space between paragraphs
+      (unless
+          (eql (char-before (- (point) 1)) 10)
+        (forward-char)
+        (while (eql (following-char) 160) (delete-char 1))
+        (when (eolp) (forward-char))))
+     finally ; end of main loop; delete `end-of-document'
+     (delete-region (point)
+                    (and
+                     (search-backward "West’s RCWA")
+                     (pos-bol))))))
 
 
 (provide 'textproc)
