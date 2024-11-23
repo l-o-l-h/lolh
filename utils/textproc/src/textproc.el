@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-20 03:53:57 lolh-mbp-16>
+;;; Time-stamp: <2024-11-23 15:28:01 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -28,6 +28,8 @@
 (keymap-global-set "M-U"     #'textproc-unlock-docs)
 (keymap-global-set "C-x p R" #'textproc-statute-rtf-to-note)
 (keymap-global-set "C-x p T" #'textproc-text-to-denote)
+(keymap-global-set "C-x p l" #'textproc-display-rcw-levels)
+(keymap-global-set "C-c N"   #'textproc-display-rcw-next-level)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1069,6 +1071,18 @@ TODO: In one instance, a headnote links to a West Key Number Outline
 (defconst textproc-lev-with-body (rx (: "(" (+ (any alnum)) ")" space nonl))
   "(_) text")
 
+(defconst textproc-lev-with-split-body
+  (rx (:
+       bol
+       (+ "*") space ; **_
+       (group-n 1 "(" (+ (any alnum)) ")" space) ; (1)_
+       (not nonl) ; \n
+       (group-n 2 (opt (+ nonl))) ; text
+       eol
+       )
+      )
+  "(_) $text")
+
 
 (defun textproc-split-headline ()
   "If a level headline has text, move the text to the next line."
@@ -1267,6 +1281,44 @@ For an RCW txt file."
                     (and
                      (search-backward "West’s RCWA")
                      (pos-bol))))))
+
+
+;;; C-x p l
+(defun textproc-display-rcw-levels (file)
+  "Open a statute in FILE and begin adding missing headline titles."
+
+  ;; TODO: this procedure is not good; figure out a better way to pick a file
+  ;; and display it.
+  (interactive "fFile: ")
+
+  (let ((fb (or (get-file-buffer file)
+                (find-file-noselect file))))
+    (require 'org)
+    (display-buffer fb '((display-buffer-pop-up-window)))
+    (org-next-visible-heading 1)
+    (org-fold-show-branches)
+    (textproc-display-next-lev)))
+
+
+;;; C-c N
+(defun textproc-display-rcw-next-level ()
+  "Move to the next headline that is missing a title."
+
+  (interactive)
+
+  (beginning-of-line)
+  (when (looking-at (rx (+ "*") space "(" (+ alnum) ")" space (group (+ nonl)) eol))
+    (replace-match "/[\\1]/" t nil nil 1)
+    (capitalize-region (match-beginning 1) (match-end 1)))
+  (org-fold-hide-entry)
+  (if (re-search-forward textproc-lev-with-split-body nil t)
+      (progn (goto-char (match-end 1))
+             (org-fold-show-subtree))
+    (progn
+      (goto-char (point-min))
+      (org-fold-hide-sublevels 1)
+      (org-next-visible-heading 1)
+      (org-fold-show-branches))))
 
 
 (provide 'textproc)

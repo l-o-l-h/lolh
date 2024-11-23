@@ -3,9 +3,9 @@
 ;;; nevertheless, you probably don't want to edit it.
 ;;; -*- End Of Bookmark File Format Version Stamp -*-
 (("System-Inits" (filename . "~/.local/src/System-Inits/")
-  (front-context-string . ".git\n  -rw-r--r-")
-  (rear-context-string . "80 Oct 27 04:19 ") (position . 220)
-  (last-modified 26406 16974 961169 0))
+ (front-context-string . ".git\n  -rw-r--r-")
+ (rear-context-string . "80 Oct 27 04:19 ") (position . 220)
+ (last-modified 26406 16974 961169 0))
 ("init-local.el"
  (filename . "~/.local/src/System-Inits/init-local.el")
  (front-context-string . "\n\n\n;;;;;;;;;;;;;")
