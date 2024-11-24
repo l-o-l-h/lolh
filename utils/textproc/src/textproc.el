@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-23 15:28:01 lolh-mbp-16>
+;;; Time-stamp: <2024-11-24 10:39:31 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1068,27 +1068,34 @@ TODO: In one instance, a headnote links to a West Key Number Outline
                                (group
                                 "(" (+ (any alnum "i" "v" "x")))))
   "(_)(_)")
-(defconst textproc-lev-with-body (rx (: "(" (+ (any alnum)) ")" space nonl))
-  "(_) text")
 
-(defconst textproc-lev-with-split-body
+(defconst textproc-lev-without-title
   (rx (:
        bol
        (+ "*") space ; **_
-       (group-n 1 "(" (+ (any alnum)) ")" space) ; (1)_
+       (group-n 1 "(" (+ alnum) ")" space) ; (1)_
        (not nonl) ; \n
        (group-n 2 (opt (+ nonl))) ; text
        eol
-       )
-      )
+       ))
   "(_) $text")
+
+(defconst textproc-lev-with-title
+  (rx (:
+       bol
+       (+ "*") space
+       "(" (+ alnum) ")" space
+       (group (+ nonl))
+       eol
+       ))
+  "(_) title")
 
 
 (defun textproc-split-headline ()
   "If a level headline has text, move the text to the next line."
 
-  (when (looking-at textproc-lev-with-body)
-    (goto-char (match-end 0)) (backward-char) (insert-char 10)))
+  (when (looking-at textproc-lev-with-title)
+    (goto-char (match-beginning 1)) (insert-char 10)))
 
 
 (defun textproc-statute-signature ()
@@ -1293,8 +1300,8 @@ For an RCW txt file."
 
   (let ((fb (or (get-file-buffer file)
                 (find-file-noselect file))))
-    (require 'org)
-    (display-buffer fb '((display-buffer-pop-up-window)))
+    (display-buffer fb '((display-buffer-reuse-window
+                          display-buffer-pop-up-window)))
     (org-next-visible-heading 1)
     (org-fold-show-branches)
     (textproc-display-next-lev)))
@@ -1307,11 +1314,11 @@ For an RCW txt file."
   (interactive)
 
   (beginning-of-line)
-  (when (looking-at (rx (+ "*") space "(" (+ alnum) ")" space (group (+ nonl)) eol))
+  (when (looking-at textproc-lev-with-title)
     (replace-match "/[\\1]/" t nil nil 1)
     (capitalize-region (match-beginning 1) (match-end 1)))
   (org-fold-hide-entry)
-  (if (re-search-forward textproc-lev-with-split-body nil t)
+  (if (re-search-forward textproc-lev-without-title nil t)
       (progn (goto-char (match-end 1))
              (org-fold-show-subtree))
     (progn
