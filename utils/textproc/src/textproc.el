@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-24 10:39:31 lolh-mbp-16>
+;;; Time-stamp: <2024-11-25 10:14:32 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1094,6 +1094,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
 (defun textproc-split-headline ()
   "If a level headline has text, move the text to the next line."
 
+  (beginning-of-line)
   (when (looking-at textproc-lev-with-title)
     (goto-char (match-beginning 1)) (insert-char 10)))
 
@@ -1125,16 +1126,22 @@ TODO: In one instance, a headnote links to a West Key Number Outline
     (format-time-string "%FT%R" (date-to-time (match-string-no-properties 0)))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Process RCW
+
+
+;;; C-x p R
 (defun textproc-statute-rtf-to-note (file)
   "Convert an `rtf' FILE into a Denote note."
 
   (interactive "fRTF File: ")
 
-  (textproc-convert-statute-to-note
-   (textproc-convert-statute-to-org
-    (textproc-process-statute
-     (textproc-scrub-statute-lines
-      (textproc-textutil file))))))
+  (textproc-display-rcw-levels
+   (textproc-convert-statute-to-note
+    (textproc-convert-statute-to-org
+     (textproc-process-statute
+      (textproc-scrub-statute-lines
+       (textproc-textutil file)))))))
 
 
 (defun textproc-convert-statute-to-note (file)
@@ -1155,9 +1162,9 @@ TODO: In one instance, a headnote links to a West Key Number Outline
             (denote-kill-buffers t))
         (rename-file org-file nfn t)
         (kill-buffer cb)
-        (textproc-bkup-file
-         (denote-rename-file nfn title kws signature date)
-         textproc-save-org 'link)))))
+        (let ((ndf (denote-rename-file nfn title kws signature date)))
+          (textproc-bkup-file ndf textproc-save-org 'link)
+          ndf)))))
 
 
 (defun textproc-convert-statute-to-org (file)
@@ -1300,8 +1307,7 @@ For an RCW txt file."
 
   (let ((fb (or (get-file-buffer file)
                 (find-file-noselect file))))
-    (display-buffer fb '((display-buffer-reuse-window
-                          display-buffer-pop-up-window)))
+    (switch-to-buffer fb)
     (org-next-visible-heading 1)
     (org-fold-show-branches)
     (textproc-display-next-lev)))
