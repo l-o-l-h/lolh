@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-25 10:14:32 lolh-mbp-16>
+;;; Time-stamp: <2024-11-26 18:54:14 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -51,6 +51,16 @@
 (defconst textproc-pdftk-command
   (concat "java -jar " textproc-pdftk-jar-path " \'%s\' cat %s-%s output \'%s\'"))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Global markers
+
+
+(setf tp-fn (make-marker)
+      tp-bop (make-marker)
+      tp-eop (make-marker))
+
+(setf tp-fn-num 0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Regular Expressions
@@ -229,6 +239,22 @@ and divides it into two sections.")
   {                 1                      }{    2    }{    3   }{4}{5}
 Used by pdftk-split-dismissal-old.")
 
+
+(defconst textproc-footnote-re
+  (rx (:
+       (not nonl)
+       bol (group (+ digit)) eol
+       (not nonl)))
+
+  "Footnote marker: number in a separate paragraph.")
+
+
+(defconst textproc-footnote-id-re
+  "\\_<[[:ascii:]]+[\"”.]?\\(%s\\)\\_>")
+
+
+(defmacro textproc-find-footnote-id (num eop)
+  `(re-search-forward (format textproc-footnote-id-re ,num) ,eop t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1042,6 +1068,65 @@ TODO: In one instance, a headnote links to a West Key Number Outline
         )))))
 
 
+(defun textproc-process-footnotes ()
+  "Link footnotes in paragraphs with their corresponding text below."
+
+  (interactive)
+
+  (save-excursion
+    (cl-loop while (textproc-find-next-footnote) do
+             (message "fn: %s tp:fn %s  tp-bop: %s  tp-eop: %s'"
+                      tp-fn-num tp-fn tp-bop tp-eop)
+             (goto-char tp-fn)
+             (forward-line))))
+
+
+(defun textproc-find-next-footnote ()
+  "Locate the next footnote marker, and set its position.
+
+Also set markers at the start and end positions of the preceding paragraph.
+Return `t' upon success.  Point will be at the beginning of the paragraph
+containing the footnote identifier.
+Return `nil' when there are no more footnotes to process."
+
+  (when (re-search-forward textproc-footnote-re nil t)
+    (forward-line -1)
+    (setf tp-fn-num (match-string-no-properties 1))
+    (set-marker tp-fn (pos-bol)) ; footnote marker
+    (forward-line -2)
+    (set-marker tp-bop (point)) ; end-of-paragraph marker
+    (set-marker tp-eop (pos-eol))  ; beginning of paragraph marker
+    t))
+
+
+(defun textproc-find-footnote-ids (fn-num eop)
+  "Locate possible footnote ids for FN-NUM in a paragraph limited to EOP and mark."
+
+  (cl-loop with num = 0
+           while (textproc-find-footnote-id fn-num eop)
+           do
+           (cl-incf num)
+           (replace-match
+            (format "=>fn#%s:%s<=" num (match-string-no-properties 1)) nil nil nil 1)))
+
+
+(defun textproc-footnote-create-link ()
+  "Create the link for the current footnote.
+
+Point is to be at the footnote identifier."
+
+  (interactive)
+
+  (if (looking-at (rx (group (+ digit)) space))
+      (progn
+        (replace-match "[fn:\\1]" nil nil nil 1)
+        (goto-char tp-fn)
+        (delete-line)
+        (insert (format "[fn:%s]" tp-fn-num))
+        (debug))
+    (error "Malformed footnote identifier at %s" (point))))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RCW Statutes
 
@@ -1310,7 +1395,7 @@ For an RCW txt file."
     (switch-to-buffer fb)
     (org-next-visible-heading 1)
     (org-fold-show-branches)
-    (textproc-display-next-lev)))
+    (textproc-display-rcw-next-level)));
 
 
 ;;; C-c N
