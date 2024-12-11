@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-11-26 18:54:14 lolh-mbp-16>
+;;; Time-stamp: <2024-12-10 17:42:13 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -64,6 +64,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Regular Expressions
+
+
+(defconst textproc-opinion-start-re
+  (rx
+   (group bol
+          (opt (* not-newline))
+          "opinion")
+   (opt space "published in part")
+   eol))
 
 
 (defconst textproc-case-page-re (rx (:
@@ -144,7 +153,7 @@ TODO: But see:
 (defconst textproc-cal-date-re
   (rx (: bow (| "January" "February" "March" "April" "May" "June"
                 "July" "August" "September" "October" "November" "December")
-         eow space) (= 2 digit) ", " (= 4 digit) eow)
+         eow space) (** 1 2 digit) ", " (= 4 digit) eow)
 
   "Regexp to find a calendar date such as
 - January 01, 2024")
@@ -495,7 +504,7 @@ Mark all page numbers as {{ **123 }}."
 
 
 (defun textproc-unpub-p ()
-  "Return `unpub' if the current case is unpublished; `nil' otherwise."
+  "Return ` unpub' if the current case is unpublished; `nil' otherwise."
 
   (save-excursion
     (goto-char (point-min))
@@ -601,7 +610,7 @@ for CA
                                    "")))
                               ("cal" "")))))
            (unpub (or (textproc-unpub-p) "")))
-      (format "%s%s%s" court subcourt unpub))))
+      (format "%s %s %s" court subcourt unpub))))
 
 
 (defun textproc-case-date ()
@@ -633,7 +642,7 @@ real one.  It is equal to the first one (I think)."
   (save-excursion
     (goto-char (point-min))
     (let ((op1 (and
-                (re-search-forward (rx (group bol (opt (* not-newline)) "opinion") eol))
+                (re-search-forward textproc-opinion-start-re)
                 (match-string 1))))
       (re-search-forward (format "^%s" op1))
       (beginning-of-line)
@@ -653,7 +662,7 @@ real one.  It is equal to the first one (I think)."
 ;; textproc-text-to-denote :: calls the five preceding commands, then converts to a denote file
 
 
-;;; C-x p t
+;;; C-x p T
 (defun textproc-text-to-denote (file)
   "Convert the `rtf' FILE into an `org' file and save as a Denote note.
 
