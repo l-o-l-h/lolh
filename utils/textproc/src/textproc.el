@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-10 17:42:13 lolh-mbp-16>
+;;; Time-stamp: <2024-12-12 19:04:27 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -61,6 +61,8 @@
       tp-eop (make-marker))
 
 (setf tp-fn-num 0)
+
+(defvar tp-fn-arr nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Regular Expressions
@@ -947,7 +949,7 @@ Return the name of the processed FILE."
           (re-search-forward "Opinion") (beginning-of-line) (insert "** "))
 
         ;; turn possible dissenting section into level 2 headling
-        (when (re-search-forward "dissenting" nil t)
+        (when (re-search-forward (rx (| "(dissenting)" "(concurring)")) nil t)
           (beginning-of-line) (insert "** "))
 
         ;; delete the All Citations section at the end of the buffer
@@ -1116,7 +1118,20 @@ Return `nil' when there are no more footnotes to process."
            do
            (cl-incf num)
            (replace-match
-            (format "=>fn#%s:%s<=" num (match-string-no-properties 1)) nil nil nil 1)))
+            (propertize
+             (format "%s<--#%s" (match-string-no-properties 1) num)
+             'face '(:foreground "red"))
+            nil nil nil 1)
+           (push (match-beginning 0) tp-fn-arr)))
+
+(defun textproc-pick-footnote-id (id)
+  "The user picks a footnote id, and then clears the highlighted text."
+
+  (interactive "nID? ")
+
+  (if (length< tp-fn-arr id)
+      (error "%s is too big. Pick a footnote between 1 and %s" id (length tp-fn-arr))
+    (message "You picked %s" id)))
 
 
 (defun textproc-footnote-create-link ()
