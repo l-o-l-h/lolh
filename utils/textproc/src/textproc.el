@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-12 19:04:27 lolh-mbp-16>
+;;; Time-stamp: <2024-12-22 12:17:05 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -60,9 +60,10 @@
       tp-bop (make-marker)
       tp-eop (make-marker))
 
-(setf tp-fn-num 0)
-
-(defvar tp-fn-arr nil)
+(defvar textproc-fn-num 0
+  "The current footnote number being processed.")
+(defvar textproc-fn-id-num 0
+  "The total number of footnote ids found in a paragraph.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Regular Expressions
@@ -261,11 +262,42 @@ Used by pdftk-split-dismissal-old.")
 
 
 (defconst textproc-footnote-id-re
-  "\\_<[[:ascii:]]+[\"”.]?\\(%s\\)\\_>")
+  "[^[:digit:][:space:]]\\(%s\\)\\>"
+  "A regular expression for finding a potential footnote in a paragram.
+The footnote number at the end of a string that does not follow a space
+or a number.  This has been the most successful re so far.")
 
 
 (defmacro textproc-find-footnote-id (num eop)
+  "Find the next possible footnote NUM in a paragraph bounded by EOP."
   `(re-search-forward (format textproc-footnote-id-re ,num) ,eop t))
+
+
+(defmacro textproc-found-footnote-marker (fn id)
+  "Create a footnote marker from FN (footnote number) and ID (the nth id).
+
+This macro creates a new footnote marker."
+  `(format "%s<--#%s" ,fn ,id))
+
+
+(defconst textproc-found-footnote-id-re
+  "%s<--#\\(%s\\)"
+  "Each potential footnote in a paragraph is marked for easy identification:
+1<--#2
+
+This macro is used to find a footnote marker that has aleady been created.")
+
+
+(defmacro textproc-found-footnote-id (fn id eop)
+  "Find the next marked footnote with ID, FN (number), EOP (end of par)."
+  `(re-search-forward (format textproc-found-footnote-id-re ,fn ,id) ,eop t))
+
+
+(defconst textproc-linked-footnote "^[\n]?[fn:[[:digit:]]+] "
+  "A blank line followed by a linked footnote, eg:
+\n
+[fn:1]")
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -946,9 +978,12 @@ Return the name of the processed FILE."
           (textproc-create-list-items)
 
           ;; turn Opinion section into level 2 headline
-          (re-search-forward "Opinion") (beginning-of-line) (insert "** "))
+          (re-search-forward "Opinion") (beginning-of-line) (insert "** ")
 
-        ;; turn possible dissenting section into level 2 headling
+          ;; process footnote links after finding the Opinion section
+          (textproc-process-footnotes))
+
+        ;; turn possible concurring or dissenting section into level 2 headling
         (when (re-search-forward (rx (| "(dissenting)" "(concurring)")) nil t)
           (beginning-of-line) (insert "** "))
 
@@ -1074,9 +1109,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
          (insert "- /") (goto-char (pos-eol)) (insert-char ?/) (beginning-of-line))
 
         ;; looking at a blank line
-        ((looking-at-p (rx eol)))
-
-        )))))
+        ((looking-at-p (rx eol))))))))
 
 
 (defun textproc-process-footnotes ()
@@ -1086,69 +1119,108 @@ TODO: In one instance, a headnote links to a West Key Number Outline
 
   (save-excursion
     (cl-loop while (textproc-find-next-footnote) do
-             (message "fn: %s tp:fn %s  tp-bop: %s  tp-eop: %s'"
-                      tp-fn-num tp-fn tp-bop tp-eop)
+             (textproc-find-possible-footnote-ids)
+             ;; don't ask User to verify if there is only one option
+             (if (= 1 textproc-fn-id-num)
+                 (textproc-footnote-link)
+               ;; ask the User to pick the correct footnote
+               (call-interactively 'textproc-footnote-create-link))
+
+             ;; Jump to the line following the footnote id and repeat
              (goto-char tp-fn)
              (forward-line))))
 
 
 (defun textproc-find-next-footnote ()
-  "Locate the next footnote marker, and set its position.
+  "Locate the next footnote marker, and mark its position.
 
-Also set markers at the start and end positions of the preceding paragraph.
+Also set markers at the start and end positions of the paragraph
+in which the footnote is found.
 Return `t' upon success.  Point will be at the beginning of the paragraph
 containing the footnote identifier.
 Return `nil' when there are no more footnotes to process."
 
   (when (re-search-forward textproc-footnote-re nil t)
+
+    ;; Empty line prior to the footnote id
+    (setf textproc-fn-num (match-string-no-properties 1))
     (forward-line -1)
-    (setf tp-fn-num (match-string-no-properties 1))
-    (set-marker tp-fn (pos-bol)) ; footnote marker
-    (forward-line -2)
+    (set-marker tp-fn (point)) ; footnote marker
+    (forward-line -1)
+
+    (debug)
+
+    ;; Occasionally two or more footnotes will be in a single paragraph;
+    ;; this will find the preceding paragraph that is not a footnote.
+    (while (progn
+             (forward-line -1)
+             (looking-at textproc-linked-footnote)))
+
     (set-marker tp-bop (point)) ; end-of-paragraph marker
     (set-marker tp-eop (pos-eol))  ; beginning of paragraph marker
     t))
 
 
-(defun textproc-find-footnote-ids (fn-num eop)
-  "Locate possible footnote ids for FN-NUM in a paragraph limited to EOP and mark."
+(defun textproc-find-possible-footnote-ids ()
+  "Locate possible footnote ids for TEXTPROC-FN-NUM in a par limited to TP-EOP."
 
-  (cl-loop with num = 0
-           while (textproc-find-footnote-id fn-num eop)
-           do
-           (cl-incf num)
-           (replace-match
-            (propertize
-             (format "%s<--#%s" (match-string-no-properties 1) num)
-             'face '(:foreground "red"))
-            nil nil nil 1)
-           (push (match-beginning 0) tp-fn-arr)))
-
-(defun textproc-pick-footnote-id (id)
-  "The user picks a footnote id, and then clears the highlighted text."
-
-  (interactive "nID? ")
-
-  (if (length< tp-fn-arr id)
-      (error "%s is too big. Pick a footnote between 1 and %s" id (length tp-fn-arr))
-    (message "You picked %s" id)))
+  (save-excursion
+    (cl-loop with id = 0
+             while (textproc-find-footnote-id textproc-fn-num tp-eop)
+             do
+             (cl-incf id)
+             (replace-match
+              (propertize
+               (textproc-found-footnote-marker (match-string-no-properties 1) id)
+               'face '(:foreground "red"))
+              nil nil nil 1)
+             finally (setf textproc-fn-id-num id))))
 
 
-(defun textproc-footnote-create-link ()
-  "Create the link for the current footnote.
+(defun textproc-footnote-create-link (id)
+  "Create the link for the current footnote at #ID.
 
-Point is to be at the footnote identifier."
+The User will pick the ID# of the correct footnote position."
 
-  (interactive)
+  ;; (interactive "nID? ")
 
-  (if (looking-at (rx (group (+ digit)) space))
-      (progn
-        (replace-match "[fn:\\1]" nil nil nil 1)
-        (goto-char tp-fn)
-        (delete-line)
-        (insert (format "[fn:%s]" tp-fn-num))
-        (debug))
-    (error "Malformed footnote identifier at %s" (point))))
+  (interactive
+   (let ((done nil)
+         num)
+     (while (not done)
+       (setf num (read-char (format "Pick an ID between 1 and %s: " textproc-fn-id-num)))
+       ;; 1 = ASCII 49; 9 = ASCII 57
+       ;; textproc-fn-id-num is the number of found possible footnote ids
+       (if (and (> num 48)
+                (< num 58)
+                (<= (- num 48) textproc-fn-id-num))
+           (setf done t)
+         (and
+          (message "You must pick a number between 1 and %s" textproc-fn-id-num)
+          (sleep-for 2))))
+     (list (- num 48))))
+
+  (message "You picked %s" id)
+
+  (goto-char tp-bop)
+  (cl-loop
+   with num = 1
+   while (textproc-found-footnote-id textproc-fn-num num tp-eop)
+   do
+   (let ((fn-id (string-to-number (match-string-no-properties 1))))
+     (if (= id fn-id)
+         (textproc-footnote-link)
+       (replace-match (format "%s" textproc-fn-num))))
+   (cl-incf num)))
+
+
+(defun textproc-footnote-link ()
+  "Create the footnote link."
+
+  (replace-match (format "[fn:%s]" textproc-fn-num))
+  (save-excursion
+    (goto-char tp-fn)
+    (insert "[fn:") (end-of-line) (insert "] ") (delete-char 2)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
