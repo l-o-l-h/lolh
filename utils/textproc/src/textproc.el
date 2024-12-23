@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-22 12:17:05 lolh-mbp-16>
+;;; Time-stamp: <2024-12-23 09:24:31 lolh-mbp-16>
 ;;; Version: 0.0.7
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -250,53 +250,6 @@ and divides it into two sections.")
   "24-2-01234-06 [2024-01-01] LAST,First -- Stipulated Dismissal-OLD.pdf
   {                 1                      }{    2    }{    3   }{4}{5}
 Used by pdftk-split-dismissal-old.")
-
-
-(defconst textproc-footnote-re
-  (rx (:
-       (not nonl)
-       bol (group (+ digit)) eol
-       (not nonl)))
-
-  "Footnote marker: number in a separate paragraph.")
-
-
-(defconst textproc-footnote-id-re
-  "[^[:digit:][:space:]]\\(%s\\)\\>"
-  "A regular expression for finding a potential footnote in a paragram.
-The footnote number at the end of a string that does not follow a space
-or a number.  This has been the most successful re so far.")
-
-
-(defmacro textproc-find-footnote-id (num eop)
-  "Find the next possible footnote NUM in a paragraph bounded by EOP."
-  `(re-search-forward (format textproc-footnote-id-re ,num) ,eop t))
-
-
-(defmacro textproc-found-footnote-marker (fn id)
-  "Create a footnote marker from FN (footnote number) and ID (the nth id).
-
-This macro creates a new footnote marker."
-  `(format "%s<--#%s" ,fn ,id))
-
-
-(defconst textproc-found-footnote-id-re
-  "%s<--#\\(%s\\)"
-  "Each potential footnote in a paragraph is marked for easy identification:
-1<--#2
-
-This macro is used to find a footnote marker that has aleady been created.")
-
-
-(defmacro textproc-found-footnote-id (fn id eop)
-  "Find the next marked footnote with ID, FN (number), EOP (end of par)."
-  `(re-search-forward (format textproc-found-footnote-id-re ,fn ,id) ,eop t))
-
-
-(defconst textproc-linked-footnote "^[\n]?[fn:[[:digit:]]+] "
-  "A blank line followed by a linked footnote, eg:
-\n
-[fn:1]")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -694,6 +647,8 @@ real one.  It is equal to the first one (I think)."
 ;; textproc-textutil-case :: calls the main three preceding commands, so converts, scrubs, processes
 ;; textproc-text-to-org :: calls the four preceding commands, then converts to an org file
 ;; textproc-text-to-denote :: calls the five preceding commands, then converts to a denote file
+;; textproc-process-footnotes :: Link footnotes in paragraphs with their corresponding text below.
+;; textproc-add-stars-to-headline-levels1-4 :: Find all of the headlines and turn into org headings
 
 
 ;;; C-x p T
@@ -1112,6 +1067,66 @@ TODO: In one instance, a headnote links to a West Key Number Outline
         ((looking-at-p (rx eol))))))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Footnotes
+
+
+(defconst textproc-footnote-re
+  (rx (:
+       (not nonl)
+       bol (group (+ digit)) eol
+       (not nonl)))
+
+  "Footnote marker: number in a separate paragraph.
+
+\n
+1
+\n
+Footnote text...")
+
+
+(defconst textproc-footnote-id-re
+  "[^[:digit:][:space:]]\\(%s\\)\\>"
+  "A regular expression for finding a potential footnote in a paragram.
+The footnote number at the end of a string that does not follow a space
+or a number.  This has been the most successful re so far.")
+
+
+(defmacro textproc-find-footnote-id (num eop)
+  "Find the next possible footnote NUM in a paragraph bounded by EOP."
+  `(re-search-forward (format textproc-footnote-id-re ,num) ,eop t))
+
+
+(defmacro textproc-found-footnote-marker (fn id)
+  "Create a footnote marker from FN (footnote number) and ID (the nth id).
+
+This macro creates a new footnote marker."
+  `(format "%s<--#%s" ,fn ,id))
+
+
+(defconst textproc-found-footnote-id-re
+  "%s<--#\\(%s\\)"
+  "Each potential footnote in a paragraph is marked for easy identification:
+1<--#2
+
+This macro is used to find a footnote marker that has aleady been created.")
+
+
+(defmacro textproc-found-footnote-id (fn id eop)
+  "Find the next marked footnote with ID, FN (number), EOP (end of par)."
+  `(re-search-forward (format textproc-found-footnote-id-re ,fn ,id) ,eop t))
+
+
+(defconst textproc-linked-footnote "^[\n]?[fn:[[:digit:]]+] "
+  "A possible blank line followed by a linked footnote, eg:
+\n?
+[fn:1]")
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Process Footnotes
+
+
 (defun textproc-process-footnotes ()
   "Link footnotes in paragraphs with their corresponding text below."
 
@@ -1221,6 +1236,105 @@ The User will pick the ID# of the correct footnote position."
   (save-excursion
     (goto-char tp-fn)
     (insert "[fn:") (end-of-line) (insert "] ") (delete-char 2)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Opinion Outline
+
+
+(rx-define textproc-page-marker
+  (seq bol "<<" (** 1 2 "*") (+ digit) ">>"))
+
+;; "\nANALYSIS\n" (but only one word)
+(rx-define textproc-op-headline-level1
+  (seq (one-or-more upper) eow))
+
+;; "\nI. Title\n" (up to 4
+(rx-define textproc-op-headline-level2
+  (seq (** 1 4 (in "I" "V" "X")) "."))
+
+;; "\nA. Title\n" (only one)
+(rx-define textproc-op-headline-level3
+  (seq (in "A-H") "."))
+
+;; "\ni. Title\n" (up to 4)
+(rx-define textproc-op-headline-level4
+  (seq (** 1 4 (in "i" "v" "x")) "."))
+
+
+(defconst textproc-op-headline-levels1-4
+  (rx-to-string
+   '(seq
+     bol
+     (opt textproc-page-marker space)
+     (|
+      textproc-op-headline-level4
+      textproc-op-headline-level3
+      textproc-op-headline-level2
+      textproc-op-headline-level1
+      )
+     (opt space (one-or-more nonl))
+     eol))
+
+  "Regular expression identifying a headline level 1-4.")
+
+
+(defun textproc-outline-level-p ()
+  "Return t if cursor is at a headline level or nil otherwise."
+
+  (let ((case-fold-search nil))
+    (looking-at textproc-op-headline-levels1-4)))
+
+
+(defun textproc-find-next-outline-level ()
+  "Command to find the next outline heading."
+
+  (interactive)
+
+  (let ((case-fold-search nil))
+    (re-search-forward textproc-op-headline-levels1-4 nil t)))
+
+
+
+(defun textproc-add-stars-to-headline-level (level)
+  "Insert stars to create a headline of LEVEL."
+
+  (save-excursion
+    (beginning-of-line)
+    (insert-char ?* (+ 2 level))
+    (insert-char ?\ )))
+
+
+(defun textproc-add-stars-to-headline-levels1-4 ()
+  "Add the correct number of stars to a headline level."
+
+  (interactive)
+
+  (cl-loop
+   while (textproc-find-next-outline-level)
+   do
+
+   (let ((case-fold-search nil))
+     (pcase (match-string-no-properties 0)
+       ((rx textproc-op-headline-level4)
+        (message "Found a Level 4 Headline: %s"
+                 (buffer-substring-no-properties (pos-bol) (pos-eol)))
+        (textproc-add-stars-to-headline-level 4))
+       ((rx textproc-op-headline-level3)
+        (message "Found a level 3 Headline: %s"
+                 (buffer-substring-no-properties (pos-bol) (pos-eol)))
+        (textproc-add-stars-to-headline-level 3))
+       ((rx textproc-op-headline-level2)
+        (message "Found a level 2 Headline: %s"
+                 (buffer-substring-no-properties (pos-bol) (pos-eol)))
+        (textproc-add-stars-to-headline-level 2))
+       ((rx textproc-op-headline-level1)
+        (message "Found a level 1 Headline: %s"
+                 (buffer-substring-no-properties (pos-bol) (pos-eol)))
+        (textproc-add-stars-to-headline-level 1))
+       (_ (message "Failed to find anything."))))
+
+   (forward-line)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
