@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-25 18:58:47 lolh-mbp-16>
+;;; Time-stamp: <2024-12-25 20:11:49 lolh-mbp-16>
 ;;; Version: 0.0.8
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -60,6 +60,13 @@
 (setf tp-fn (make-marker)
       tp-bop (make-marker)
       tp-eop (make-marker))
+
+(defun textproc-clear-footnote-markers ()
+  "Set the footnote markers to nil."
+
+  (set-marker tp-fn nil)
+  (set-marker tp-bop nil)
+  (set-marker tp-eop nil))
 
 (defvar textproc-fn-num 0
   "The current footnote number being processed.")
@@ -1073,20 +1080,6 @@ TODO: In one instance, a headnote links to a West Key Number Outline
 ;;; Footnotes
 
 
-(defconst textproc-footnote-re
-  (rx (:
-       (not nonl)
-       bol (group (+ digit)) eol
-       (not nonl)))
-
-  "Footnote marker: number in a separate paragraph.
-
-\n
-1
-\n
-Footnote text...")
-
-
 (rx-let (;; empty-line digit empty-line
          (fn-num (seq bol "\n" (group (+ digit)) eol "\n"))
 
@@ -1128,9 +1121,7 @@ number or a space or a [ or <."
 
 
 (defmacro textproc-create-found-footnote-marker (num id)
-  "Create a footnote marker from NUM (footnote number) and ID (the nth id).
-
-PRE is the preceding character to the footnote number."
+  "Create a footnote marker from NUM (footnote number) and ID (the nth id)."
   `(format "%s<--#%s" ,num ,id))
 
 
@@ -1154,7 +1145,8 @@ PRE is the preceding character to the footnote number."
 
              ;; Jump to the line following the footnote id and repeat
              (goto-char tp-fn)
-             (forward-line))))
+             (forward-line)))
+  (textproc-clear-footnote-markers))
 
 
 (defun textproc-find-next-footnote ()
