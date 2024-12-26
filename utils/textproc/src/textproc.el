@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-25 18:51:50 lolh-mbp-16>
-;;; Version: 0.0.7
+;;; Time-stamp: <2024-12-25 18:58:47 lolh-mbp-16>
+;;; Version: 0.0.8
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -12,6 +12,7 @@
 ;;  Processes files downloaded from Westlaw in .rtc format into, first,
 ;;  `.txt' format, then into `.org' format, then into `Denote' files,
 ;;  then into some kind of static web site form.
+;;  Works for both cases and statutes.
 
 ;;; Code:
 
