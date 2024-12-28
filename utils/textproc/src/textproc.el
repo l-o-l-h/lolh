@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-25 20:11:49 lolh-mbp-16>
+;;; Time-stamp: <2024-12-27 18:10:51 lolh-mbp-16>
 ;;; Version: 0.0.8
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -32,6 +32,9 @@
 (keymap-global-set "C-x p l" #'textproc-display-rcw-levels)
 (keymap-global-set "C-c N"   #'textproc-display-rcw-next-level)
 
+
+;; org-target is used to identify West headnote links and page numbers
+(face-spec-set 'org-target '((t (:box t :foreground "cyan"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Constants
