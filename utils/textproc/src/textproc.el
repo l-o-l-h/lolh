@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-27 18:10:51 lolh-mbp-16>
-;;; Version: 0.0.8
+;;; Time-stamp: <2024-12-28 12:33:59 lolh-mbp-16>
+;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -1247,24 +1247,59 @@ The User will pick the ID# of the correct footnote position."
 ;;; Opinion Outline
 
 
+;; *123 (WA) | **456 (Pacific) Page markers
 (rx-define textproc-page-marker
   (seq bol "<<" (** 1 2 "*") (+ digit) ">>"))
 
+;; Upper Roman
+;; I | II | III | IV | V | IX | X | XV | XX etc. .
+(rx-define textproc-upper-roman
+  (seq (** 1 4 (in "I" "V" "X")) "."))
+
+;; Lower Roman
+;; i | ii | iii | iv | v | ix | x | xv | xx etc. .
+(rx-define textproc-lower-roman
+  (seq (** 1 4 (in "i" "v" "x")) "."))
+
+;; Upper Arabic
+;; A | B | C | ... H .
+(rx-define textproc-upper-arabic
+  (seq (in "A-H") "."))
+
+;; Word | word
+(rx-define textproc-headline-word
+  (seq bow
+       (| upper lower)
+       (+ lower)
+       eow))
+
+;; \nWord | Word or Word\n
+(rx-define textproc-headline-words
+  (seq textproc-headline-word
+       (0+ space textproc-headline-word)
+       eol))
+
+
+;; Opinion Headline Level 1
 ;; "\nANALYSIS\n" (but only one word)
 (rx-define textproc-op-headline-level1
   (seq (one-or-more upper) eow))
 
-;; "\nI. Title\n" (up to 4
+;; Opinion Headline Level 2
+;; "\nI. Title\n" (up to 4) | Title...
 (rx-define textproc-op-headline-level2
-  (seq (** 1 4 (in "I" "V" "X")) "."))
+  (| textproc-upper-roman
+     textproc-headline-words))
 
+;; Opinion Headline Level 3
 ;; "\nA. Title\n" (only one)
 (rx-define textproc-op-headline-level3
-  (seq (in "A-H") "."))
+  textproc-upper-arabic)
 
+;; Opinion Headline Level 4
 ;; "\ni. Title\n" (up to 4)
 (rx-define textproc-op-headline-level4
-  (seq (** 1 4 (in "i" "v" "x")) "."))
+  textproc-lower-roman)
 
 
 (defconst textproc-op-headline-levels1-4
@@ -1292,13 +1327,12 @@ The User will pick the ID# of the correct footnote position."
 
 
 (defun textproc-find-next-outline-level ()
-  "Command to find the next outline heading."
+  "Find the next outline heading."
 
   (interactive)
 
   (let ((case-fold-search nil))
     (re-search-forward textproc-op-headline-levels1-4 nil t)))
-
 
 
 (defun textproc-add-stars-to-headline-level (level)
