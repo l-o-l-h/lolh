@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-29 10:00:33 lolh-mbp-16>
+;;; Time-stamp: <2024-12-29 11:17:06 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -60,9 +60,19 @@
 ;;; Global markers
 
 
+(defvar tp-fn
+  "footnote marker")
+(defvar tp-bop
+  "beginning of par for footnote processing")
+(defvar tp-eop
+  "end of par for footnote processing")
+(defvar op-pos
+  "opinion start postion")
+
 (setf tp-fn (make-marker)
       tp-bop (make-marker)
-      tp-eop (make-marker))
+      tp-eop (make-marker)
+      op-pos (make-marker))
 
 (defun textproc-clear-footnote-markers ()
   "Set the footnote markers to nil."
@@ -75,6 +85,7 @@
   "The current footnote number being processed.")
 (defvar textproc-fn-id-num 0
   "The total number of footnote ids found in a paragraph.")
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Regular Expressions
@@ -490,7 +501,7 @@ TYPE can be `copy' or `link' (hardlink)."
 
 
 (defmacro textproc-mark-case-pages-in-line ()
-  "Mark all case page numbers as {{ *123 }}."
+  "Mark all case page numbers as <<*123>>."
 
   `(progn
      (while (re-search-forward textproc-case-page-re (pos-eol) t)
@@ -967,14 +978,18 @@ Return the name of the processed FILE."
 
           ;; turn Opinion section into level 2 headline
           (re-search-forward "Opinion") (beginning-of-line) (insert "** ")
+          (set-marker op-pos (point))
 
           ;; process footnote links and outline headlines after finding the Opinion section
           (textproc-process-footnotes)
           (textproc-add-stars-to-headline-levels1-4))
 
-        ;; turn possible concurring or dissenting section into level 2 headling
-        (when (re-search-forward (rx (| "(dissenting)" "(concurring)")) nil t)
-          (beginning-of-line) (insert "** "))
+        ;; turn possible concurring and dissenting sections into level 2 headling
+        (goto-char op-pos)
+        (while (re-search-forward (rx (| "(dissenting)" "(concurring)")) nil t)
+          (beginning-of-line) (insert "** ")
+          (forward-line))
+        (set-marker op-pos nil)
 
         ;; delete the All Citations section at the end of the buffer
         (goto-char (point-max))
@@ -1381,8 +1396,9 @@ The User will pick the ID# of the correct footnote position."
    while (textproc-find-next-outline-level)
    do
 
-   (let ((case-fold-search nil))
-     (pcase (match-string-no-properties 0)
+   (let ((case-fold-search nil)
+         (matched (match-string-no-properties 0)))
+     (pcase matched
        ((rx textproc-op-headline-level4)
         (message "Found a Level 4 Headline: %s"
                  (buffer-substring-no-properties (pos-bol) (pos-eol)))
@@ -1396,10 +1412,13 @@ The User will pick the ID# of the correct footnote position."
                  (buffer-substring-no-properties (pos-bol) (pos-eol)))
         (textproc-add-stars-to-headline-level 2))
        ((rx textproc-op-headline-level1)
-        (message "Found a level 1 Headline: %s"
-                 (buffer-substring-no-properties (pos-bol) (pos-eol)))
-        (textproc-add-stars-to-headline-level 1))
-       (_ (message "Failed to find anything."))))
+        ;; Sometimes RAP or RCW might start a line;
+        ;; this avoids turning such a line into a headline with stars
+        (unless (string-match-p (rx (| "RAP" "RCW")) matched)
+          (message "Found a level 1 Headline: %s"
+                   (buffer-substring-no-properties (pos-bol) (pos-eol)))
+          (textproc-add-stars-to-headline-level 1)))
+       (_ (error "Failed to find anything."))))
 
    (forward-line)))
 
