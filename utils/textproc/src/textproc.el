@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-28 12:33:59 lolh-mbp-16>
+;;; Time-stamp: <2024-12-29 10:00:33 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -95,6 +95,12 @@
                                      (+ digit)
                                      eow))
   "*23|**23")
+
+
+;; *123 (WA) | **456 (Pacific) Page markers
+;; Only finds marked pages at the beginning of a line.
+(rx-define textproc-page-marker
+  (seq bol "<<" (** 1 2 "*") (+ digit) ">>"))
 
 
 (defconst textproc-citation-re
@@ -486,8 +492,9 @@ TYPE can be `copy' or `link' (hardlink)."
 (defmacro textproc-mark-case-pages-in-line ()
   "Mark all case page numbers as {{ *123 }}."
 
-  `(when (re-search-forward textproc-case-page-re (pos-eol) t)
-     (replace-match "<<\\&>>")
+  `(progn
+     (while (re-search-forward textproc-case-page-re (pos-eol) t)
+       (replace-match "<<\\&>>"))
      (beginning-of-line)))
 
 
@@ -645,6 +652,21 @@ real one.  It is equal to the first one (I think)."
       (re-search-forward (format "^%s" op1))
       (beginning-of-line)
       (point-marker))))
+
+
+(defmacro textproc-prior-empty-line-p ()
+  "Predicate for the prior line being empty."
+
+  '(save-excursion
+     (forward-line -1)
+     (looking-at-p (rx bol eol))))
+
+
+(defmacro textproc-ensure-prior-empty-line ()
+  "Make the prior line empty."
+
+  '(unless (textproc-prior-empty-line-p)
+     (insert-char 10)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1075,6 +1097,16 @@ TODO: In one instance, a headnote links to a West Key Number Outline
         ((looking-at-p (rx "("))
          (insert "- /") (goto-char (pos-eol)) (insert-char ?/) (beginning-of-line))
 
+        ;; make sure there is a blank line before a page marker starting a line
+        ((looking-at-p (rx textproc-page-marker))
+         (textproc-ensure-prior-empty-line))
+
+        ;; In one instance so far, there is a headline called "West Codenotes"
+        ;; that identified that a statutue had been determined unconstitutional
+        ;; and repealed.  Turn this into a level 3 headline.
+        ((looking-at-p "West Codenotes")
+         (insert "*** "))
+
         ;; looking at a blank line
         ((looking-at-p (rx eol))))))))
 
@@ -1089,7 +1121,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
          ;; word.1
          (fn-id1 (n) (seq
                       ;; this is the character preceding the number
-                      (group (not (in digit space "[<")))
+                      (group (not (in digit space "<")))
                       ;; this is the number itself
                       (group (literal n))
                       eow))
@@ -1246,10 +1278,6 @@ The User will pick the ID# of the correct footnote position."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Opinion Outline
 
-
-;; *123 (WA) | **456 (Pacific) Page markers
-(rx-define textproc-page-marker
-  (seq bol "<<" (** 1 2 "*") (+ digit) ">>"))
 
 ;; Upper Roman
 ;; I | II | III | IV | V | IX | X | XV | XX etc. .
