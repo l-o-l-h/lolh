@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-29 11:17:06 lolh-mbp-16>
+;;; Time-stamp: <2024-12-29 23:17:09 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -66,13 +66,29 @@
   "beginning of par for footnote processing")
 (defvar tp-eop
   "end of par for footnote processing")
+(defvar cap-pos
+  "position to place the citation")
+(defvar cap-pos-begin
+  "case caption position start")
+(defvar cap-pos-end
+  "case caption position end")
 (defvar op-pos
   "opinion start postion")
 
 (setf tp-fn (make-marker)
       tp-bop (make-marker)
       tp-eop (make-marker)
-      op-pos (make-marker))
+      op-pos (make-marker)
+      cap-pos (make-marker)
+      cap-pos-begin (make-marker)
+      cap-pos-end (make-marker))
+
+(defun textproc-clear-cap-markers ()
+  "Set the caption markers to nil."
+
+  (set-marker cap-pos nil)
+  (set-marker cap-pos-begin nil)
+  (set-marker cap-pos-end nil))
 
 (defun textproc-clear-footnote-markers ()
   "Set the footnote markers to nil."
@@ -533,9 +549,19 @@ Mark all page numbers as {{ **123 }}."
 (defmacro textproc-create-list-items ()
   "Add list item dashes to the following lines."
 
-  `(cl-loop until (eolp) do (insert "- ") (forward-line)))
+  `(cl-loop until (eolp) do
+            (when (looking-at-p "outline")
+              (delete-line))
+            (when (looking-at-p "all citations")
+              (delete-line)
+              (cl-return))
+            (insert "- ")
+            (forward-line)))
 
 
+;;; TODO: This does not work with a newly published case which does
+;;; not yet have a Washington Citation.
+;;; Maybe just wait?
 (defun textproc-case-citation ()
   "Return the case citation from the ORG-FILE'.
 
@@ -916,7 +942,8 @@ Return the name of the processed FILE."
                  (goto-char c)
                  (insert "- " (delete-and-extract-region m1 m2))
                  (goto-char m1) (delete-char 1)
-                 finally (goto-char c) (insert-char 10))
+                 finally (goto-char c) (insert-char 10)
+                 (set-marker cap-pos (point)))
 
         ;; Add a Brief subheading here
         (ensure-empty-lines 3)
@@ -929,8 +956,8 @@ Return the name of the processed FILE."
           (delete-region (point) (and (re-search-forward textproc-citation-re) (1- (pos-bol))))
           (beginning-of-line))
 
-        ;; center the caption
-        (insert "* Case" 10)
+        ;; center and then relocate the caption
+        (set-marker cap-pos-begin (point))
         (cl-loop
          until (textproc-date-p)
          do
@@ -942,6 +969,11 @@ Return the name of the processed FILE."
           (t (center-line) (insert-char 10) (forward-line)))
          finally
          (center-line) (forward-line))
+        (set-marker cap-pos-end (point))
+        (goto-char cap-pos)
+        (insert (delete-and-extract-region cap-pos-begin cap-pos-end))
+        (goto-char cap-pos-end)
+        (textproc-clear-cap-markers)
 
         ;; Add list items until either the Synopsis or Option section is encountered
         (cl-loop
@@ -966,15 +998,17 @@ Return the name of the processed FILE."
         ;; unless this is an unpublished case,
         ;; turn Headnotes and Attorneys sections into headlines
         (unless unpub
-          (search-forward "West Headnotes") (beginning-of-line) (insert "** ")
-          ;; process Headnotes here
-
-          (textproc-process-headnotes)
+          ;; A newly published case will not yet have headnotes
+          (when (search-forward "West Headnotes" nil t)
+            (beginning-of-line)
+            (insert "** ")
+            (textproc-process-headnotes))
 
           ;; find the Attorneys Section; turn into a level 2 headline
-          (search-forward "Attorneys and Law Firms")
-          (beginning-of-line) (insert "** ") (forward-line) (ensure-empty-lines)
-          (textproc-create-list-items)
+          ;; a newly published case will not yet have an attorneys section
+          (when (search-forward "Attorneys and Law Firms" nil t)
+            (beginning-of-line) (insert "** ") (forward-line) (ensure-empty-lines)
+            (textproc-create-list-items))
 
           ;; turn Opinion section into level 2 headline
           (re-search-forward "Opinion") (beginning-of-line) (insert "** ")
@@ -984,17 +1018,23 @@ Return the name of the processed FILE."
           (textproc-process-footnotes)
           (textproc-add-stars-to-headline-levels1-4))
 
-        ;; turn possible concurring and dissenting sections into level 2 headling
+        ;; turn possible concurring and dissenting sections into level 2 headlines
         (goto-char op-pos)
-        (while (re-search-forward (rx (| "(dissenting)" "(concurring)")) nil t)
-          (beginning-of-line) (insert "** ")
-          (forward-line))
+        (while (re-search-forward (rx "(" (group (| "dissenting" "concurring")) ")" ) nil t)
+          (let ((fnd (capitalize (match-string-no-properties 1))))
+            (beginning-of-line)
+            (insert "** " fnd " Opinion" 10 10)
+            (forward-line)))
         (set-marker op-pos nil)
 
         ;; delete the All Citations section at the end of the buffer
         (goto-char (point-max))
         (search-backward "All Citations")
-        (delete-region (- (pos-bol) 1) (point-max)))
+        (forward-line -1)
+        (delete-region (point) (point-max)))
+
+      ;; Link the outline into the case
+      (textproc-outline-links2)
 
       (write-file proc-file)
       (textproc-bkup-file proc-file textproc-save-txt 'link)
@@ -1136,7 +1176,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
          ;; word.1
          (fn-id1 (n) (seq
                       ;; this is the character preceding the number
-                      (group (not (in digit space "<")))
+                      (group (not (in digit space "[<")))
                       ;; this is the number itself
                       (group (literal n))
                       eow))
@@ -1288,6 +1328,50 @@ The User will pick the ID# of the correct footnote position."
   (save-excursion
     (goto-char tp-fn)
     (insert "[fn:") (end-of-line) (insert "] ") (delete-char 2)))
+
+
+(defun textproc-outline-links ()
+  "Create links in the Document Details section."
+
+  (rx-let ((lst (| "case"  "synopsis" "west headnotes" "attorneys and law firms" "opinion"))
+           (realhl (x) (seq bol (+ "*") space (group (literal x)))))
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "** Document Details")
+        (forward-line 2)
+        (cl-loop until (looking-at-p (rx bol eol))
+                 with hl with fnd
+                 do
+                 (setf hl (buffer-substring-no-properties
+                           (+ 2 (pos-bol)) (pos-eol)))
+                 (when (string-match (rx lst) hl)
+                   (save-excursion
+                     (re-search-forward (rx (realhl hl)))
+                     (setf fnd (buffer-substring (match-beginning 1) (pos-eol))))
+                   (goto-char (+ 2 (pos-bol)))
+                   (insert "[[*" fnd "][" hl "]]")
+                   (delete-region (point) (pos-eol)))
+                 (forward-line))))))
+
+
+(defun textproc-outline-links2 ()
+
+  (rx-let ((realhl (x) (seq bol (+ "*") space (group (literal x)))))
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "Document Details" nil t)
+        (forward-line 2)
+        (cl-loop until (looking-at-p (rx bol eol))
+                 with hl with link
+                 do
+                 (setf hl (buffer-substring-no-properties (+ 2 (pos-bol)) (pos-eol)))
+                 (save-excursion
+                   (re-search-forward (rx (realhl hl)))
+                   (setf link (buffer-substring-no-properties (match-beginning 1) (pos-eol))))
+                 (forward-char 2)
+                 (insert "[[*" link "][" hl "]]")
+                 (delete-region (point) (pos-eol))
+                 (forward-line))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
