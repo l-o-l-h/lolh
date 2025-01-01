@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2024-12-29 23:17:09 lolh-mbp-16>
+;;; Time-stamp: <2025-01-01 12:13:05 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1034,7 +1034,7 @@ Return the name of the processed FILE."
         (delete-region (point) (point-max)))
 
       ;; Link the outline into the case
-      (textproc-outline-links2)
+      (textproc-outline-links)
 
       (write-file proc-file)
       (textproc-bkup-file proc-file textproc-save-txt 'link)
@@ -1093,13 +1093,23 @@ TODO: In one instance, a headnote links to a West Key Number Outline
          (forward-line 1)
          (delete-blank-lines)
          (join-line)
+         ;; NOTE: this separates words in the main note only
          (goto-char (textproc-west-topic-split))
          (insert-char ?\ )
          ;; establish a link using the West key number at this point
          (set-marker m1 (point))
          ;; `item' is the West key number subtopic text; save it for comparison
          (setq item (buffer-substring-no-properties (point) (pos-eol)))
-         (beginning-of-line) (insert "*** "))
+         (beginning-of-line) (insert "*** ")
+         (forward-line)
+         ;; sometimes there are multiple lines with connected headnotes phrases
+         ;; this section places a - between the phrases
+         ;; TODO: add code to insert the appropriate West key numbers instead of the dash
+         (while (not (looking-at-p (rx bol eol)))
+           (let ((fnd (textproc-west-topic-split)))
+             (when fnd
+               (goto-char fnd) (insert-char ?-)))
+           (forward-line)))
 
        ;; Run through the list of West key number items
        (cond
@@ -1331,30 +1341,7 @@ The User will pick the ID# of the correct footnote position."
 
 
 (defun textproc-outline-links ()
-  "Create links in the Document Details section."
-
-  (rx-let ((lst (| "case"  "synopsis" "west headnotes" "attorneys and law firms" "opinion"))
-           (realhl (x) (seq bol (+ "*") space (group (literal x)))))
-    (save-excursion
-      (goto-char (point-min))
-      (when (re-search-forward "** Document Details")
-        (forward-line 2)
-        (cl-loop until (looking-at-p (rx bol eol))
-                 with hl with fnd
-                 do
-                 (setf hl (buffer-substring-no-properties
-                           (+ 2 (pos-bol)) (pos-eol)))
-                 (when (string-match (rx lst) hl)
-                   (save-excursion
-                     (re-search-forward (rx (realhl hl)))
-                     (setf fnd (buffer-substring (match-beginning 1) (pos-eol))))
-                   (goto-char (+ 2 (pos-bol)))
-                   (insert "[[*" fnd "][" hl "]]")
-                   (delete-region (point) (pos-eol)))
-                 (forward-line))))))
-
-
-(defun textproc-outline-links2 ()
+  "Link the Document Details items to their matching outline headings."
 
   (rx-let ((realhl (x) (seq bol (+ "*") space (group (literal x)))))
     (save-excursion
