@@ -2,7 +2,11 @@
 ;;; This format is meant to be slightly human-readable;
 ;;; nevertheless, you probably don't want to edit it.
 ;;; -*- End Of Bookmark File Format Version Stamp -*-
-(("System-Inits" (filename . "~/.local/src/System-Inits/")
+(("src" (filename . "~/.local/src/")
+ (front-context-string . ".DS_Store\n  drwx")
+ (rear-context-string . "96 Nov  5 07:09 ") (position . 195)
+ (last-modified 26488 1341 782013 0))
+("System-Inits" (filename . "~/.local/src/System-Inits/")
  (front-context-string . ".git\n  -rw-r--r-")
  (rear-context-string . "80 Oct 27 04:19 ") (position . 220)
  (last-modified 26406 16974 961169 0))
