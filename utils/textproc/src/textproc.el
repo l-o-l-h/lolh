@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-11 17:37:35 lolh-mbp-16>
+;;; Time-stamp: <2025-01-12 09:32:56 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -44,8 +44,8 @@
 (keymap-global-set "M-P"     #'textproc-pbcopy-client-phone)
 (keymap-global-set "M-T"     #'textproc-pbcopy-title)
 (keymap-global-set "M-U"     #'textproc-unlock-docs)
-;; (keymap-global-set "C-x p C" #'textproc-note-copy-current)
-(keymap-global-set "C-x p L" #'textproc-notes-begin-first-last-end)
+(keymap-global-set "C-x p C" #'textproc-note-copy-current)
+(keymap-global-set "C-x p L" #'textproc-note-jump)
 ;; (keymap-global-set "C-x p N" #'textproc-note-move-to-next)
 ;; (keymap-global-set "C-x p P" #'textproc-note-move-to-prior)
 (keymap-global-set "C-x p R" #'textproc-statute-rtf-to-note)
@@ -1995,18 +1995,6 @@ A NOTE looks like: `^- Note taken on [2025-01-03 Fri 12:01] \\$'"
   (end nil integer "The end position"))
 
 
-(cl-defstruct textproc-drawer-s
-  "A structure to hold the drawer info."
-
-  (heading-name nil string "The enclosing heading name")
-  (heading-be nil textproc-begin-end-s "Begin-End of heading")
-  (name nil string "The drawer name: LOGBOOK | WORKTIME")
-  (name-be nil textproc-begin-end-s "Begin-End of drawer")
-  (list nil string "The list type: plain | ordered | checkboxes")
-  (list-be nil textproc-begin-end-s "Begin-End of list")
-  (notes nil list "The list of notes"))
-
-
 (cl-defstruct textproc-notes-s
   "A structre to hold a set of notes and related headline, drawer, and list."
 
@@ -2025,30 +2013,6 @@ A NOTE looks like: `^- Note taken on [2025-01-03 Fri 12:01] \\$'"
 - pllist :: textproc-begin-end-s")
 
 
-(cl-defun textproc-note-current ()
-  "Return the index of the current note."
-
-  (interactive)
-
-  (textproc-notes-set)
-  (when (>= (point) (textproc-begin-end-s-end
-                     (textproc-notes-s-pllist textproc-notes)))
-    (message "Not in a list")
-    (cl-return-from textproc-note-current))
-  (let* ((notes (textproc-notes-s-notes textproc-notes))
-         (pos (point))
-         (cur (cl-first (seq-find (lambda (note) (let ((b (cl-second note))
-                                                       (e (cl-third note)))
-                                                   (and (>= pos b)
-                                                        (<= pos e))))
-                                  notes))))
-    (when (= pos (textproc-note-n-end cur))
-      (cl-incf cur))
-    (when (called-interactively-p 'interactive)
-      (message "%s" cur))
-    cur))
-
-
 (defmacro textproc-note-n (n)
   "Return the Nth note.
 
@@ -2062,20 +2026,100 @@ A NOTE looks like: `^- Note taken on [2025-01-03 Fri 12:01] \\$'"
        (elt notes (1- ,n)))))
 
 
-(defmacro textproc-note-n-begin (n)
-  "Return the begin position of note N."
+(defmacro textproc-note-index (note)
+  "Return the index of NOTE."
+
+  `(cl-first ,note))
+
+
+(defmacro textproc-note-next-previous (dir)
+  "Return the next or previous note depending on DIR.
+- ?n for next
+- ?p for previous
+Wrap around in both directions."
+
+  `(textproc-note-begin
+    (let* ((cur (textproc-note-current))
+           (notes (textproc-notes-s-notes textproc-notes))
+           (len (length notes)))
+      (when (null cur) (throw 'same (point)))
+      (pcase ,dir
+        (?p (if (= cur 1) len (1- cur)))
+        (?n (if (= cur len) 1 (1+ cur)))
+        (_ cur)))))
+
+
+(cl-defun textproc-note-current ()
+  "Return the index of the current note."
+
+  (interactive)
+
+  (textproc-notes-set)
+  (when (or
+         (>= (point) (textproc-begin-end-s-end
+                      (textproc-notes-s-pllist textproc-notes)))
+         (< (point) (textproc-begin-end-s-begin
+                     (textproc-notes-s-pllist textproc-notes))))
+    (message "Not in a list")
+    (cl-return-from textproc-note-current nil))
+  (let* ((notes (textproc-notes-s-notes textproc-notes))
+         (pos (point))
+         (cur (textproc-note-index
+               (seq-find (lambda (note) (let ((b (cl-second note))
+                                              (e (cl-third note)))
+                                          (and (>= pos b)
+                                               (<= pos e))))
+                         notes))))
+    (when (= pos (textproc-note-n-end cur))
+      (cl-incf cur))
+    (when (called-interactively-p 'interactive)
+      (message "%s" cur))
+    cur))
+
+
+(defmacro textproc-note-begin (n)
+  "Return the begin position of the Nth note."
 
   `(cl-second (textproc-note-n ,n)))
 
 
-(defmacro textproc-note-n-end (n)
-  "Return the end position of note N."
+(defmacro textproc-note-end (n)
+  "Return the end position of the Nth note."
 
   `(cl-third (textproc-note-n ,n)))
 
 
+(defmacro textproc-note-substring (n)
+  "Return the substring of the Nth note."
+
+  `(buffer-substring
+    (textproc-note-begin ,n)
+    (textproc-note-end ,n)))
+
+
+(defun textproc-note-copy (n &optional s)
+  "Copy the Nth note into the paste buffer.
+
+Don't set the notes when S is non-nil."
+
+  (interactive "nNote index: ")
+
+  (unless s (textproc-notes-set))
+  (textproc-pbcopy
+   (textproc-note-substring n)))
+
+
+;; C-x p C
+(defun textproc-note-copy-current ()
+  "Copy the current note into the paste buffer."
+
+  (interactive)
+
+  (textproc-note-copy (textproc-note-current) :set))
+
+
 (defun textproc-headline ()
-  "Return the enclosing heading name."
+  "Return the enclosing headline."
 
   (save-excursion
     (unless (looking-at-p textproc-heading)
@@ -2093,7 +2137,7 @@ A NOTE looks like: `^- Note taken on [2025-01-03 Fri 12:01] \\$'"
 
 
 (defun textproc-drawer ()
-  "Find the enclosing logbook drawer element within headline HL."
+  "Find the enclosing drawer (logbook) element within headline HL."
 
   (save-excursion
     (goto-char
@@ -2162,12 +2206,13 @@ Then, add an index entry."
 
 
 ;;; C-x p L
-(defun textproc-notes-begin-first-last-end (which)
-  "Jump to either the beginning, the first, the last, or the ending.
+(defun textproc-note-jump (which)
+  "Jump to the beginning, the first, the last, the end, the next, the previous.
 
-WHICH is ?b for beginning, ?f for first, ?l for last, or ?e for end."
+WHICH is ?b for beginning, ?f for first, ?l for last, or ?e for end.
+WHICH is ?n for next, ?p for previous."
 
-  (interactive "c<b>egin <f>irst, <l>ast, or <e>nd")
+  (interactive "c<b>egin <f>irst, <l>ast, <e>nd, <n>ext, <p>revious")
 
   (textproc-notes-set)
   (goto-char (pcase which
@@ -2175,13 +2220,13 @@ WHICH is ?b for beginning, ?f for first, ?l for last, or ?e for end."
                (?f (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
                (?l (cl-second (cl-first (last (textproc-notes-s-notes textproc-notes)))))
                (?e (textproc-begin-end-s-end (textproc-notes-s-pllist textproc-notes)))
+               (?n (catch 'same (textproc-note-next-previous which)))
+               (?p (catch 'same (textproc-note-next-previous which)))
                (_ (message "Enter either <?b>begin, <?f>irst, <?l>ast or <?e>nd") (point)))))
 
 
 (defun textproc-notes-goto-note (n)
-  "Place point on the Nth note.
-
-Give a warning if N is out of range."
+  "Place point on the Nth note."
 
   (interactive "nNote index ")
 
