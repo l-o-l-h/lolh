@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-12 11:50:57 lolh-mbp-16>
+;;; Time-stamp: <2025-01-12 12:24:29 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1831,6 +1831,10 @@ For an RCW txt file."
 ;;; Note Processing
 
 
+(defvar textproc-cur nil "A marker for the current position")
+(setf textproc-cur (make-marker))
+
+
 (defconst textproc-heading (rx-to-string '(seq bol (+ "*") space)))
 
 
@@ -1942,7 +1946,8 @@ Wrap around in both directions."
 (cl-defun textproc-note-current (&optional no-set)
   "Return the index of the current note.
 
-Don't set the notes if NO-SET is non-nil"
+Don't set the notes if NO-SET is non-nil.
+If in a drawer or a plain list, goto to the first note."
 
   (interactive)
 
@@ -1952,8 +1957,10 @@ Don't set the notes if NO-SET is non-nil"
                       (textproc-notes-s-pllist textproc-notes)))
          (< (point) (textproc-begin-end-s-begin
                      (textproc-notes-s-pllist textproc-notes))))
-    (message "Not in a list")
-    (cl-return-from textproc-note-current nil))
+    (if (and (>= (point) (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
+             (<= (point) (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes))))
+        (cl-return-from textproc-note-current 1)
+      (error "You are not in a drawer.")))
   (let* ((notes (textproc-notes-s-notes textproc-notes))
          (pos (point))
          (cur (textproc-note-index
@@ -2011,9 +2018,9 @@ Don't set the notes when NO-SET is non-nil."
 
 
 (defmacro textproc-headline ()
-  "Return the enclosing headline."
+  "Set the enclosing headline."
 
-  `(save-excursion
+  `(progn
      (unless (looking-at-p textproc-heading)
        (org-backward-heading-same-level 0))
      (let* ((he (org-element-at-point))
@@ -2031,7 +2038,7 @@ Don't set the notes when NO-SET is non-nil."
 (defmacro textproc-drawer ()
   "Find the enclosing drawer (logbook) element within headline HL."
 
-  `(save-excursion
+  `(progn
      (goto-char
       (textproc-begin-end-s-begin
        (textproc-notes-s-headline textproc-notes)))
@@ -2051,7 +2058,7 @@ Don't set the notes when NO-SET is non-nil."
 (defmacro textproc-pllist ()
   "Find the enclosing plain list within logbook LS and headline HL."
 
-  `(save-excursion
+  `(progn
      (goto-char
       (textproc-begin-end-s-begin
        (textproc-notes-s-drawer textproc-notes)))
@@ -2139,13 +2146,17 @@ Then, add an index entry."
 (defmacro textproc-notes-set ()
   "Set the elements of `textproc-notes'"
 
-  `(progn
-     (textproc-headline)
-     (textproc-drawer)
-     (textproc-pllist)
-     (textproc-notes-list)
-     (textproc-note-current-be)
-     (textproc-note-timestamp)))
+  `(save-excursion
+     (progn
+       (set-marker textproc-cur (point))
+       (textproc-headline)
+       (textproc-drawer)
+       (textproc-pllist)
+       (textproc-notes-list)
+       (goto-char textproc-cur)
+       (textproc-note-current-be)
+       (textproc-note-timestamp)
+       (set-marker textproc-cur nil))))
 
 
 ;;; C-x p L
@@ -2163,7 +2174,7 @@ WHICH is ?t for top of current"
                (?b (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
                (?f (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
                (?l (textproc-note-begin (length (textproc-notes-s-notes textproc-notes))))
-               (?e (textproc-begin-end-s-end (textproc-notes-s-pllist textproc-notes)))
+               (?e (textproc-begin-end-s-end   (textproc-notes-s-drawer textproc-notes)))
                (?n (catch 'same (textproc-note-next-previous which)))
                (?p (catch 'same (textproc-note-next-previous which)))
                (?t (textproc-note-begin (textproc-note-current t)))
