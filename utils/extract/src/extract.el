@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2024-11-15 07:36:53 lolh-mbp-16>
+;; Time-stamp: <2025-01-06 12:25:46 lolh-mbp-16>
 ;; Version: 0.2.1 [2024-11-15 07:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -278,7 +278,6 @@ of that client note."
 (keymap-global-set "C-x p h" #'lolh/extract-pdfs)
 (keymap-global-set "C-x p j" #'lolh/process-dir)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
-(keymap-global-set "C-x p C" #'lolh/close-case)
 (keymap-global-set "M-A"     #'lolh/note-tree)
 ;; (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
 ;; (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
@@ -637,8 +636,6 @@ argument sets BODY-P to 16."
 
 ;;====================================================================
 
-
-;; C-x p C :: CLOSE A CASE
 
 (defun lolh/close-case ()
   "Close a CASE, updating any data directory references.
