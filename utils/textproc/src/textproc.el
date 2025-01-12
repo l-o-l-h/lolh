@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-11 16:48:22 lolh-mbp-16>
+;;; Time-stamp: <2025-01-11 17:37:35 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -2023,6 +2023,30 @@ A NOTE looks like: `^- Note taken on [2025-01-03 Fri 12:01] \\$'"
 - headline :: textproc-begin-end-s
 - drawer :: textproc-begin-end-s
 - pllist :: textproc-begin-end-s")
+
+
+(cl-defun textproc-note-current ()
+  "Return the index of the current note."
+
+  (interactive)
+
+  (textproc-notes-set)
+  (when (>= (point) (textproc-begin-end-s-end
+                     (textproc-notes-s-pllist textproc-notes)))
+    (message "Not in a list")
+    (cl-return-from textproc-note-current))
+  (let* ((notes (textproc-notes-s-notes textproc-notes))
+         (pos (point))
+         (cur (cl-first (seq-find (lambda (note) (let ((b (cl-second note))
+                                                       (e (cl-third note)))
+                                                   (and (>= pos b)
+                                                        (<= pos e))))
+                                  notes))))
+    (when (= pos (textproc-note-n-end cur))
+      (cl-incf cur))
+    (when (called-interactively-p 'interactive)
+      (message "%s" cur))
+    cur))
 
 
 (defmacro textproc-note-n (n)
