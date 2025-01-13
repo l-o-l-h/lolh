@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-13 06:56:50 lolh-mbp-16>
+;;; Time-stamp: <2025-01-13 07:56:02 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1939,7 +1939,7 @@ For an RCW txt file."
 Wrap around in both directions."
 
   `(textproc-note-begin
-    (let* ((cur (textproc-note-current))
+    (let* ((cur (textproc-note-current t))
            (notes (textproc-notes-s-notes textproc-notes))
            (len (length notes)))
       (when (null cur) (throw 'same (point)))
@@ -2119,28 +2119,23 @@ Then, add an index entry."
      (setf (textproc-notes-s-current textproc-notes) be)))
 
 
-(defun textproc-note-jump-to-timestamp (&optional no-set)
-  "Jump to the timestamp of the current note.
+(defmacro textproc-note-jump-to-timestamp ()
+  "Jump to the timestamp of the current note."
 
-Don't set when NO-SET is non-nil."
-
-  (interactive)
-
-  (textproc-note-jump ?t no-set) ;; textproc-notes-set is handled by textproc-note-current there
-  (re-search-forward
-   (rx textproc-inactive-timestamp)
-   (textproc-note-end (textproc-note-current t))
-   t))
+  `(progn
+     (textproc-note-jump ?t t) ;; textproc-notes-set is handled by textproc-note-current there
+     (re-search-forward
+      (rx textproc-inactive-timestamp)
+      (textproc-note-end (textproc-note-current t))
+      t)))
 
 
-(defmacro textproc-note-timestamp (&optional no-set)
-  "Return the timestamp value of the current note.
-
-NO-SET non-nil means not to reset."
+(defmacro textproc-note-timestamp ()
+  "Set the timestamp value of the current note into `textproc-notes'."
 
   `(save-excursion
      (progn
-       (textproc-note-jump-to-timestamp ,no-set)
+       (textproc-note-jump-to-timestamp)
        (backward-char)
        (let* ((tsv (org-element-context))
               (type (org-element-type tsv))
@@ -2169,7 +2164,7 @@ NO-SET non-nil means not to reset."
        (textproc-notes-list)
        (goto-char textproc-cur)
        (textproc-note-current-be)
-       (textproc-note-timestamp t)
+       (textproc-note-timestamp)
        (set-marker textproc-cur nil))))
 
 
@@ -2190,7 +2185,11 @@ If NO-SET is non-nil, don't run textproc-notes-set."
                (?b (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
                (?f (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
                (?l (textproc-note-begin (length (textproc-notes-s-notes textproc-notes))))
-               (?e (textproc-begin-end-s-end   (textproc-notes-s-drawer textproc-notes)))
+               (?e (progn ; sometimes the end of the drawer is not at :END:
+                     (goto-char (textproc-begin-end-s-end   (textproc-notes-s-drawer textproc-notes)))
+                     (while (not (looking-at-p (rx bol ":END:" eol)))
+                       (forward-line -1))
+                     (point)))
                (?n (catch 'same (textproc-note-next-previous which)))
                (?p (catch 'same (textproc-note-next-previous which)))
                (?t (textproc-note-begin (textproc-note-current t)))
