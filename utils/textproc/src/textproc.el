@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-12 12:24:29 lolh-mbp-16>
+;;; Time-stamp: <2025-01-13 06:56:50 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -46,7 +46,7 @@
 (keymap-global-set "M-U"     #'textproc-unlock-docs)
 (keymap-global-set "C-x p C" #'textproc-note-copy-current)
 (keymap-global-set "C-x p L" #'textproc-note-jump)
-;; (keymap-global-set "C-x p N" #'textproc-note-move-to-next)
+(keymap-global-set "C-x p N" #'textproc-note-go)
 ;; (keymap-global-set "C-x p P" #'textproc-note-move-to-prior)
 (keymap-global-set "C-x p R" #'textproc-statute-rtf-to-note)
 ;; (keymap-global-set "C-x p S" #'textproc-note-sort)
@@ -1849,11 +1849,17 @@ For an RCW txt file."
   (seq
    bol
    (+ space)
-   (opt (| "Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun") ", ")
-   (opt (| "Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec") space
-        (** 1 2 digit) ", ")
-   (opt (= 4 digit) ", ")
-   (** 1 2 digit) ":" (= 2 digit) nonl (| "AM" "PM") eow))
+   (group-n 1
+     (opt (| "Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun") ", ")
+     (opt (| "Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec") space
+          (** 1 2 digit) ", ")
+     (opt (= 4 digit) ", ")
+     (** 1 2 digit) ":" (= 2 digit) nonl (group-n 2 (| "AM" "PM")) eow)))
+
+
+(defconst textproc-email-time-format
+  "Dow, Mon dd, h:mm AM|PM"
+  "%s, %b %e, %I:%M %p")
 
 
 (rx-define textproc-note
@@ -2005,7 +2011,9 @@ Don't set the notes when NO-SET is non-nil."
 
   (unless no-set (textproc-notes-set))
   (textproc-pbcopy
-   (textproc-note-substring n)))
+   (concat
+    (textproc-note-substring n)
+    (format "%s\n\n" (make-string 40 ?=)))))
 
 
 ;; C-x p C
@@ -2014,7 +2022,9 @@ Don't set the notes when NO-SET is non-nil."
 
   (interactive)
 
-  (textproc-note-copy (textproc-note-current) :set))
+  (textproc-note-copy (textproc-note-current) t)
+  (when (called-interactively-p 'interactive)
+    (message "Note copied")))
 
 
 (defmacro textproc-headline ()
@@ -2103,30 +2113,34 @@ Then, add an index entry."
           (beg (textproc-note-begin cur))
           (end (textproc-note-end cur))
           (be (make-textproc-begin-end-s :type "note"
-                                         :name "current"
+                                         :name cur
                                          :begin beg
                                          :end end)))
      (setf (textproc-notes-s-current textproc-notes) be)))
 
 
-(defun textproc-note-jump-to-timestamp ()
-  "Jump to the timestamp of the current note."
+(defun textproc-note-jump-to-timestamp (&optional no-set)
+  "Jump to the timestamp of the current note.
+
+Don't set when NO-SET is non-nil."
 
   (interactive)
 
-  (textproc-note-jump ?t) ;; textproc-notes-set is handled by textproc-note-current there
+  (textproc-note-jump ?t no-set) ;; textproc-notes-set is handled by textproc-note-current there
   (re-search-forward
    (rx textproc-inactive-timestamp)
    (textproc-note-end (textproc-note-current t))
    t))
 
 
-(defmacro textproc-note-timestamp ()
-  "Return the timestamp value of the current note."
+(defmacro textproc-note-timestamp (&optional no-set)
+  "Return the timestamp value of the current note.
+
+NO-SET non-nil means not to reset."
 
   `(save-excursion
      (progn
-       (textproc-note-jump-to-timestamp)
+       (textproc-note-jump-to-timestamp ,no-set)
        (backward-char)
        (let* ((tsv (org-element-context))
               (type (org-element-type tsv))
@@ -2155,21 +2169,23 @@ Then, add an index entry."
        (textproc-notes-list)
        (goto-char textproc-cur)
        (textproc-note-current-be)
-       (textproc-note-timestamp)
+       (textproc-note-timestamp t)
        (set-marker textproc-cur nil))))
 
 
 ;;; C-x p L
-(defun textproc-note-jump (which)
+(defun textproc-note-jump (which &optional no-set)
   "Jump to the beginning, the first, the last, the end, the next, the previous.
 
 WHICH is ?b for beginning, ?f for first, ?l for last, or ?e for end.
 WHICH is ?n for next, ?p for previous.
-WHICH is ?t for top of current"
+WHICH is ?t for top of current.
 
-  (interactive "c<b>egin <f>irst, <l>ast, <e>nd, <n>ext, <p>revious, <t>op")
+If NO-SET is non-nil, don't run textproc-notes-set."
 
-  (textproc-notes-set)
+  (interactive "c<b>egin <f>irst, <l>ast, <e>nd, <n>ext, <p>revious, <t>op\ni")
+
+  (unless no-set (textproc-notes-set))
   (goto-char (pcase which
                (?b (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
                (?f (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
@@ -2181,43 +2197,58 @@ WHICH is ?t for top of current"
                (_ (message "Enter either <?b>begin, <?f>irst, <?l>ast or <?e>nd") (point)))))
 
 
-(defun textproc-notes-goto-note (n)
+;; C-x p N
+(defun textproc-note-go (n)
   "Place point on the Nth note."
 
-  (interactive "nNote index ")
+  (interactive (let* ((len (length (textproc-notes-s-notes textproc-notes)))
+                      (note (read-from-minibuffer (format "Note (1-%s)? " len) nil nil t)))
+                 (list note)))
 
+  (textproc-notes-set)
   (catch 'bad-index
     (goto-char (textproc-note-begin n))))
 
 
-;; (defun textproc-note-time (note &optional value)
-;;   "Return either the timestamp of NOTE, or its VALUE.
+(defun textproc-update-email-time (dts ampm)
+  "Given an email time string, DTS, update missing elements.
 
-;; NOTE can be either an index of a note or a note.  When VALUE is non-nil,
-;; return the timestamp's value; else return it as a string.
+AMPM is either `AM' or `PM' and the hour is updated to 24-hour time
+for `PM' times."
 
-;; When called interactively, use the current NOTE.  When called interactively
-;; with a prefix argument such as `'C-u', return the VALUE of the string timestamp;
-;; otherwise just return the string timestamp."
+  (let ((cts (decode-time (current-time))))
+    (cl-do ((i 1 (1+ i))) ((eql i 6) dts)
+      (pcase i
+        (1 (when (null (decoded-time-minute dts))
+             (setf (decoded-time-minute dts) (nth i cts))))
+        (2 (when (null (decoded-time-hour dts))
+             (setf (decoded-time-hour dts) (nth i cts))
+             ;; (when (string= ampm "PM")
+             ;;   (setf (decoded-time-hour dts)
+             ;;         (+ 12 (decoded-time-hour dts))))
+             ))
+        (3 (when (null (decoded-time-day dts))
+             (setf (decoded-time-day dts) (nth i cts))))
+        (4 (when (null (decoded-time-month dts))
+             (setf (decoded-time-month dts) (nth i cts))))
+        (5 (when (null (decoded-time-year dts))
+             (setf (decoded-time-year dts) (nth i cts))))))))
 
-;;   (interactive "i\nP")
 
-;;   (cond
-;;    ((null note) (setf note (textproc-note-current-index-or-note :note)) (message "Note: %s" note))
-;;    ((integerp note) (setf note (textproc-note-getter note))))
+(defun textproc-note-email-time ()
+  "Get an email time and update missing components."
 
-;;   (save-excursion
-;;     (goto-char (textproc-note-begin-or-end-pos note :begin))
-;;     (if (re-search-forward (rx textproc-inactive-timestamp) (pos-eol) t)
-;;         (let* ((ts (and
-;;                     (set-marker ts-begin-pos (match-beginning 0))
-;;                     (set-marker ts-end-pos (match-end 0))
-;;                     (match-string-no-properties 0)))
-;;                (val (date-to-time ts)))
-;;           (when (called-interactively-p 'interactive)
-;;             (message "%s => %s" ts val))
-;;           (if value val ts))
-;;       (error "Failed to find a timestamp in note %s" note))))
+  (save-excursion
+    (textproc-notes-set)
+    (textproc-note-jump ?t t)
+    (when (re-search-forward (rx textproc-email-time))
+      (let* (
+             ;; (data (match-data))
+             (pts (parse-time-string (match-string-no-properties 1)))
+             (ampm (match-string-no-properties 2))
+             (cpts (copy-sequence pts))
+             (upts (textproc-update-email-time pts ampm)))
+        (message "old: %s\nnew: %s" cpts upts)))))
 
 
 ;; (defun textproc-note-time-set (value)
