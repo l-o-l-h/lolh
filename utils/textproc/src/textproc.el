@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-13 07:56:02 lolh-mbp-16>
+;;; Time-stamp: <2025-01-13 09:45:26 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1858,8 +1858,8 @@ For an RCW txt file."
 
 
 (defconst textproc-email-time-format
-  "Dow, Mon dd, h:mm AM|PM"
-  "%s, %b %e, %I:%M %p")
+  "%a, %b %e, %Y, %l:%M %p"
+  "Dow, Mon dd, h:mm AM|PM")
 
 
 (rx-define textproc-note
@@ -2210,44 +2210,52 @@ If NO-SET is non-nil, don't run textproc-notes-set."
 
 
 (defun textproc-update-email-time (dts ampm)
-  "Given an email time string, DTS, update missing elements.
+  "Given an email decoded time, DTS, update missing elements and return.
+
+Use components from the current note timestamp for the updating.
 
 AMPM is either `AM' or `PM' and the hour is updated to 24-hour time
 for `PM' times."
 
-  (let ((cts (decode-time (current-time))))
-    (cl-do ((i 1 (1+ i))) ((eql i 6) dts)
+  (let ((ndts (copy-sequence dts))
+        (cts (parse-time-string (textproc-begin-end-s-name
+                                 (textproc-notes-s-time textproc-notes)))))
+    (cl-do ((i 2 (1+ i))) ((eql i 6) ndts)
       (pcase i
-        (1 (when (null (decoded-time-minute dts))
-             (setf (decoded-time-minute dts) (nth i cts))))
-        (2 (when (null (decoded-time-hour dts))
-             (setf (decoded-time-hour dts) (nth i cts))
-             ;; (when (string= ampm "PM")
-             ;;   (setf (decoded-time-hour dts)
-             ;;         (+ 12 (decoded-time-hour dts))))
-             ))
-        (3 (when (null (decoded-time-day dts))
-             (setf (decoded-time-day dts) (nth i cts))))
-        (4 (when (null (decoded-time-month dts))
-             (setf (decoded-time-month dts) (nth i cts))))
-        (5 (when (null (decoded-time-year dts))
-             (setf (decoded-time-year dts) (nth i cts))))))))
+        ;; start with hours, then the day, month, and year
+        (2 (when (and
+                  (< (decoded-time-hour ndts) 12)
+                  (string= ampm "PM"))
+             (setf (decoded-time-hour ndts)
+                   (+ 12 (decoded-time-hour ndts)))))
+        (3 (when (null (decoded-time-day ndts))
+             (setf (decoded-time-day ndts) (nth i cts))))
+        (4 (when (null (decoded-time-month ndts))
+             (setf (decoded-time-month ndts) (nth i cts))))
+        (5 (when (null (decoded-time-year ndts))
+             (setf (decoded-time-year ndts) (nth i cts))))))))
 
 
-(defun textproc-note-email-time ()
-  "Get an email time and update missing components."
+(defun textproc-note-update-email-time (&optional no-set)
+  "Get an email time, update missing components.
+
+Do not reset notes when NO-SET is non-nil."
+
+  (interactive "i")
 
   (save-excursion
-    (textproc-notes-set)
+    (unless no-set (textproc-notes-set))
     (textproc-note-jump ?t t)
     (when (re-search-forward (rx textproc-email-time))
-      (let* (
-             ;; (data (match-data))
+      (let* ((data (match-data))
              (pts (parse-time-string (match-string-no-properties 1)))
              (ampm (match-string-no-properties 2))
              (cpts (copy-sequence pts))
-             (upts (textproc-update-email-time pts ampm)))
-        (message "old: %s\nnew: %s" cpts upts)))))
+             (upts (textproc-update-email-time cpts ampm)))
+        (set-match-data data)
+        (goto-char (match-beginning 1))
+        (delete-region (point) (pos-eol))
+        (insert (format-time-string textproc-email-time-format (encode-time upts)))))))
 
 
 ;; (defun textproc-note-time-set (value)
@@ -2562,10 +2570,12 @@ for `PM' times."
   (beginning-of-line)
   (while (not (looking-at-p (rx bol "- ")))
     (forward-line -1))
-  (ensure-empty-lines))
+  (ensure-empty-lines)
+  (textproc-note-jump ?b t))
 
 
 (add-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-empty-line)
+(add-hook 'org-after-note-stored-hook 'textproc-note-update-email-time)
 ;; (remove-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-empty-line)
 
 
