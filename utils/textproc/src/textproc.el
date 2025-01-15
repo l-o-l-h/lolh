@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-15 08:24:19 lolh-mbp-16>
+;;; Time-stamp: <2025-01-15 09:32:54 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1855,9 +1855,9 @@ For an RCW txt file."
    (+ space)
    (group-n 1
      (opt (| "Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun") ", ")
-     (opt (| "Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec") space
-          (** 1 2 digit) ", ")
-     (opt (= 4 digit) ", ")
+     (opt (| "Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec") (+ space)
+          (** 1 2 digit) "," (+ space))
+     (opt (= 4 digit) "," (+ space))
      (** 1 2 digit) ":" (= 2 digit) nonl (group-n 2 (| "AM" "PM")) eow)))
 
 
@@ -1893,7 +1893,7 @@ For an RCW txt file."
   "A structure to hold a timestamp string."
 
   (tsbe nil textproc-begin-end-s "The position of the timestamp")
-  (value nil string "The raw string value of the timestamp"))
+  (value nil timestamp "The timestamp value of the timestamp"))
 
 
 (cl-defstruct textproc-notes-s
@@ -1939,6 +1939,7 @@ For an RCW txt file."
        (goto-char textproc-cur)
        (textproc--note-current)
        (textproc--note-timestamp)
+       (textproc--note-email)
        (set-marker textproc-cur nil))))
 
 
@@ -2083,15 +2084,63 @@ will be set as current."
               (beg (org-element-begin tsv))
               (end (org-element-end tsv))
               (name (org-element-property :raw-value tsv))
+              (value (date-to-time name))
               (be (make-textproc-begin-end-s :type type
                                              :name name
                                              :begin beg
-                                             :end end)))
-         (setf (textproc-notes-s-time textproc-notes) be)))))
+                                             :end end))
+              (tss (make-textproc-timestamp-s :tsbe be
+                                              :value value)))
+         (setf (textproc-notes-s-time textproc-notes) tss)))))
+
+
+(defmacro textproc--update-email (data)
+  "Update the email to include all missing elements.
+
+DATA is the match-data from the calling function."
+
+  `(progn
+     (set-match-data ,data)
+     (save-excursion
+       (let* ((pts (parse-time-string (match-string-no-properties 1)))
+              (ampm (match-string-no-properties 2))
+              (upts (textproc--update-email-time pts ampm)))
+         (set-match-data ,data)
+         (goto-char (match-beginning 1))
+         (delete-region (point) (pos-eol))
+         (insert (format-time-string textproc-email-time-format (encode-time upts)))
+         (buffer-substring-no-properties (match-beginning 1) (pos-eol))))))
+
+
+(defmacro textproc--note-email ()
+  "Set the email timestamp value of the current note, if there is one."
+
+  `(save-excursion
+     (progn
+       (let ((cur (textproc-notes-s-current textproc-notes))
+             (notes (textproc-notes-s-notes textproc-notes))
+             data)
+         (goto-char (cl-second (nth (1- cur) notes)))
+         (when (re-search-forward
+                (rx textproc-email-time)
+                (cl-third (nth (1- cur) notes)) t)
+           (setf data (match-data))
+           (let* ((name (textproc--update-email data))
+                  (type 'email-ts)
+                  (beg (match-beginning 1))
+                  (end (pos-eol))
+                  (value (date-to-time name))
+                  (be (make-textproc-begin-end-s :type type
+                                                 :name name
+                                                 :begin beg
+                                                 :end end))
+                  (ets (make-textproc-timestamp-s :tsbe be
+                                                  :value value)))
+             (setf (textproc-notes-s-email textproc-notes) ets)))))))
 
 
 ;; End Notes Set
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 
@@ -2343,7 +2392,8 @@ for `PM' times."
 
   (let ((ndts (copy-sequence dts))
         (cts (parse-time-string (textproc-begin-end-s-name
-                                 (textproc-notes-s-time textproc-notes)))))
+                                 (textproc-timestamp-s-tsbe
+                                  (textproc-notes-s-time textproc-notes))))))
     (cl-do ((i 2 (1+ i))) ((eql i 6) ndts)
       (pcase i
         ;; start with hours, then the day, month, and year
