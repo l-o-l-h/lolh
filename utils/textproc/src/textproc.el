@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-14 22:43:14 lolh-mbp-16>
+;;; Time-stamp: <2025-01-15 07:58:58 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1922,6 +1922,12 @@ For an RCW txt file."
 ;;; index, begin-pos, end-pos
 
 
+(defmacro textproc--notes ()
+  "The list of notes."
+
+  `(textproc-notes-s-notes textproc-notes))
+
+
 ;; returns a note
 (defmacro textproc--note-n (n &optional no-set)
   "Return the Nth note from the note's list.
@@ -1933,7 +1939,7 @@ Do not set notes when NO-SET is non-nil.
 
   `(progn
      (unless ,no-set (textproc-notes-set))
-     (let* ((notes (textproc-notes-s-notes textproc-notes))
+     (let* ((notes (textproc--notes))
             (len (length notes)))
        (if (or (< ,n 1) (> ,n len))
            (progn (message "Index %s is out of range: 1 <= n <= %s" ,n len)
@@ -2061,59 +2067,69 @@ Then, add an index entry."
          (textproc--notes-filter-structure)))
 
 
-(cl-defun textproc--note-current ()
-  "Return the index of the current note based upon point.
+(defun textproc--note-current ()
+  "Set the current note into `textproc-notes'.
 
-Error if point is not in a drawer."
+Current note is the index of the note point is in.
+However, the current note will not be set if point is outside of a drawer.
+Instead, an error will result.
+If point is at the borders of a drawer, either the first or the last note
+will be set as current."
 
-  (interactive)
+  (when (or (< (point) (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
+            (> (point) (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes))))
+    (error "You are not in a drawer."))
+  (setf (textproc-notes-s-current textproc-notes)
+        (cond
+         ((<= (point)
+              (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
+          1)
+         ((>= (point)
+              (textproc-begin-end-s-end (textproc-notes-s-pllist textproc-notes)))
+          (length (textproc-notes-s-notes textproc-notes)))
+         ((= (point)
+             (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes)))
+          (length (textproc-notes-s-notes textproc-notes)))
+         ((= (point)
+             (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
+          1)
+         (t (let* ((notes (textproc-notes-s-notes textproc-notes))
+                   (pos (point))
+                   (note (cl-first (seq-find (lambda (note) (let ((b (textproc--note-begin note))
+                                                                  (e (textproc--note-end note)))
+                                                              (and (>= pos b)
+                                                                   (<= pos e))))
+                                             notes))))
+              (if (and
+                   (> note 0)
+                   (< note (length notes))
+                   (= pos (textproc--note-begin (nth note notes))))
+                  (1+ note)
+                note))))))
 
-  (when (or
-         (>= (point) (textproc-begin-end-s-end
-                      (textproc-notes-s-pllist textproc-notes)))
-         (< (point) (textproc-begin-end-s-begin
-                     (textproc-notes-s-pllist textproc-notes))))
-    (if (and (>= (point) (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
-             (<= (point) (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes))))
-        (cl-return-from textproc-note-current 1)
-      (error "You are not in a drawer.")))
-  (let* ((notes (textproc-notes-s-notes textproc-notes))
-         (pos (point))
-         (note (seq-find (lambda (note) (let ((b (textproc--note-begin note))
-                                              (e (textproc--note-end note)))
-                                          (and (>= pos b)
-                                               (<= pos e))))
-                         notes))
-         (cur (textproc--note-index note)))
-    (when (= pos (textproc--note-end note))
-      (cl-incf cur))
-    (when (called-interactively-p 'interactive)
-      (message "%s" cur))
-    (setf (textproc-notes-s-current textproc-notes) cur)))
 
+  (defmacro textproc--note-timestamp ()
+    "Set the timestamp value of the current note into `textproc-notes'."
 
-(defmacro textproc--note-timestamp ()
-  "Set the timestamp value of the current note into `textproc-notes'."
-
-  `(save-excursion
-     (progn
-       (let ((cur (textproc-notes-s-current textproc-notes))  ; cur index
-             (notes (textproc-notes-s-notes textproc-notes))) ; notes
-         (goto-char (cl-second (nth (1- cur) notes)))
-         (re-search-forward
-          (rx textproc-inactive-timestamp)
-          (cl-third (nth (1- cur) notes)))
-         (backward-char))
-       (let* ((tsv (org-element-context))
-              (type (org-element-type tsv))
-              (beg (org-element-begin tsv))
-              (end (org-element-end tsv))
-              (name (org-element-property :raw-value tsv))
-              (be (make-textproc-begin-end-s :type type
-                                             :name name
-                                             :begin beg
-                                             :end end)))
-         (setf (textproc-notes-s-time textproc-notes) be)))))
+    `(save-excursion
+       (progn
+         (let ((cur (textproc-notes-s-current textproc-notes))  ; cur index
+               (notes (textproc-notes-s-notes textproc-notes))) ; notes
+           (goto-char (cl-second (nth (1- cur) notes)))
+           (re-search-forward
+            (rx textproc-inactive-timestamp)
+            (cl-third (nth (1- cur) notes)))
+           (backward-char))
+         (let* ((tsv (org-element-context))
+                (type (org-element-type tsv))
+                (beg (org-element-begin tsv))
+                (end (org-element-end tsv))
+                (name (org-element-property :raw-value tsv))
+                (be (make-textproc-begin-end-s :type type
+                                               :name name
+                                               :begin beg
+                                               :end end)))
+           (setf (textproc-notes-s-time textproc-notes) be)))))
 
 
 ;; End Notes Set
@@ -2272,8 +2288,8 @@ If NO-SET is non-nil, don't run textproc-notes-set."
   (unless no-set (textproc-notes-set))
   (goto-char (pcase which
                (?b (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
-               (?f (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
-               (?l (textproc--note-begin (length (textproc-notes-s-notes textproc-notes))))
+               (?f (textproc-note-begin-n 1 t))
+               (?l (textproc-note-begin-n (length (textproc-notes-s-notes textproc-notes)) t))
                (?e (progn ; sometimes the end of the drawer is not at :END:
                      (goto-char (textproc-begin-end-s-end   (textproc-notes-s-drawer textproc-notes)))
                      (while (not (looking-at-p (rx bol ":END:" eol)))
