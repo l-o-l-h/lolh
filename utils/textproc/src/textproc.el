@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-15 07:58:58 lolh-mbp-16>
+;;; Time-stamp: <2025-01-15 08:24:19 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -1870,8 +1870,11 @@ For an RCW txt file."
   (seq bol "- Note taken on " textproc-inactive-timestamp " \\" nonl))
 
 
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Note List Element Structures
+;;; Textproc Note List Element Structures
 
 ;; Jump directly to the prior heading
 ;; org-backward-heading-same-level 0
@@ -1887,7 +1890,7 @@ For an RCW txt file."
 
 
 (cl-defstruct textproc-timestamp-s
-  "A structure to hold the current note's timestamp."
+  "A structure to hold a timestamp string."
 
   (tsbe nil textproc-begin-end-s "The position of the timestamp")
   (value nil string "The raw string value of the timestamp"))
@@ -1900,8 +1903,9 @@ For an RCW txt file."
   (headline nil textproc-begin-end-s "the enclosing headline")
   (drawer nil textproc-begin-end-s "the enclosing drawer")
   (pllist nil textproc-begin-end-s "the enclosing plain-list")
-  (current nil textproc-begin-end-s "the current note")
-  (time nil textproc-begin-end-s "the current note's timestamp"))
+  (current nil integer "the current note")
+  (time nil textproc-timestamp-s "the current note's timestamp")
+  (email nil textproc-timestamp-s "the current note's email time"))
 
 
 (defvar textproc-notes (make-textproc-notes-s)
@@ -1910,66 +1914,16 @@ For an RCW txt file."
 - notes :: alist
 - headline :: textproc-begin-end-s
 - drawer :: textproc-begin-end-s
-- pllist :: textproc-begin-end-s")
+- pllist :: textproc-begin-end-s
+- current :: integer
+- time :: timestamp
+- email :: timestamp")
 
 
-
-
-;;; the following few macros use the notes' internal structure to
-;;; access parts of the note, and are marked with `textproc--...'
-
-;;; primitive accessors for a note
-;;; index, begin-pos, end-pos
-
-
-(defmacro textproc--notes ()
-  "The list of notes."
-
-  `(textproc-notes-s-notes textproc-notes))
-
-
-;; returns a note
-(defmacro textproc--note-n (n &optional no-set)
-  "Return the Nth note from the note's list.
-
-Make sure n is not out-of-bounds.
-Do not set notes when NO-SET is non-nil.
-
-((<index> <begin> <end>) ...)"
-
-  `(progn
-     (unless ,no-set (textproc-notes-set))
-     (let* ((notes (textproc--notes))
-            (len (length notes)))
-       (if (or (< ,n 1) (> ,n len))
-           (progn (message "Index %s is out of range: 1 <= n <= %s" ,n len)
-                  (throw 'bad-index nil))
-         (nth (1- ,n) notes)))))
-
-
-;; accesses a note's index
-(defmacro textproc--note-index (note)
-  "Return the NOTE's index."
-
-  `(cl-first ,note))
-
-
-;; accesses a note's begin position
-(defmacro textproc--note-begin (note)
-  "Return NOTE's begin position."
-
-  `(cl-second ,note))
-
-
-;; accesses a note's end position
-(defmacro textproc--note-end (note)
-  "Return the NOTE's end position."
-
-  `(cl-third ,note))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Notes Set
+;;; Textproc Notes Set
 
 
 (defmacro textproc-notes-set ()
@@ -2080,19 +2034,23 @@ will be set as current."
             (> (point) (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes))))
     (error "You are not in a drawer."))
   (setf (textproc-notes-s-current textproc-notes)
+        ;; point is inside a drawer
         (cond
+         ;; point is at or before a plain list
          ((<= (point)
               (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
-          1)
+          1) ; set current note to the first
+         ;; point is at or after the end of a plain list
          ((>= (point)
               (textproc-begin-end-s-end (textproc-notes-s-pllist textproc-notes)))
+          ;; set current to the last note
           (length (textproc-notes-s-notes textproc-notes)))
+         ;; point as at the bottom of a drawer
          ((= (point)
              (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes)))
+          ;; set current to the last note
           (length (textproc-notes-s-notes textproc-notes)))
-         ((= (point)
-             (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
-          1)
+         ;; point is in a list item
          (t (let* ((notes (textproc-notes-s-notes textproc-notes))
                    (pos (point))
                    (note (cl-first (seq-find (lambda (note) (let ((b (textproc--note-begin note))
@@ -2108,31 +2066,90 @@ will be set as current."
                 note))))))
 
 
-  (defmacro textproc--note-timestamp ()
-    "Set the timestamp value of the current note into `textproc-notes'."
+(defmacro textproc--note-timestamp ()
+  "Set the timestamp value of the current note into `textproc-notes'."
 
-    `(save-excursion
-       (progn
-         (let ((cur (textproc-notes-s-current textproc-notes))  ; cur index
-               (notes (textproc-notes-s-notes textproc-notes))) ; notes
-           (goto-char (cl-second (nth (1- cur) notes)))
-           (re-search-forward
-            (rx textproc-inactive-timestamp)
-            (cl-third (nth (1- cur) notes)))
-           (backward-char))
-         (let* ((tsv (org-element-context))
-                (type (org-element-type tsv))
-                (beg (org-element-begin tsv))
-                (end (org-element-end tsv))
-                (name (org-element-property :raw-value tsv))
-                (be (make-textproc-begin-end-s :type type
-                                               :name name
-                                               :begin beg
-                                               :end end)))
-           (setf (textproc-notes-s-time textproc-notes) be)))))
+  `(save-excursion
+     (progn
+       (let ((cur (textproc-notes-s-current textproc-notes))  ; cur index
+             (notes (textproc-notes-s-notes textproc-notes))) ; notes
+         (goto-char (cl-second (nth (1- cur) notes)))
+         (re-search-forward
+          (rx textproc-inactive-timestamp)
+          (cl-third (nth (1- cur) notes)))
+         (backward-char))
+       (let* ((tsv (org-element-context))
+              (type (org-element-type tsv))
+              (beg (org-element-begin tsv))
+              (end (org-element-end tsv))
+              (name (org-element-property :raw-value tsv))
+              (be (make-textproc-begin-end-s :type type
+                                             :name name
+                                             :begin beg
+                                             :end end)))
+         (setf (textproc-notes-s-time textproc-notes) be)))))
 
 
 ;; End Notes Set
+
+
+
+
+
+
+;;; the following few macros use the notes' internal structure to
+;;; access parts of the note, and are marked with `textproc--...'
+
+;;; primitive accessors for a note
+;;; index, begin-pos, end-pos
+
+
+(defmacro textproc--notes ()
+  "The list of notes."
+
+  `(textproc-notes-s-notes textproc-notes))
+
+
+;; returns a note
+(defmacro textproc--note-n (n &optional no-set)
+  "Return the Nth note from the note's list.
+
+Make sure n is not out-of-bounds.
+Do not set notes when NO-SET is non-nil.
+
+((<index> <begin> <end>) ...)"
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (let* ((notes (textproc--notes))
+            (len (length notes)))
+       (if (or (< ,n 1) (> ,n len))
+           (progn (message "Index %s is out of range: 1 <= n <= %s" ,n len)
+                  (throw 'bad-index nil))
+         (nth (1- ,n) notes)))))
+
+
+;; accesses a note's index
+(defmacro textproc--note-index (note)
+  "Return the NOTE's index."
+
+  `(cl-first ,note))
+
+
+;; accesses a note's begin position
+(defmacro textproc--note-begin (note)
+  "Return NOTE's begin position."
+
+  `(cl-second ,note))
+
+
+;; accesses a note's end position
+(defmacro textproc--note-end (note)
+  "Return the NOTE's end position."
+
+  `(cl-third ,note))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Notes Processing
 
