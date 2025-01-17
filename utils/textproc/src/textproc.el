@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-16 23:55:14 lolh-mbp-16>
+;;; Time-stamp: <2025-01-17 09:21:39 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -17,8 +17,7 @@
 ;;; TODO:
 ;;  Notes
 ;;  - [X] Sync timestamp of note with timestamp of email [2025-01-16T0930]
-;;  - [ ] Sort notes and add a blank space between each
-;;  - [ ] Add a key combo for the above
+;;  - [X] Sort notes and add a blank space between each [2025-01-17T0915]
 ;;  - [ ] When adding a document, include option to add to the current note
 ;;  - [X] Add a command/key combo to move point to the top of the current note [2025-01-16T0930]
 ;;  - [X] Add a command and key combo to walk through the notes in reverse order one by one [2025-01-16T0930]
@@ -27,7 +26,7 @@
 ;;  - [X] Add a command to copy a Logbook entry to paste buffer [2025-01-16T0930]
 ;;  - [ ] Add a command to copy a Worklog entry to paste buffer
 ;;  - [X] Be able to copy multiple notes at once instead of having to copy each separately [2025-01-16T2130]
-;;  - [ ] Single space a note upon exit from note buffer
+;;  - [X] Single space a note upon exit from note buffer [2025-01-17T0915
 ;;  - [ ] Add a command to jump from a secondary note (such as O/C Comm) to the Main
 ;;  - [ ] Copy a new note upon completion
 ;; Emails
@@ -2180,31 +2179,6 @@ DATA is the match-data from the calling function."
              (setf (textproc-notes-s-email textproc-notes) ets)))))))
 
 
-;; (defun textproc-note-update-email-time (&optional no-set)
-;;   "Get an email time, update missing components.
-
-;; Do not reset notes when NO-SET is non-nil."
-
-;;   (interactive "i")
-
-;;   (save-excursion
-;;     (unless no-set (textproc-notes-set))
-;;     (textproc-note-jump ?t t)
-;;     (when (re-search-forward (rx textproc-email-time)
-;;                              (textproc-current-note-end) t)
-;;       (let* ((data (match-data))
-;;              (pts (parse-time-string (match-string-no-properties 1)))
-;;              (ampm (match-string-no-properties 2))
-;;              (cpts (copy-sequence pts))
-;;              (upts (textproc--update-email-time cpts ampm)))
-;;         (when (cdr upts)
-;;           (set-match-data data)
-;;           (goto-char (match-beginning 1))
-;;           (delete-region (point) (pos-eol))
-;;           (insert (format-time-string textproc-email-time-format (encode-time (cl-first upts))))
-;;           (save-buffer 0))))))
-
-
 ;; End Notes Set
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2265,6 +2239,12 @@ Do not set notes when NO-SET is non-nil.
   `(cl-third ,note))
 
 
+;; (defmacro textproc-note-ts-value (note)
+;;   "Return the note's timestamp value."
+
+;;   `(textproc-timestamp-s-value ,note))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Notes Processing
 
@@ -2309,6 +2289,62 @@ Do not set the notes when NO-SET is non-nil."
      (textproc--note-end (textproc-current-note t))))
 
 
+(defmacro textproc-note-timestamp-values (note &optional no-set)
+  "Return the timestamp value the NOTE.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (let ((value (cons nil nil)))
+       (save-excursion
+         (goto-char (textproc--note-begin ,note))
+         (textproc-notes-set)
+         (setf (car value) (textproc-current-timestamp-value))
+         (setf (cdr value) (textproc-current-email-value)))
+       (textproc-notes-set)
+       value)))
+
+
+(defmacro textproc-current-timestamp-value (&optional no-set)
+  "Return the timestamp value of the current note.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc-timestamp-s-value
+      (textproc-notes-s-time textproc-notes))))
+
+
+(defmacro textproc-current-email-value (&optional no-set)
+  "Return the value of the email time.
+
+Do not set the notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc-timestamp-s-value
+      (textproc-notes-s-email textproc-notes))))
+
+
+(defmacro textproc-notes-time-compare (v1 v2)
+  "Compare two timestamp values V1 and V2.
+
+-1 when V1 < V2
+ 0 when V1 = V2
++1 when V1 > V2"
+
+  `(cond
+    ((time-less-p ,v1 ,v2) -1)
+    ((time-equal-p ,v1 ,v2) 0)
+    (t 1)))
+
+
+(defmacro textproc-notes-time-less-p (v1 v2)
+  "Return t if V1 is less than V2."
+
+  `(= -1 (textproc-notes-time-compare ,v1 ,v2)))
 
 
 
@@ -2460,6 +2496,55 @@ Do not set notes when NO-SET is non-nil."
   (unless no-set (textproc-notes-set))
   (catch 'bad-index
     (goto-char (textproc-note-begin-n n))))
+
+
+(defun textproc-note-find-greater-timestamp (ts &optional no-set)
+  "Find a note that has a greater timestamp value than TS.
+
+Do not set notes when NO-SET is non-nil."
+
+  (unless no-set (textproc-notes-set))
+  (seq-find (lambda (note)
+              (textproc-notes-time-less-p
+               ts
+               (let ((value (textproc-note-timestamp-values note t)))
+                 (or (cdr value)
+                     (car value)))))
+            (textproc--notes)))
+
+
+(defmacro textproc-note-pick-ts-value ()
+  "Return an email timestamp value if present, or else a note timestamp value.
+
+Use the current note."
+
+  `(or (textproc-current-email-value t)
+       (textproc-current-timestamp-value t)))
+
+
+(defun textproc-note-move-note-maybe (&optional no-set)
+  "Move the current note into time position.
+
+Use email timestamp value if present; otherwise use note timestamp value.
+
+Do not set notes when NO-SET is non-nil."
+
+  (interactive)
+
+  (unless no-set (textproc-notes-set))
+  (let* ((greater
+          (textproc-note-find-greater-timestamp
+           (textproc-note-pick-ts-value)
+           t)))
+    (when greater
+      (goto-char (textproc--note-begin greater))
+      (insert (delete-and-extract-region
+               (textproc-current-note-begin t)
+               (textproc-current-note-end t)))
+      (ensure-empty-lines 1)
+      (textproc-note-jump ?e)
+      (ensure-empty-lines 0)
+      (save-buffer))))
 
 
 ;; End Notes Processing
@@ -2797,9 +2882,11 @@ Do not set notes when NO-SET is non-nil."
   (textproc-notes-set))
 
 
-(add-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-spacing)
+(add-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-spacing -1)
+(add-hook 'org-after-note-stored-hook 'textproc-note-move-note-maybe 1)
 
 ;; (remove-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-spacing)
+;; (remove-hook 'org-after-note-stored-hook 'textproc-note-move-note-maybe 1)
 
 (provide 'textproc)
 
