@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-16 21:18:56 lolh-mbp-16>
+;;; Time-stamp: <2025-01-16 23:55:14 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -26,7 +26,7 @@
 ;;  - [ ] Add a command to delete a note
 ;;  - [X] Add a command to copy a Logbook entry to paste buffer [2025-01-16T0930]
 ;;  - [ ] Add a command to copy a Worklog entry to paste buffer
-;;  - [ ] Be able to copy multiple notes at once instead of having to copy each separately
+;;  - [X] Be able to copy multiple notes at once instead of having to copy each separately [2025-01-16T2130]
 ;;  - [ ] Single space a note upon exit from note buffer
 ;;  - [ ] Add a command to jump from a secondary note (such as O/C Comm) to the Main
 ;;  - [ ] Copy a new note upon completion
@@ -99,7 +99,7 @@
 (defvar cap-pos-end nil
   "case caption position end")
 (defvar op-pos nil
-  "opinion start postion")
+  "opinion start position")
 (defvar ts-begin-pos nil
   "timestamp start position")
 (defvar ts-end-pos nil
@@ -2142,8 +2142,9 @@ DATA is the match-data from the calling function."
      (save-excursion
        (let* ((pts (parse-time-string (match-string-no-properties 1)))
               (ampm (match-string-no-properties 2))
+              ;; upts = (time . changed)
               (upts (textproc--update-email-time pts ampm)))
-         (when (cdr upts)
+         (when (cdr upts) ; when changed is t
            (set-match-data ,data)
            (goto-char (match-beginning 1))
            (delete-region (point) (pos-eol))
@@ -2159,14 +2160,13 @@ DATA is the match-data from the calling function."
   `(save-excursion
      (progn
        (let ((cur (textproc-notes-s-current textproc-notes))
-             (notes (textproc-notes-s-notes textproc-notes))
-             data)
+             (notes (textproc-notes-s-notes textproc-notes)))
          (goto-char (cl-second (nth (1- cur) notes)))
          (when (re-search-forward
                 (rx textproc-email-time)
                 (cl-third (nth (1- cur) notes)) t)
-           (setf data (match-data))
-           (let* ((name (textproc--update-email data))
+           (let* ((data (match-data))
+                  (name (textproc--update-email data))
                   (type 'email-ts)
                   (beg (match-beginning 1))
                   (end (pos-eol))
@@ -2286,8 +2286,7 @@ Do not set notes when NO-SET is non-nil."
 
   `(progn
      (unless ,no-set (textproc-notes-set))
-     (nth (1- (textproc-current-note-index t))
-          (textproc-notes-s-notes textproc-notes))))
+     (textproc--note-n (textproc-current-note-index t) t)))
 
 
 (defmacro textproc-current-note-begin (&optional no-set)
@@ -2782,25 +2781,25 @@ Do not set notes when NO-SET is non-nil."
 ;;   (ensure-empty-lines 1))
 
 
-(defun textproc-new-note-ensure-empty-line ()
-  "Add a space between notes."
 
-  (beginning-of-line)
-  (while (not (looking-at-p (rx bol "- ")))
-    (forward-line -1))
+
+(defun textproc-new-note-ensure-spacing ()
+  "Add a space between notes and remove excess spacing in the note."
+
+  (setq op-pos (point-marker))
+  (search-backward "- Note taken on [")
   (ensure-empty-lines)
-  (textproc-note-jump ?b t))
+  (cl-loop until (<= op-pos (point)) do
+           (if (looking-at-p (rx (= 2 (seq bol (zero-or-more space) "\n"))))
+               (delete-line)
+             (forward-line)))
+  (set-marker op-pos nil)
+  (textproc-notes-set))
 
 
-(add-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-empty-line 0)
-(add-hook 'org-after-note-stored-hook 'textproc-notes-set 1)
-;; (add-hook 'org-after-note-stored-hook 'textproc-note-update-email-time)
-;; (add-hook 'org-after-note-stored-hook 'textproc-note-copy-current)
+(add-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-spacing)
 
-;; (remove-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-empty-line)
-;; (remove-hook 'org-after-note-stored-hook 'textproc-note-copy-current)
-;; (remove-hook 'org-after-note-stored-hook 'textproc-note-update-email-time)
-;; (remove-hook 'org-after-note-stored-hook 'textproc-notes-set)
+;; (remove-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-spacing)
 
 (provide 'textproc)
 
