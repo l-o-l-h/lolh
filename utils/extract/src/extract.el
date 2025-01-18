@@ -1,11 +1,11 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2025-01-06 12:25:46 lolh-mbp-16>
-;; Version: 0.2.1 [2024-11-15 07:35]
-;; Package-Requires: ((emacs "29.1") org-attach)
+;;; Time-stamp: <2025-01-18 13:20:16 lolh-mbp-16>
+;;; Version: 0.3.0 [2025-01-18 13:20]
+;;; Package-Requires: ((emacs "29.1") org-attach)
 
-;; Author: LOLH <lolh@lolh.com>
-;; Homepage:
-;; Keywords: denote
+;;; Author: LOLH <lolh@lolh.com>
+;;; Homepage:
+;;; Keywords: denote
 
 ;;; Commentary:
 
@@ -99,6 +99,19 @@
 
 
 ;;;-------------------------------------------------------------------
+
+
+(keymap-global-set "M-A"     #'lolh/note-tree)
+(keymap-global-set "M-H"     #'lolh/add-columns-header)
+(keymap-global-set "M-R"     #'lolh/simple-rename-using-note)
+(keymap-global-set "M-W"     #'lolh/return-cause-plaintiffs-defendants)
+(keymap-global-set "C-x p a" #'lolh/court-files-attach)
+(keymap-global-set "C-x p h" #'lolh/extract-pdfs)
+(keymap-global-set "C-x p j" #'lolh/process-dir)
+(keymap-global-set "C-x p u" #'lolh/update-pleadings)
+
+
+;;;-------------------------------------------------------------------
 ;;; Macro lolh/with-main-note, lolh/with-client-note
 
 
@@ -122,8 +135,10 @@ of that client note."
 
 
 ;;;-------------------------------------------------------------------
-;;; Constants
+;; Constants
 
+
+(setq-local default-directory *lolh/downloads-dir*)
 
 (defconst *lolh/gd* "GOOGLE_DRIVE")
 ;; GOOGLE_DRIVE = $HOME/Google Drive/My Drive"
@@ -140,26 +155,8 @@ of that client note."
 (defconst *lolh/downloads-dir*
   (expand-file-name "Downloads" "~"))
 
-(setq-local default-directory *lolh/downloads-dir*)
-
 (defconst *lolh/process-dir*
   (expand-file-name "process" *lolh/downloads-dir*))
-
-;; (defconst *lolh/pdftk-jar-path*
-;;   (expand-file-name "~/.local/bin/pdftk-all.jar"))
-
-;; (defconst *lolh/pdftk-command*
-;;   (combine-and-quote-strings
-;;    (list "java" "-jar" *lolh/pdftk-jar-path*
-;;          (file-name-concat *lolh/process-dir* "%s")
-;;          "cat" "%s-%s" "output"
-;;          (file-name-concat *lolh/process-dir* "%s")))
-
-;;   "A string that will be used by `format' to create a command.")
-
-;; (defconst *lolh/pdftk-command*
-;;   (concat "java -jar " *lolh/pdftk-jar-path* " \'%s\' cat %s-%s output \'%s\'"))
-;; "java -jar %s \'%s\' cat %s-%s output \'%s\'"
 
 (defconst *lolh/first-middle-last-name-rx*
   (rx bos
@@ -168,9 +165,6 @@ of that client note."
       (group (1+ (any word "-")))             ; last name
       (opt (seq "," space (group (1+ (any word "."))))) ; suffix Jr., Sr., MD.
       eos))
-
-;; (defconst *lolh/first-last-name-re*
-;;   "^\\([^[:space:]]+\\).*[[:space:]]\\([^[:space:]]+\\)$")
 
 (defconst *lolh/file-name-allowed-parts*
   '(:full :docket :cause :date-b :date :name-full :name-pri :name-sec :document :ext)
@@ -249,6 +243,8 @@ of that client note."
 
 
 ;;;-------------------------------------------------------------------
+;; Global Variables
+
 
 ;; TODO: create a buffer-local variable that resets to nil when a buffer
 ;; stops being current; function lolh/note-tree can check this variable
@@ -264,6 +260,7 @@ of that client note."
 
 
 ;;;-------------------------------------------------------------------
+;; Main Commands
 
 
 ;;; TODO: Is it possible to use a hook from `org-element'
@@ -272,22 +269,6 @@ of that client note."
 (defun lolh/note-tree ()
   (interactive)
   (setq *lolh/note-tree* (org-element-parse-buffer)))
-
-
-(keymap-global-set "C-x p a" #'lolh/court-files-attach)
-(keymap-global-set "C-x p h" #'lolh/extract-pdfs)
-(keymap-global-set "C-x p j" #'lolh/process-dir)
-(keymap-global-set "C-x p u" #'lolh/update-pleadings)
-(keymap-global-set "M-A"     #'lolh/note-tree)
-;; (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
-;; (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
-(keymap-global-set "M-H"     #'lolh/add-columns-header)
-;; (keymap-global-set "M-N"     #'lolh/pbcopy-client-name)
-;; (keymap-global-set "M-P"     #'lolh/pbcopy-client-phone)
-(keymap-global-set "M-R"     #'lolh/simple-rename-using-note)
-;; (keymap-global-set "M-T"     #'lolh/pbcopy-title)
-;; (keymap-global-set "M-U"     #'lolh/unlock-docs)
-(keymap-global-set "M-W"     #'lolh/return-cause-plaintiffs-defendants)
 
 
 ;;; The following command requires that there be a main heading titled
@@ -602,41 +583,10 @@ argument sets BODY-P to 16."
     (lolh/send-to-gd-and-maybe-attach old-files new-files attach-hl)))
 
 
-;; M-U
-;; (defun lolh/unlock-docs ()
-;;   "Unlock DOC, e.g. an OLD or Appointment.
-
-;; DOC must be in *lolh/process-dir*, and so this command will first call
-;; `lolh/copy-new-files-into-process-dir'.  It will thereafter work on every
-;; file in *lolh/process-dir*.
-;; UNLOCKED will be the same file name but with (unlocked) added to the end.
-
-;; The original (locked) files are deleted from *lolh/process-dir*.
-;; The unlocked files are moved into *lolh/downloads-dir*."
-
-;;   (interactive)
-
-;;   (lolh/copy-new-files-into-process-dir)
-
-;;   (let ((all-locked (directory-files *lolh/process-dir* t "^[^.]")))
-;;     (dolist (locked all-locked)
-;;       (let ((unlocked (format "%s (unlocked).pdf"
-;;                               (file-name-sans-extension locked))))
-;;         (textproc-pdftk-cat
-;;          (file-name-nondirectory locked)
-;;          1 "end"
-;;          (file-name-nondirectory unlocked))
-;;         (rename-file unlocked
-;;                      (file-name-concat *lolh/downloads-dir*
-;;                                        (file-name-nondirectory unlocked)))
-;;         (delete-file locked))))
-
-;;   (message "Files unlocked"))
-
-
 ;;====================================================================
 
 
+;; TODO: Finish this one
 (defun lolh/close-case ()
   "Close a CASE, updating any data directory references.
 
@@ -875,6 +825,7 @@ This returns all directories rooted in the gd-cause-dir for the current note."
   (let (result)
     (dolist (dir (lolh/gd-dirs) result)
       (push (cons dir (file-name-nondirectory dir)) result))))
+
 
 ;;;-------------------------------------------------------------------
 ;;; Main Note and Client Note Commands
@@ -1660,95 +1611,6 @@ PART must be one of *lolh/file-name-allowed-parts*."
                      (file-name-concat *lolh/downloads-dir* new-file))))))
 
 
-;;;-------------------------------------------------------------------
-;;; PDFTK
-
-;; (defun lolh/pdftk-cat (doc start end new-doc)
-;;   "Run pdftk on the DOC starting at page START, ending at page END, into NEW-DOC.
-
-;; All documents begin and end in *lolh/process-dir*"
-
-;;   (call-process-shell-command
-;;    (format *lolh/pdftk-command*
-;;            (file-name-concat *lolh/process-dir* doc)
-;;            start end
-;;            (file-name-concat *lolh/process-dir* new-doc))))
-
-
-;; (defun lolh/call-split-dismissal-old ()
-;;   (interactive)
-;;   (setq-local default-directory *lolh/downloads-dir*)
-;;   (setq-local insert-default-directory t)
-;;   (call-interactively #'lolh/split-dismissal-old))
-
-
-;;; Split and rename a combined Stipulated Dismissal-OLD
-;;; case [date] def-names -- Stipulated Dismisall-OLD.pdf
-;; (defun lolh/split-dismissal-old (file)
-;;   "Split into two documents a single stipulated dismissal-OLD."
-
-;;   (interactive
-;;    (let ((default-directory *lolh/downloads-dir*)
-;;          (insert-default-directory nil)
-;;          (initial (directory-files *lolh/downloads-dir* nil "Stipulated Dismissal-OLD")))
-;;      (list
-;;       (read-file-name "File to split? "nil nil t (car initial)))))
-
-;;   (lolh/clean-dirs)
-
-;;   (let* ((bn-file (file-name-nondirectory file))
-;;          (full (and
-;;                 (string-match (rx (seq
-;;                                    bos
-;;                                    (group (* ascii))
-;;                                    " -- "
-;;                                    (group "Stipulated")
-;;                                    (any space)
-;;                                    (group "Dismissal")
-;;                                    "-"
-;;                                    (group "OLD")
-;;                                    (group (* ascii))
-;;                                    ".pdf"
-;;                                    eos))
-;;                               bn-file)
-;;                 (match-string 0 bn-file)))
-;;          (first (match-string 1 bn-file))
-;;          (second (match-string 2 bn-file))
-;;          (third (match-string 3 bn-file))
-;;          (fourth (match-string 4 bn-file))
-;;          (fifth (match-string 5 bn-file))
-;;          (dismissal (format "%s -- %s %s%s (unlocked).pdf" first second third fifth))
-;;          (old (format "%s -- %s %s%s (unlocked).pdf" first second fourth fifth))
-;;          (process-file (file-name-concat *lolh/process-dir* full)))
-;;     (copy-file file process-file)
-;;     (textproc-pdftk-cat full 1 1 dismissal)
-;;     (textproc-pdftk-cat full 2 3 old)
-;;     (delete-file process-file)
-;;     (rename-file (file-name-concat *lolh/process-dir* dismissal)
-;;                  (file-name-concat *lolh/downloads-dir* dismissal))
-;;     (rename-file (file-name-concat *lolh/process-dir* old)
-;;                  (file-name-concat *lolh/downloads-dir* old))))
-
-;;;-------------------------------------------------------------------
-;;; pbcopy
-
-
-;; (defun lolh/pbcopy (thing)
-;;   "Copy a THING using pbcopy."
-
-;;   (call-process-shell-command
-;;    (concat
-;;     "echo -n " (shell-quote-argument thing) " | " "pbcopy")))
-
-
-;; ;; M-T
-;; (defun lolh/pbcopy-title ()
-;;   "pbcopy the string value of the main note's title."
-
-;;   (interactive)
-;;   (lolh/pbcopy (lolh/title)))
-
-
 (defun lolh/main-property (property)
   "Return the value of PROPERTY from a main note."
 
@@ -1775,71 +1637,6 @@ the main note's title instead.  Should usually use
     (if (string-match-p *lolh/cause-re* cause)
         cause
       (error "Failed to find a valid cause."))))
-
-
-;; ;; M-C
-;; (defun lolh/pbcopy-cause ()
-;;   "Return the cause number of the current case."
-
-;;   (interactive)
-;;   (lolh/pbcopy (lolh/cause)))
-
-
-;; ;; M-P
-;; (defun lolh/pbcopy-client-phone ()
-;;   (interactive)
-;;   (lolh/pbcopy-client-property "PHONE"))
-
-
-;; ;; M-E
-;; (defun lolh/pbcopy-client-email ()
-;;   (interactive)
-;;   (lolh/pbcopy-client-property "EMAIL"))
-
-
-;; ;; M-N
-;; (defun lolh/pbcopy-client-name ()
-;;   (interactive)
-;;   (lolh/pbcopy-client-property "NAME"))
-
-
-;; (defun lolh/pbcopy-client-property (property)
-;;   "pbcopy the client PROPERTY requested.
-
-;; If point is not in a client note, and there are more than one clients,
-;; this function will ask for a client."
-
-;;   (lolh/with-client-note
-;;    (let ((property-value (lolh/note-property property)))
-;;      (message "%s: %s" property property-value)
-;;      (lolh/pbcopy property-value))))
-
-
-;;;-------------------------------------------------------------------
-;;; textutil
-
-
-;; (defun lolh/textutil-rtf-to-txt-command (&optional p)
-;;   "Convert a set of RTF documents into same-named TXT documents.
-
-;; The RTF documents should be in /Downloads.
-;; The TXT documents will end up in /process."
-
-;;   (interactive "p")
-
-;;   (cl-dolist (rtf (directory-files *lolh/downloads-dir* t ".rtf$"))
-;;     (rename-file rtf (file-name-as-directory *lolh/process-dir*))
-;;     (let* ((new-rtf (file-name-concat *lolh/process-dir* (file-name-nondirectory rtf)))
-;;            (new-txt (file-name-concat (file-name-with-extension new-rtf "txt"))))
-;;       (call-process-shell-command
-;;        (format "textutil -convert txt \"%s\"" new-rtf))
-;;       (delete-file new-rtf t)
-;;       (when (eql p 4)
-;;         (if (string-match-p (rx bos (= 7 digit)) (file-name-base new-txt))
-;;             (helpers-process-text-rcw-file)
-;;           (helpers-process-text-case-file new-txt)))
-;;       ;; (delete-file new-txt t)
-;;       )))
 
 
 ;;--------------------------------------------------------------------
@@ -1876,6 +1673,7 @@ headline properties."
 ;;;-------------------------------------------------------------------
 ;;; Clean Directories
 
+
 (defun lolh/clean-dirs ()
 
   (interactive)
@@ -1893,6 +1691,7 @@ headline properties."
 
 ;;;--------------------------------------------------------------------
 ;; Columns
+
 
 ;; M-H
 (defun lolh/add-columns-header ()
