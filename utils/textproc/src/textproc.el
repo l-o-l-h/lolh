@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-17 09:21:39 lolh-mbp-16>
+;;; Time-stamp: <2025-01-18 12:59:25 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -36,8 +36,12 @@
 
 ;;; Code:
 
+;;;-------------------------------------------------------------------
+
 (require 'cl-lib)
 (require 'denote)
+
+;;;-------------------------------------------------------------------
 
 
 (keymap-global-set "M-B"     #'textproc-call-bifurcate-dismissal-old)
@@ -2873,9 +2877,15 @@ Do not set notes when NO-SET is non-nil."
 
   (setq op-pos (point-marker))
   (search-backward "- Note taken on [")
-  (ensure-empty-lines)
+  (ensure-empty-lines (prog2
+                          (forward-line -1)
+                          (if (looking-at-p (rx bol ":LOGBOOK:"))
+                              0 1)
+                        (forward-line)))
+  (when (looking-at-p (rx bol (* space) eol)) (delete-line))
   (cl-loop until (<= op-pos (point)) do
-           (if (looking-at-p (rx (= 2 (seq bol (zero-or-more space) "\n"))))
+           (if (looking-at-p
+                (rx (= 2 (seq bol (zero-or-more space) "\n"))))
                (delete-line)
              (forward-line)))
   (set-marker op-pos nil)
