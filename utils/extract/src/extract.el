@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2025-01-06 12:25:46 lolh-mbp-16>
+;; Time-stamp: <2025-01-18 13:41:52 lolh-mbp-16>
 ;; Version: 0.2.1 [2024-11-15 07:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -1507,8 +1507,11 @@ something seriously wrong with it."
         (rename-file (file-name-concat *lolh/process-dir* (file-name-nondirectory file))
                      (file-name-concat
                       *lolh/process-dir*
-                      (format "[%s] -- %s %s"
-                              date party file)))))))
+                      (format "[%s] -- %s <%s>.%s"
+                              date
+                              party
+                              (file-name-sans-extension file)
+                              (file-name-extension file))))))))
 
 
 
