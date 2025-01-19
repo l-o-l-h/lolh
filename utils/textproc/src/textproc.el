@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-18 17:22:14 lolh-mbp-16>
+;;; Time-stamp: <2025-01-19 12:54:53 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -29,6 +29,7 @@
 ;;  - [X] Single space a note upon exit from note buffer [2025-01-17T0915
 ;;  - [ ] Add a command to jump from a secondary note (such as O/C Comm) to the Main
 ;;  - [ ] Copy a new note upon completion
+;;  - [ ] Give a better error message than the debugger when not in a note
 ;; Emails
 ;;  - [ ] Use email program to add email to O/C Communication entry
 ;; LegalServer
@@ -61,6 +62,7 @@
 (keymap-global-set "C-x p R" #'textproc-statute-rtf-to-note)
 ;; (keymap-global-set "C-x p S" #'textproc-note-sort)
 (keymap-global-set "C-x p T" #'textproc-text-to-denote)
+(keymap-global-set "C-x p W" #'textproc-note-worklog-last-entry)
 (keymap-global-set "C-c N"   #'textproc-display-rcw-next-level)
 
 
@@ -1880,6 +1882,9 @@ For an RCW txt file."
   (seq bol "- Note taken on " textproc-inactive-timestamp " \\" nonl))
 
 
+(rx-define textproc-worktime
+  (seq bol ":WORKTIME:" eol))
+
 
 
 
@@ -1915,7 +1920,8 @@ For an RCW txt file."
   (pllist nil textproc-begin-end-s "the enclosing plain-list")
   (current nil integer "the current note")
   (time nil textproc-timestamp-s "the current note's timestamp")
-  (email nil textproc-timestamp-s "the current note's email time"))
+  (email nil textproc-timestamp-s "the current note's email time")
+  (worktime nil textproc-begin-end-s "a worklog if one exists."))
 
 
 (defvar textproc-notes (make-textproc-notes-s)
@@ -1927,7 +1933,8 @@ For an RCW txt file."
 - pllist :: textproc-begin-end-s
 - current :: integer
 - time :: timestamp
-- email :: timestamp")
+- email :: timestamp
+- worktime :: textproc-begin-end-s")
 
 
 
@@ -1950,6 +1957,7 @@ For an RCW txt file."
        (textproc--note-current)
        (textproc--note-timestamp)
        (textproc--note-email)
+       (textproc--worktime-set)
        (set-marker textproc-cur nil))))
 
 
@@ -2043,7 +2051,7 @@ will be set as current."
 
   (when (or (< (point) (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
             (> (point) (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes))))
-    (error "You are not in a drawer."))
+    (goto-char (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes))))
   (setf (textproc-notes-s-current textproc-notes)
         ;; point is inside a drawer
         (cond
@@ -2186,6 +2194,29 @@ DATA is the match-data from the calling function."
            (setf (textproc-notes-s-email textproc-notes)
                  (make-textproc-timestamp-s)))))))
 
+
+(defmacro textproc--worktime-set ()
+  "Set a worklog if one exists."
+
+  `(save-excursion
+     (progn
+       (goto-char (textproc-begin-end-s-begin
+                   (textproc-notes-s-headline textproc-notes)))
+       (let ((wlbe (make-textproc-begin-end-s)))
+         (when (re-search-forward (rx textproc-worktime)
+                                  (textproc-begin-end-s-end
+                                   (textproc-notes-s-headline textproc-notes))
+                                  t)
+           (let* ((wld (org-element-at-point))
+                  (type (org-element-type wld))
+                  (name (org-element-property :drawer-name wld))
+                  (beg (org-element-begin wld))
+                  (end (org-element-end wld)))
+             (setf wlbe (make-textproc-begin-end-s :type type
+                                                   :name name
+                                                   :begin beg
+                                                   :end end))))
+         (setf (textproc-notes-s-worktime textproc-notes) wlbe)))))
 
 ;; End Notes Set
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2448,7 +2479,7 @@ Do not set notes when NO-SET is non-nil."
                       (textproc-note-begin-n cur)
                       (textproc-note-end-n cur))
                      (make-string 40 ?/)
-                     (make-string 2 10))))))
+                     (string 10))))))
   (message "Copied notes %s-%s" n1 n2))
 
 
@@ -2581,6 +2612,30 @@ Do not set notes when NO-SET is non-nil."
   (when no-set (textproc-notes-set))
   (textproc-note-delete-note (textproc-current-note-index t) t))
 
+
+;; C-x p W
+(defun textproc-note-worklog-last-entry (&optional no-set)
+  "Place the last worklog entry into the paste buffer.
+
+Do not set notes when NO-SET is non-nil."
+
+  (interactive)
+
+  (unless no-set (textproc-notes-set))
+  (let ((wte (textproc-notes-s-worktime textproc-notes)))
+    (when wte
+      (let ((wtb (textproc-begin-end-s-begin wte))
+            (wte (progn
+                   (goto-char (textproc-begin-end-s-end wte))
+                   (re-search-backward (rx bol ":END:" eol)))))
+        (goto-char wte)
+        (re-search-backward (rx bol "CLOCK: [") wtb)
+        (textproc-pbcopy (concat
+                          (buffer-substring (pos-bol) wte)
+                          (make-string 40 ?/)
+                          (string 10)))
+        (when (called-interactively-p 'interactive)
+          (message "Copied the last worktime entry."))))))
 
 
 ;; End Notes Processing
