@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-18 12:59:25 lolh-mbp-16>
+;;; Time-stamp: <2025-01-18 17:22:14 lolh-mbp-16>
 ;;; Version: 0.0.9
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -21,8 +21,8 @@
 ;;  - [ ] When adding a document, include option to add to the current note
 ;;  - [X] Add a command/key combo to move point to the top of the current note [2025-01-16T0930]
 ;;  - [X] Add a command and key combo to walk through the notes in reverse order one by one [2025-01-16T0930]
-;;  - [ ] Add a command to place angle brackets around a downloaded file with the date
-;;  - [ ] Add a command to delete a note
+;;  - [X] Add a command to place angle brackets around a downloaded file with the date [2025-01-18T1600]
+;;  - [X] Add a command to delete a note [2025-01-18T1700
 ;;  - [X] Add a command to copy a Logbook entry to paste buffer [2025-01-16T0930]
 ;;  - [ ] Add a command to copy a Worklog entry to paste buffer
 ;;  - [X] Be able to copy multiple notes at once instead of having to copy each separately [2025-01-16T2130]
@@ -40,12 +40,14 @@
 
 (require 'cl-lib)
 (require 'denote)
+(require 'extract)
 
 ;;;-------------------------------------------------------------------
 
 
 (keymap-global-set "M-B"     #'textproc-call-bifurcate-dismissal-old)
 (keymap-global-set "M-C"     #'textproc-pbcopy-cause)
+(keymap-global-set "M-D"     #'textproc-note-delete-current)
 (keymap-global-set "M-E"     #'textproc-pbcopy-client-email)
 (keymap-global-set "M-N"     #'textproc-pbcopy-client-name)
 (keymap-global-set "M-P"     #'textproc-pbcopy-client-phone)
@@ -2165,22 +2167,24 @@ DATA is the match-data from the calling function."
        (let ((cur (textproc-notes-s-current textproc-notes))
              (notes (textproc-notes-s-notes textproc-notes)))
          (goto-char (cl-second (nth (1- cur) notes)))
-         (when (re-search-forward
-                (rx textproc-email-time)
-                (cl-third (nth (1- cur) notes)) t)
-           (let* ((data (match-data))
-                  (name (textproc--update-email data))
-                  (type 'email-ts)
-                  (beg (match-beginning 1))
-                  (end (pos-eol))
-                  (value (date-to-time name))
-                  (be (make-textproc-begin-end-s :type type
-                                                 :name name
-                                                 :begin beg
-                                                 :end end))
-                  (ets (make-textproc-timestamp-s :tsbe be
-                                                  :value value)))
-             (setf (textproc-notes-s-email textproc-notes) ets)))))))
+         (if (re-search-forward
+              (rx textproc-email-time)
+              (cl-third (nth (1- cur) notes)) t)
+             (let* ((data (match-data))
+                    (name (textproc--update-email data))
+                    (type 'email-ts)
+                    (beg (match-beginning 1))
+                    (end (pos-eol))
+                    (value (date-to-time name))
+                    (be (make-textproc-begin-end-s :type type
+                                                   :name name
+                                                   :begin beg
+                                                   :end end))
+                    (ets (make-textproc-timestamp-s :tsbe be
+                                                    :value value)))
+               (setf (textproc-notes-s-email textproc-notes) ets))
+           (setf (textproc-notes-s-email textproc-notes)
+                 (make-textproc-timestamp-s)))))))
 
 
 ;; End Notes Set
@@ -2549,6 +2553,34 @@ Do not set notes when NO-SET is non-nil."
       (textproc-note-jump ?e)
       (ensure-empty-lines 0)
       (save-buffer))))
+
+
+(defmacro textproc-note-delete-note (n &optional no-set)
+  "Delete the note N.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (delete-region
+      (textproc-note-begin-n ,n t)
+      (textproc-note-end-n ,n t))
+     (when (= ,n (length (textproc--notes)))
+       (textproc-note-jump ?e t)
+       (ensure-empty-lines 0))))
+
+
+;; M-D
+(defun textproc-note-delete-current (&optional no-set)
+  "Delete the current note.
+
+Do not set notes when NO-SET is non-nil."
+
+  (interactive)
+
+  (when no-set (textproc-notes-set))
+  (textproc-note-delete-note (textproc-current-note-index t) t))
+
 
 
 ;; End Notes Processing
