@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-18 13:20:16 lolh-mbp-16>
+;;; Time-stamp: <2025-01-20 13:43:33 lolh-mbp-16>
 ;;; Version: 0.3.0 [2025-01-18 13:20]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -92,6 +92,7 @@
 ;;; Code:
 
 ;;;===================================================================
+
 
 (require 'textproc)
 (require 'denote)
@@ -269,6 +270,23 @@ of that client note."
 (defun lolh/note-tree ()
   (interactive)
   (setq *lolh/note-tree* (org-element-parse-buffer)))
+
+
+(keymap-global-set "C-x p a" #'lolh/court-files-attach)
+(keymap-global-set "C-x p h" #'lolh/extract-pdfs)
+(keymap-global-set "C-x p j" #'lolh/process-dir)
+(keymap-global-set "C-x p J" #'lolh/jump-to-main-client-oc-note)
+(keymap-global-set "C-x p u" #'lolh/update-pleadings)
+(keymap-global-set "M-A"     #'lolh/note-tree)
+;; (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
+;; (keymap-global-set "M-E"     #'lolh/pbcopy-client-email)
+(keymap-global-set "M-H"     #'lolh/add-columns-header)
+;; (keymap-global-set "M-N"     #'lolh/pbcopy-client-name)
+;; (keymap-global-set "M-P"     #'lolh/pbcopy-client-phone)
+(keymap-global-set "M-R"     #'lolh/simple-rename-using-note)
+;; (keymap-global-set "M-T"     #'lolh/pbcopy-title)
+;; (keymap-global-set "M-U"     #'lolh/unlock-docs)
+(keymap-global-set "M-W"     #'lolh/return-cause-plaintiffs-defendants)
 
 
 ;;; The following command requires that there be a main heading titled
@@ -846,16 +864,21 @@ This returns all directories rooted in the gd-cause-dir for the current note."
 (defun lolh/note-p (note type)
   "Predicate to test the TYPE of a NOTE.
 
-TYPE can be either `main' or `client'."
+- main
+- client
+- oc"
 
-  (cl-member type
-             (cl-intersection
-              (cl-ecase type
-                ((main) *lolh/main-note*)
-                ((client) *lolh/client-note*))
-              (denote-extract-keywords-from-path note)
-              :test #'string=)
-             :test #'string=))
+  (let ((keywords (denote-extract-keywords-from-path note)))
+    (cond
+     ((cl-member "main" keywords :test #'string=)
+      (if (cl-member "client" keywords :test #'string=)
+          (eq type 'client)
+        (eq type 'main)))
+     ((and (cl-member "oc" keywords :test #'string=)
+           (cl-member "communication" keywords :test #'string=))
+      (eq type 'oc))
+     (t nil))))
+
 
 
 (defun lolh/main-note ()
@@ -880,7 +903,7 @@ Return an error if a main note cannot be found."
 (defun lolh/client-note ()
   "Return a client notes.
 
-If the current note is as client note, return it.
+If the current note is a client note, return it.
 Otherwise, provide a list of client notes for the user to pick one from.
 
 lolh/client-notes returns a list of client names.
@@ -899,6 +922,32 @@ The associated cons cell is returned."
          (assoc
           (completing-read "Pick a Client: " client-names nil t nil nil client-names)
           client-notes))))))
+
+
+(defun lolh/oc-note ()
+  "Return an O/C note."
+
+  (cond
+   ((lolh/note-p buffer-file-name 'oc)
+    buffer-file-name)
+   (t (lolh/with-main-note
+       (let ((blb (denote-link-return-links)))
+         (or (cl-dolist (b blb)
+               (when (lolh/note-p b 'oc)
+                 (cl-return b)))))))))
+
+
+;; C-x p J | C-u C-x p J | C-u C-u C-x p J
+(defun lolh/jump-to-main-client-oc-note (which)
+  "Jump to the main note from a secondary note."
+
+  (interactive "p")                     ; 1=main-note 4=client note 16=oc note
+
+  (pcase which
+    (1 (find-file (lolh/main-note)))
+    (4 (find-file (lolh/client-note)))
+    (16 (find-file (lolh/oc-note)))
+    (_ (message "Doing nothing."))))
 
 
 (defun lolh/client-notes ()
@@ -1458,8 +1507,11 @@ something seriously wrong with it."
         (rename-file (file-name-concat *lolh/process-dir* (file-name-nondirectory file))
                      (file-name-concat
                       *lolh/process-dir*
-                      (format "[%s] -- %s %s"
-                              date party file)))))))
+                      (format "[%s] -- %s <%s>.%s"
+                              date
+                              party
+                              (file-name-sans-extension file)
+                              (file-name-extension file))))))))
 
 
 
@@ -1702,6 +1754,7 @@ headline properties."
 
 
 ;;;-------------------------------------------------------------------
+
 
 (provide 'extract)
 

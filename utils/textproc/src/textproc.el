@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-12 12:24:29 lolh-mbp-16>
-;;; Version: 0.0.9
+;;; Time-stamp: <2025-01-20 09:38:26 lolh-mbp-16>
+;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -16,16 +16,20 @@
 
 ;;; TODO:
 ;;  Notes
-;;  - [ ] Sync timestamp of note with timestamp of email
-;;  - [ ] Sort notes and add a blank space between each
-;;  - [ ] Add a key combo for the above
+;;  - [X] Sync timestamp of note with timestamp of email [2025-01-16T0930]
+;;  - [X] Sort notes and add a blank space between each [2025-01-17T0915]
 ;;  - [ ] When adding a document, include option to add to the current note
-;;  - [ ] Add a command/key combo to move point to the top of the current note
-;;  - [ ] Add a command and key combo to walk through the notes in reverse order one by one
-;;  - [ ] Add a command to place angle brackets around a downloaded file with the date
-;;  - [ ] Add a command to delete a note
-;;  - [ ] Add a command to copy a Worklog entry to paste buffer
-;;  - [ ] Be able to copy multiple notes at once instead of having to copy each separately
+;;  - [X] Add a command/key combo to move point to the top of the current note [2025-01-16T0930]
+;;  - [X] Add a command and key combo to walk through the notes in reverse order one by one [2025-01-16T0930]
+;;  - [X] Add a command to place angle brackets around a downloaded file with the date [2025-01-18T1600]
+;;  - [X] Add a command to delete a note [2025-01-18T1700
+;;  - [X] Add a command to copy a Logbook entry to paste buffer [2025-01-16T0930]
+;;  - [X] Add a command to copy a Worklog entry to paste buffer [2025-01-19T1525
+;;  - [X] Be able to copy multiple notes at once instead of having to copy each separately [2025-01-16T2130]
+;;  - [X] Single space a note upon exit from note buffer [2025-01-17T0915
+;;  - [X] Add a command to jump from a secondary note (such as O/C Comm) to the Main [2025-01-19T1525
+;;  - [X] Copy a new note upon completion [2025-01-19T2150
+;;  - [ ] Give a better error message than the debugger when not in a note
 ;; Emails
 ;;  - [ ] Use email program to add email to O/C Communication entry
 ;; LegalServer
@@ -33,12 +37,18 @@
 
 ;;; Code:
 
+;;;-------------------------------------------------------------------
+
 (require 'cl-lib)
 (require 'denote)
+;; (require 'extract)
+
+;;;-------------------------------------------------------------------
 
 
 (keymap-global-set "M-B"     #'textproc-call-bifurcate-dismissal-old)
 (keymap-global-set "M-C"     #'textproc-pbcopy-cause)
+(keymap-global-set "M-D"     #'textproc-note-delete-current)
 (keymap-global-set "M-E"     #'textproc-pbcopy-client-email)
 (keymap-global-set "M-N"     #'textproc-pbcopy-client-name)
 (keymap-global-set "M-P"     #'textproc-pbcopy-client-phone)
@@ -46,11 +56,13 @@
 (keymap-global-set "M-U"     #'textproc-unlock-docs)
 (keymap-global-set "C-x p C" #'textproc-note-copy-current)
 (keymap-global-set "C-x p L" #'textproc-note-jump)
-;; (keymap-global-set "C-x p N" #'textproc-note-move-to-next)
+(keymap-global-set "C-x p M" #'textproc-note-copy-multiple)
+(keymap-global-set "C-x p N" #'textproc-note-go)
 ;; (keymap-global-set "C-x p P" #'textproc-note-move-to-prior)
 (keymap-global-set "C-x p R" #'textproc-statute-rtf-to-note)
 ;; (keymap-global-set "C-x p S" #'textproc-note-sort)
 (keymap-global-set "C-x p T" #'textproc-text-to-denote)
+(keymap-global-set "C-x p W" #'textproc-note-worklog-last-entry)
 (keymap-global-set "C-c N"   #'textproc-display-rcw-next-level)
 
 
@@ -94,7 +106,7 @@
 (defvar cap-pos-end nil
   "case caption position end")
 (defvar op-pos nil
-  "opinion start postion")
+  "opinion start position")
 (defvar ts-begin-pos nil
   "timestamp start position")
 (defvar ts-end-pos nil
@@ -1827,6 +1839,10 @@ For an RCW txt file."
       (org-fold-show-branches))))
 
 
+
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Note Processing
 
@@ -1849,25 +1865,35 @@ For an RCW txt file."
   (seq
    bol
    (+ space)
-   (opt (| "Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun") ", ")
-   (opt (| "Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec") space
-        (** 1 2 digit) ", ")
-   (opt (= 4 digit) ", ")
-   (** 1 2 digit) ":" (= 2 digit) nonl (| "AM" "PM") eow))
+   (group-n 1
+     (opt (| "Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun") ", ")
+     (opt (| "Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec") (+ space)
+          (** 1 2 digit) "," (+ space))
+     (opt (= 4 digit) "," (+ space))
+     (** 1 2 digit) ":" (= 2 digit) nonl (group-n 2 (| "AM" "PM")) eow)))
+
+
+(defconst textproc-email-time-format
+  "%a, %b %e, %Y, %l:%M %p"
+  "Dow, Mon dd, h:mm AM|PM")
 
 
 (rx-define textproc-note
   (seq bol "- Note taken on " textproc-inactive-timestamp " \\" nonl))
 
 
+(rx-define textproc-worktime
+  (seq bol ":WORKTIME:" eol))
+
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Note List Elements
+;;; Textproc Note List Element Structures
 
 ;; Jump directly to the prior heading
 ;; org-backward-heading-same-level 0
 
-
-;;; START
 
 (cl-defstruct textproc-begin-end-s
   "A structure to hold the begin and end points of an org element."
@@ -1879,23 +1905,23 @@ For an RCW txt file."
 
 
 (cl-defstruct textproc-timestamp-s
-  "A structure to hold the current note's timestamp."
+  "A structure to hold a timestamp string."
 
   (tsbe nil textproc-begin-end-s "The position of the timestamp")
-  (value nil string "The raw string value of the timestamp"))
+  (value nil timestamp "The timestamp value of the timestamp"))
 
 
-;; Add current note
-;; Add timestamp of current note
 (cl-defstruct textproc-notes-s
-  "A structre to hold a set of notes and related headline, drawer, and list."
+  "A structure to hold a set of notes and related headline, drawer, and list."
 
   (notes nil list "a set of notes as an alist")
   (headline nil textproc-begin-end-s "the enclosing headline")
   (drawer nil textproc-begin-end-s "the enclosing drawer")
   (pllist nil textproc-begin-end-s "the enclosing plain-list")
-  (current nil textproc-begin-end-s "the current note")
-  (time nil textproc-begin-end-s "the current note's timestamp"))
+  (current nil integer "the current note")
+  (time nil textproc-timestamp-s "the current note's timestamp")
+  (email nil textproc-timestamp-s "the current note's email time")
+  (worktime nil textproc-begin-end-s "a worklog if one exists."))
 
 
 (defvar textproc-notes (make-textproc-notes-s)
@@ -1904,120 +1930,38 @@ For an RCW txt file."
 - notes :: alist
 - headline :: textproc-begin-end-s
 - drawer :: textproc-begin-end-s
-- pllist :: textproc-begin-end-s")
+- pllist :: textproc-begin-end-s
+- current :: integer
+- time :: timestamp
+- email :: timestamp
+- worktime :: textproc-begin-end-s")
 
 
-(defmacro textproc-note-n (n)
-  "Return the Nth note.
-
-((<index> <begin> <end>) ...)"
-
-  `(let* ((notes (textproc-notes-s-notes textproc-notes))
-          (len (length notes)))
-     (if (or (< ,n 1) (> ,n len))
-         (progn (message "Index %s is out of range: 1 <= n <= %s" ,n len)
-                (throw 'bad-index nil))
-       (elt notes (1- ,n)))))
 
 
-(defmacro textproc-note-index (note)
-  "Return the index of NOTE."
-
-  `(cl-first ,note))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Textproc Notes Set
 
 
-(defmacro textproc-note-next-previous (dir)
-  "Return the next or previous note depending on DIR.
-- ?n for next
-- ?p for previous
-Wrap around in both directions."
+(defmacro textproc-notes-set ()
+  "Set the elements of `textproc-notes'"
 
-  `(textproc-note-begin
-    (let* ((cur (textproc-note-current))
-           (notes (textproc-notes-s-notes textproc-notes))
-           (len (length notes)))
-      (when (null cur) (throw 'same (point)))
-      (pcase ,dir
-        (?p (if (= cur 1) len (1- cur)))
-        (?n (if (= cur len) 1 (1+ cur)))
-        (_ cur)))))
-
-
-(cl-defun textproc-note-current (&optional no-set)
-  "Return the index of the current note.
-
-Don't set the notes if NO-SET is non-nil.
-If in a drawer or a plain list, goto to the first note."
-
-  (interactive)
-
-  (unless no-set (textproc-notes-set))
-  (when (or
-         (>= (point) (textproc-begin-end-s-end
-                      (textproc-notes-s-pllist textproc-notes)))
-         (< (point) (textproc-begin-end-s-begin
-                     (textproc-notes-s-pllist textproc-notes))))
-    (if (and (>= (point) (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
-             (<= (point) (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes))))
-        (cl-return-from textproc-note-current 1)
-      (error "You are not in a drawer.")))
-  (let* ((notes (textproc-notes-s-notes textproc-notes))
-         (pos (point))
-         (cur (textproc-note-index
-               (seq-find (lambda (note) (let ((b (cl-second note))
-                                              (e (cl-third note)))
-                                          (and (>= pos b)
-                                               (<= pos e))))
-                         notes))))
-    (when (= pos (textproc-note-end cur))
-      (cl-incf cur))
-    (when (called-interactively-p 'interactive)
-      (message "%s" cur))
-    cur))
+  `(save-excursion
+     (progn
+       (set-marker textproc-cur (point))
+       (textproc--headline)
+       (textproc--drawer)
+       (textproc--pllist)
+       (textproc--notes-list)
+       (goto-char textproc-cur)
+       (textproc--note-current)
+       (textproc--note-timestamp)
+       (textproc--note-email)
+       (textproc--worktime-set)
+       (set-marker textproc-cur nil))))
 
 
-(defmacro textproc-note-begin (n)
-  "Return the begin position of the Nth note."
-
-  `(cl-second (textproc-note-n ,n)))
-
-
-(defmacro textproc-note-end (n)
-  "Return the end position of the Nth note."
-
-  `(cl-third (textproc-note-n ,n)))
-
-
-(defmacro textproc-note-substring (n)
-  "Return the substring of the Nth note."
-
-  `(buffer-substring
-    (textproc-note-begin ,n)
-    (textproc-note-end ,n)))
-
-
-(defun textproc-note-copy (n &optional no-set)
-  "Copy the Nth note into the paste buffer.
-
-Don't set the notes when NO-SET is non-nil."
-
-  (interactive "nNote index: ")
-
-  (unless no-set (textproc-notes-set))
-  (textproc-pbcopy
-   (textproc-note-substring n)))
-
-
-;; C-x p C
-(defun textproc-note-copy-current ()
-  "Copy the current note into the paste buffer."
-
-  (interactive)
-
-  (textproc-note-copy (textproc-note-current) :set))
-
-
-(defmacro textproc-headline ()
+(defmacro textproc--headline ()
   "Set the enclosing headline."
 
   `(progn
@@ -2035,7 +1979,7 @@ Don't set the notes when NO-SET is non-nil."
        (setf (textproc-notes-s-headline textproc-notes) hs))))
 
 
-(defmacro textproc-drawer ()
+(defmacro textproc--drawer ()
   "Find the enclosing drawer (logbook) element within headline HL."
 
   `(progn
@@ -2055,8 +1999,8 @@ Don't set the notes when NO-SET is non-nil."
          (setf (textproc-notes-s-drawer textproc-notes) ls)))))
 
 
-(defmacro textproc-pllist ()
-  "Find the enclosing plain list within logbook LS and headline HL."
+(defmacro textproc--pllist ()
+  "Set the plain list within logbook LS and headline HL into `textproc-notes'."
 
   `(progn
      (goto-char
@@ -2070,8 +2014,8 @@ Don't set the notes when NO-SET is non-nil."
        (setf (textproc-notes-s-pllist textproc-notes) pe ))))
 
 
-(defun textproc-notes-filter-structure ()
-  "Filter the plain list note structure so only the first level notes remain.
+(defun textproc--notes-filter-structure ()
+  "Create the plain list notes structure by going to the plain list.
 
 First, remove list levels higher than 1.
 Then, add an index entry."
@@ -2089,255 +2033,624 @@ Then, add an index entry."
                           struct))))
 
 
-(defmacro textproc-notes-list ()
-  "Find the notes from the plain list structure."
+(defmacro textproc--notes-list ()
+  "Set the notes list with the filtered plain list structure."
 
   `(setf (textproc-notes-s-notes textproc-notes)
-         (textproc-notes-filter-structure)))
+         (textproc--notes-filter-structure)))
 
 
-(defmacro textproc-note-current-be ()
-  "Create a `textproc-begin-end-s' for the current note."
+(defun textproc--note-current ()
+  "Set the current note into `textproc-notes'.
 
-  `(let* ((cur (textproc-note-current t))
-          (beg (textproc-note-begin cur))
-          (end (textproc-note-end cur))
-          (be (make-textproc-begin-end-s :type "note"
-                                         :name "current"
-                                         :begin beg
-                                         :end end)))
-     (setf (textproc-notes-s-current textproc-notes) be)))
+Current note is the index of the note point is in.
+However, the current note will not be set if point is outside of a drawer.
+Instead, an error will result.
+If point is at the borders of a drawer, either the first or the last note
+will be set as current."
+
+  (when (or (< (point) (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
+            (> (point) (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes))))
+    (goto-char (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes))))
+  (setf (textproc-notes-s-current textproc-notes)
+        ;; point is inside a drawer
+        (cond
+         ;; point is at or before a plain list
+         ((<= (point)
+              (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
+          1)           ; set current note to the first
+         ;; point is at or after the end of a plain list
+         ((>= (point)
+              (textproc-begin-end-s-end (textproc-notes-s-pllist textproc-notes)))
+          ;; set current to the last note
+          (length (textproc-notes-s-notes textproc-notes)))
+         ;; point as at the bottom of a drawer
+         ((= (point)
+             (textproc-begin-end-s-end (textproc-notes-s-drawer textproc-notes)))
+          ;; set current to the last note
+          (length (textproc-notes-s-notes textproc-notes)))
+         ;; point is in a list item
+         (t (let* ((notes (textproc-notes-s-notes textproc-notes))
+                   (pos (point))
+                   (index (cl-first (seq-find (lambda (note) (let ((b (textproc--note-begin note))
+                                                                   (e (textproc--note-end note)))
+                                                               (and (>= pos b)
+                                                                    (<= pos e))))
+                                              notes))))
+              (if (and
+                   (> index 0)
+                   (< index (length notes))
+                   (= pos (textproc--note-begin (nth index notes))))
+                  (1+ index)
+                index))))))
 
 
-(defun textproc-note-jump-to-timestamp ()
-  "Jump to the timestamp of the current note."
-
-  (interactive)
-
-  (textproc-note-jump ?t) ;; textproc-notes-set is handled by textproc-note-current there
-  (re-search-forward
-   (rx textproc-inactive-timestamp)
-   (textproc-note-end (textproc-note-current t))
-   t))
-
-
-(defmacro textproc-note-timestamp ()
-  "Return the timestamp value of the current note."
+(defmacro textproc--note-timestamp ()
+  "Set the timestamp value of the current note into `textproc-notes'."
 
   `(save-excursion
      (progn
-       (textproc-note-jump-to-timestamp)
-       (backward-char)
+       (let ((cur (textproc-notes-s-current textproc-notes))  ; cur index
+             (notes (textproc-notes-s-notes textproc-notes))) ; notes
+         (goto-char (cl-second (nth (1- cur) notes)))
+         (re-search-forward
+          (rx textproc-inactive-timestamp)
+          (cl-third (nth (1- cur) notes)))
+         (backward-char))
        (let* ((tsv (org-element-context))
               (type (org-element-type tsv))
               (beg (org-element-begin tsv))
               (end (org-element-end tsv))
               (name (org-element-property :raw-value tsv))
+              (value (date-to-time name))
               (be (make-textproc-begin-end-s :type type
                                              :name name
                                              :begin beg
-                                             :end end)))
-         (setf (textproc-notes-s-time textproc-notes) be)))))
+                                             :end end))
+              (tss (make-textproc-timestamp-s :tsbe be
+                                              :value value)))
+         (setf (textproc-notes-s-time textproc-notes) tss)))))
 
 
+(defun textproc--update-email-time (dts ampm)
+  "Given an email decoded time, DTS, update missing elements and return.
+
+Use components from the current note timestamp for the updating.
+
+AMPM is either `AM' or `PM' and the hour is updated to 24-hour time
+for `PM' times.
+
+The function returns a cons cell with a potentially updated decoded time
+and a boolean flag indicating if the email time was updated or not:
+
+- (<decoded-time> . <t|nil>).
+
+A change of the hour due to PM is not considered a change."
+
+  (let ((ndts (copy-sequence dts))
+        (cts (parse-time-string (textproc-begin-end-s-name
+                                 (textproc-timestamp-s-tsbe
+                                  (textproc-notes-s-time textproc-notes)))))
+        changed)
+    (cl-do ((i 2 (1+ i))) ((eql i 6) (cons ndts changed))
+      (pcase i
+        ;; start with hours, then the day, month, and year
+        (2 (when (and
+                  (< (decoded-time-hour ndts) 12)
+                  (string= ampm "PM"))
+             (setf (decoded-time-hour ndts)
+                   (+ 12 (decoded-time-hour ndts)))))
+        (3 (when (null (decoded-time-day ndts))
+             (setf (decoded-time-day ndts) (nth i cts)
+                   changed t)))
+        (4 (when (null (decoded-time-month ndts))
+             (setf (decoded-time-month ndts) (nth i cts)
+                   changed t)))
+        (5 (when (null (decoded-time-year ndts))
+             (setf (decoded-time-year ndts) (nth i cts)
+                   changed t)))))))
 
 
+(defmacro textproc--update-email (data)
+  "Update the email time to include all missing elements and get its timestamp.
 
-(defmacro textproc-notes-set ()
-  "Set the elements of `textproc-notes'"
+DATA is the `match-data' from the calling function.
+
+The macro returns a cons cell with an updated string and its timestamp value:
+
+- (<email-time-string> . (<timestamp>))"
+
+  `(progn
+     (set-match-data ,data)
+     (save-excursion
+       (let* ((pts (parse-time-string (match-string-no-properties 1)))
+              (ampm (match-string-no-properties 2))
+              ;; upts = (time . changed)
+              (upts (textproc--update-email-time pts ampm))
+              (ts (encode-time (cl-first upts))))
+         (when (cdr upts)               ; when changed is t
+           (set-match-data ,data)
+           (goto-char (match-beginning 1))
+           (delete-region (point) (pos-eol))
+           (insert
+            (format-time-string textproc-email-time-format ts)))
+         (cons ; the return cons cell
+          (buffer-substring-no-properties (match-beginning 1) (pos-eol))
+          (cons ts nil))))))
+
+
+(defmacro textproc--note-email ()
+  "Set the email timestamp value of the current note, if there is one."
 
   `(save-excursion
      (progn
-       (set-marker textproc-cur (point))
-       (textproc-headline)
-       (textproc-drawer)
-       (textproc-pllist)
-       (textproc-notes-list)
-       (goto-char textproc-cur)
-       (textproc-note-current-be)
-       (textproc-note-timestamp)
-       (set-marker textproc-cur nil))))
+       (let ((cur (textproc-notes-s-current textproc-notes))
+             (notes (textproc-notes-s-notes textproc-notes)))
+         (goto-char (cl-second (nth (1- cur) notes)))
+         (if (re-search-forward (rx textproc-email-time)
+                                (cl-third (nth (1- cur) notes)) t)
+             (let* ((name-value (textproc--update-email (match-data)))
+                    (name (cl-first name-value))
+                    (value (cl-second name-value))      ; a string time
+                    (type 'email-ts)                    ; a timestamp
+                    (beg (match-beginning 1))
+                    (end (progn (goto-char beg) (pos-eol)))
+                    (be (make-textproc-begin-end-s :type type
+                                                   :name name
+                                                   :begin beg
+                                                   :end end))
+                    (ets (make-textproc-timestamp-s :tsbe be
+                                                    :value value)))
+               (setf (textproc-notes-s-email textproc-notes) ets))
+           (setf (textproc-notes-s-email textproc-notes)
+                 (make-textproc-timestamp-s)))))))
 
 
-;;; C-x p L
-(defun textproc-note-jump (which)
+(defmacro textproc--worktime-set ()
+  "Set a worklog if one exists."
+
+  `(save-excursion
+     (progn
+       (goto-char (textproc-begin-end-s-begin
+                   (textproc-notes-s-headline textproc-notes)))
+       (let ((wlbe (make-textproc-begin-end-s)))
+         (when (re-search-forward (rx textproc-worktime)
+                                  (textproc-begin-end-s-end
+                                   (textproc-notes-s-headline textproc-notes))
+                                  t)
+           (let* ((wld (org-element-at-point))
+                  (type (org-element-type wld))
+                  (name (org-element-property :drawer-name wld))
+                  (beg (org-element-begin wld))
+                  (end (org-element-end wld)))
+             (setf wlbe (make-textproc-begin-end-s :type type
+                                                   :name name
+                                                   :begin beg
+                                                   :end end))))
+         (setf (textproc-notes-s-worktime textproc-notes) wlbe)))))
+
+;; End Notes Set
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+
+
+;;; the following few macros use the notes' internal structure to
+;;; access parts of the note, and are marked with `textproc--...'
+
+;;; primitive accessors for a note
+;;; index, begin-pos, end-pos
+
+
+(defmacro textproc--notes ()
+  "The list of notes."
+
+  `(textproc-notes-s-notes textproc-notes))
+
+
+;; returns a note
+(defmacro textproc--note-n (n &optional no-set)
+  "Return the Nth note from the note's list.
+
+Make sure n is not out-of-bounds.
+Do not set notes when NO-SET is non-nil.
+
+((<index> <begin> <end>) ...)"
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (let* ((notes (textproc--notes))
+            (len (length notes)))
+       (if (or (< ,n 1) (> ,n len))
+           (progn (message "Index %s is out of range: 1 <= n <= %s" ,n len)
+                  (throw 'bad-index nil))
+         (nth (1- ,n) notes)))))
+
+
+;; accesses a note's index
+(defmacro textproc--note-index (note)
+  "Return the NOTE's index."
+
+  `(cl-first ,note))
+
+
+;; accesses a note's begin position
+(defmacro textproc--note-begin (note)
+  "Return NOTE's begin position."
+
+  `(cl-second ,note))
+
+
+;; accesses a note's end position
+(defmacro textproc--note-end (note)
+  "Return the NOTE's end position."
+
+  `(cl-third ,note))
+
+
+;; (defmacro textproc-note-ts-value (note)
+;;   "Return the note's timestamp value."
+
+;;   `(textproc-timestamp-s-value ,note))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Notes Processing
+
+
+(defmacro textproc-current-note-index (&optional no-set)
+  "Return the index of the current note.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc-notes-s-current textproc-notes)))
+
+
+(defmacro textproc-current-note (&optional no-set)
+  "Return the current note.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc--note-n (textproc-current-note-index t) t)))
+
+
+(defmacro textproc-current-note-begin (&optional no-set)
+  "Return the begin position of the current note.
+
+Do not set the notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc--note-begin (textproc-current-note t))))
+
+
+(defmacro textproc-current-note-end (&optional no-set)
+  "Return the end position of the current note.
+
+Do not set the notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc--note-end (textproc-current-note t))))
+
+
+
+(defmacro textproc-note-timestamp-value (note &optional no-set)
+  "Return the timestamp value of the NOTE.
+
+The timestamp value of a note is the email time if it exists, and the
+note timestamp value otherwise.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (let (value)
+       (save-excursion
+         (goto-char (textproc--note-begin ,note))
+         (textproc-notes-set)
+         (setf value (or
+                      (textproc-current-email-value t)
+                      (textproc-current-timestamp-value t))))
+       (textproc-notes-set)
+       value)))
+
+
+(defmacro textproc-current-timestamp-value (&optional no-set)
+  "Return the timestamp value of the current note.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc-timestamp-s-value
+      (textproc-notes-s-time textproc-notes))))
+
+
+(defmacro textproc-current-email-value (&optional no-set)
+  "Return the value of the email time.
+
+Do not set the notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc-timestamp-s-value
+      (textproc-notes-s-email textproc-notes))))
+
+
+(defmacro textproc-notes-time-compare (v1 v2)
+  "Compare two timestamp values V1 and V2.
+
+-1 when V1 < V2
+ 0 when V1 = V2
++1 when V1 > V2"
+
+  `(cond
+    ((time-less-p ,v1 ,v2) -1)
+    ((time-equal-p ,v1 ,v2) 0)
+    (t 1)))
+
+
+(defmacro textproc-notes-time-less-p (v1 v2)
+  "Return t if V1 is less than V2."
+
+  `(= -1 (textproc-notes-time-compare ,v1 ,v2)))
+
+
+
+(defmacro textproc-note-begin-n (n &optional no-set)
+  "Return the begin position of the Nth note.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc--note-begin (textproc--note-n ,n t))))
+
+
+(defmacro textproc-note-end-n (n &optional no-set)
+  "Return the end position of the Nth note.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc--note-end (textproc--note-n ,n))))
+
+
+
+
+
+(defmacro textproc-note-next-previous (which &optional no-set)
+  "Return the next or previous note's begin position depending on WHICH.
+- ?n for next
+- ?p for previous
+Wrap around in both directions.
+
+Do not set notes when NO-SET is non-nil."
+
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (textproc-note-begin-n
+      (let* ((cur (textproc-current-note-index t))
+             (len (length (textproc-notes-s-notes textproc-notes))))
+        (pcase ,which
+          (?p (if (= cur 1) len (1- cur)))
+          (?n (if (= cur len) 1 (1+ cur)))
+          (_ cur))))))
+
+
+
+
+;; C-x p C
+(defun textproc-note-copy-current (&optional no-set)
+  "Copy the current note into the paste buffer.
+
+Do not set notes when NO-SET is non-nil."
+
+  (interactive)
+
+  (unless no-set (textproc-notes-set))
+  (let ((cur (textproc-current-note-index t)))
+    (textproc-note-copy-multiple cur cur t))
+  (when (called-interactively-p 'interactive)
+    (message "Note copied")))
+
+
+;; C-x p M
+(defun textproc-note-copy-multiple (n1 n2 &optional no-set)
+  "Copy multiple notes, from N1 to N2 inclusive.
+
+Do not set notes when NO-SET is non-nil."
+
+  (interactive "nN1=\nnN2=")
+
+  (unless no-set (textproc-notes-set))
+  (textproc-pbcopy
+   (let ((string))
+     (cl-do
+         ((cur n1 (1+ cur)))
+         ((= cur (1+ n2))
+          string)
+       (setf string
+             (concat string
+                     (buffer-substring
+                      (textproc-note-begin-n cur)
+                      (textproc-note-end-n cur))
+                     (make-string 40 ?/)
+                     (string 10))))))
+  (message "Copied notes %s-%s" n1 n2))
+
+
+(defmacro textproc-note-jump-to-timestamp ()
+  "Jump to the timestamp of the current note."
+
+  `(progn
+     (textproc-note-jump ?t t)
+     (re-search-forward
+      (rx textproc-inactive-timestamp)
+      ;; (textproc-current-note-end)
+      t)))
+
+
+;; ;;; C-x p L
+(defun textproc-note-jump (which &optional no-set)
   "Jump to the beginning, the first, the last, the end, the next, the previous.
 
 WHICH is ?b for beginning, ?f for first, ?l for last, or ?e for end.
 WHICH is ?n for next, ?p for previous.
-WHICH is ?t for top of current"
+WHICH is ?t for top of current.
 
-  (interactive "c<b>egin <f>irst, <l>ast, <e>nd, <n>ext, <p>revious, <t>op")
+If NO-SET is non-nil, don't run textproc-notes-set."
 
-  (textproc-notes-set)
+  (interactive "c<b>egin <f>irst, <l>ast, <e>nd, <n>ext, <p>revious, <t>op\ni")
+
+  (unless no-set (textproc-notes-set))
   (goto-char (pcase which
                (?b (textproc-begin-end-s-begin (textproc-notes-s-drawer textproc-notes)))
-               (?f (textproc-begin-end-s-begin (textproc-notes-s-pllist textproc-notes)))
-               (?l (textproc-note-begin (length (textproc-notes-s-notes textproc-notes))))
-               (?e (textproc-begin-end-s-end   (textproc-notes-s-drawer textproc-notes)))
+               (?f (textproc-note-begin-n 1 t))
+               (?l (textproc-note-begin-n (length (textproc-notes-s-notes textproc-notes)) t))
+               (?e (progn ; sometimes the end of the drawer is not at :END:
+                     (goto-char (textproc-begin-end-s-end   (textproc-notes-s-drawer textproc-notes)))
+                     (while (not (looking-at-p (rx bol ":END:" eol)))
+                       (forward-line -1))
+                     (point)))
                (?n (catch 'same (textproc-note-next-previous which)))
                (?p (catch 'same (textproc-note-next-previous which)))
-               (?t (textproc-note-begin (textproc-note-current t)))
+               (?t (textproc-current-note-begin t))
                (_ (message "Enter either <?b>begin, <?f>irst, <?l>ast or <?e>nd") (point)))))
 
 
-(defun textproc-notes-goto-note (n)
-  "Place point on the Nth note."
+;; C-x p N
+(defun textproc-note-go (n &optional no-set)
+  "Place point on the Nth note.
 
-  (interactive "nNote index ")
+Do not set notes when NO-SET is non-nil."
 
+  (interactive (let* ((len (length (textproc-notes-s-notes textproc-notes)))
+                      (note (read-from-minibuffer (format "Note (1-%s)? " len) nil nil t)))
+                 (list note)))
+
+  (unless no-set (textproc-notes-set))
   (catch 'bad-index
-    (goto-char (textproc-note-begin n))))
+    (goto-char (textproc-note-begin-n n))))
 
 
-;; (defun textproc-note-time (note &optional value)
-;;   "Return either the timestamp of NOTE, or its VALUE.
+(defun textproc-note-find-greater-timestamp (ts &optional no-set)
+  "Find a note that has a greater timestamp value than TS.
 
-;; NOTE can be either an index of a note or a note.  When VALUE is non-nil,
-;; return the timestamp's value; else return it as a string.
+Do not set notes when NO-SET is non-nil."
 
-;; When called interactively, use the current NOTE.  When called interactively
-;; with a prefix argument such as `'C-u', return the VALUE of the string timestamp;
-;; otherwise just return the string timestamp."
-
-;;   (interactive "i\nP")
-
-;;   (cond
-;;    ((null note) (setf note (textproc-note-current-index-or-note :note)) (message "Note: %s" note))
-;;    ((integerp note) (setf note (textproc-note-getter note))))
-
-;;   (save-excursion
-;;     (goto-char (textproc-note-begin-or-end-pos note :begin))
-;;     (if (re-search-forward (rx textproc-inactive-timestamp) (pos-eol) t)
-;;         (let* ((ts (and
-;;                     (set-marker ts-begin-pos (match-beginning 0))
-;;                     (set-marker ts-end-pos (match-end 0))
-;;                     (match-string-no-properties 0)))
-;;                (val (date-to-time ts)))
-;;           (when (called-interactively-p 'interactive)
-;;             (message "%s => %s" ts val))
-;;           (if value val ts))
-;;       (error "Failed to find a timestamp in note %s" note))))
+  (unless no-set (textproc-notes-set))
+  (seq-find (lambda (note)
+              (textproc-notes-time-less-p
+               ts
+               (textproc-note-timestamp-value note t)))
+            (textproc--notes)))
 
 
-;; (defun textproc-note-time-set (value)
-;;   "Set the timestamp to VALUE.
+(defmacro textproc-note-pick-ts-value ()
+  "Return an email timestamp value if present, or else a note timestamp value.
 
-;; The timestamp must be marked with the two markers
-;; - `ts-begin-pos'
-;; - `ts-end-pos'
+Use the current note."
 
-;; One command that sets these is `textproc-note-time'."
-
-;;   (interactive "i")
-
-;;   (delete-region ts-begin-pos ts-end-pos)
-;;   (goto-char ts-begin-pos)
-;;   (insert (format-time-string "[%F %a %R]" value))
-;;   (textproc-clear-timestamp-markers))
+  `(or (textproc-current-email-value t)
+       (textproc-current-timestamp-value t)))
 
 
-;; (defun textproc-note-time-comparison (n1 n2)
-;;   "Compares the timestamp value of N1 (note 1) with N2 (note 2).
+(defun textproc-note-move-note-maybe (&optional no-set)
+  "Move the current note into time position.
 
-;; -1 if N1 is earlier than N2
-;;  0 if N1 and N2 are the same time
-;; +1 if N1 is later than N2"
+Use email timestamp value if present; otherwise use note timestamp value.
 
-;;   (let ((tv1 (textproc-note-time
-;;               (if (integerp n1) (textproc-note-getter n1) n1) :value))
-;;         (tv2 (textproc-note-time
-;;               (if (integerp n2) (textproc-note-getter n2) n2) :value)))
-;;     (cond
-;;      ((time-less-p tv1 tv2) -1)
-;;      ((time-equal-p tv1 tv2) 0)
-;;      (t 1))))
+Do not set notes when NO-SET is non-nil."
 
+  (interactive)
 
-;; (defun textproc-note-relocate (note1 note2)
-;;   "Move NOTE1 to before NOTE2.
-
-;; NOTE1 and NOTE2 can be either integer indices or notes."
-
-;;   (save-excursion
-;;     (when (integerp note1) (setf note1 (textproc-note-getter note1)))
-;;     (when (integerp note2) (setf note2 (textproc-note-getter note2)))
-;;     (goto-char (textproc-note-begin-or-end-pos note2 :begin))
-;;     (insert (delete-and-extract-region (textproc-note-begin-or-end-pos note1 :begin)
-;;                                        (textproc-note-begin-or-end-pos note1 :end)))
-;;     (ensure-empty-lines)
-;;     (textproc-notes-begin-end :end)
-;;     (ensure-empty-lines 0)))
+  (unless no-set (textproc-notes-set))
+  (let* ((greater
+          (textproc-note-find-greater-timestamp
+           (textproc-note-pick-ts-value)
+           t)))
+    (when greater
+      (goto-char (textproc--note-begin greater))
+      (insert (delete-and-extract-region
+               (textproc-current-note-begin t)
+               (textproc-current-note-end t)))
+      (ensure-empty-lines 1)
+      (textproc-note-jump ?e)
+      (ensure-empty-lines 0)
+      (save-buffer))))
 
 
-;; (defun textproc-note-later-p ()
-;;   "Iterate through the notes looking for a note that is later than the final note.
+(defmacro textproc-note-delete-note (n &optional no-set)
+  "Delete the note N.
 
-;; Return the first note found, or nil."
+Do not set notes when NO-SET is non-nil."
 
-;;   (interactive)
-
-;;   (let* ((cur (textproc-note-last-note))
-;;          (notes (textproc-note-list-structure))
-;;          (len (length notes)))
-;;     (seq-find (lambda (note)
-;;                 (cl-minusp (textproc-note-time-comparison cur note)))
-;;               (seq-take notes (1- len)))))
-
-
-;; C-x p S
-;; (defun textproc-note-sort (&optional msg)
-;;   "Iterate through the notes, placing them in their proper chronological positions."
-
-;;   (interactive "P")
-
-;;   (let ((cur (textproc-note-last-note))
-;;         found)
-;;     (while (setf found (textproc-note-later-p))
-;;       (when msg (message "%s is later than %s, so swapping" found cur))
-;;       (textproc-note-relocate cur found)
-;;       (setf cur (textproc-note-last-note))))
-;;   (message "Done sorting"))
+  `(progn
+     (unless ,no-set (textproc-notes-set))
+     (delete-region
+      (textproc-note-begin-n ,n t)
+      (textproc-note-end-n ,n t))
+     (when (= ,n (length (textproc--notes)))
+       (textproc-note-jump ?e t)
+       (ensure-empty-lines 0))))
 
 
-;; (defun textproc-note-find-email-time (&optional note)
-;;   "Place point on an email time and return the email time string from NOTE."
+;; M-D
+(defun textproc-note-delete-current (&optional no-set)
+  "Delete the current note.
 
-;;   (interactive "i")
+Do not set notes when NO-SET is non-nil."
 
-;;   (if note
-;;       (textproc-note-begin-or-end-pos note :begin :go)
-;;     (and
-;;      (setf note (textproc-note-current-index-or-note :note))
-;;      (textproc-note-move-to-top)))
-;;   (let ((es (and (re-search-forward (rx textproc-email-time)
-;;                                     (textproc-note-begin-or-end-pos note :end))
-;;                  (string-trim-left (match-string-no-properties 0)))))
-;;     (beginning-of-line)
-;;     (when (called-interactively-p 'interactive)
-;;       (message es))
-;;     es))
+  (interactive)
+
+  (when no-set (textproc-notes-set))
+  (textproc-note-delete-note (textproc-current-note-index t) t))
 
 
-;; (defun textproc-note-email-time (&optional note)
-;;   "Return the NOTE's email timestamp value.
+;; C-x p W
+(defun textproc-note-worklog-last-entry (&optional no-set)
+  "Place the last worklog entry into the paste buffer.
 
-;; If NOTE is omitted or called interactively, use the current note."
+Do not set notes when NO-SET is non-nil."
 
-;;   (interactive "i")
+  (interactive)
 
-;;   (save-excursion
-;;     (let* ((et (textproc-note-find-email-time note))
-;;            (el (parse-time-string et)))
-;;       (if (seq-drop-while #'identity (seq-take el 6))
-;;           (message "Found some nil date elements in note %s %s"
-;;                    et el)
-;;         (progn
-;;           (when (string-match (rx (+ (any alnum punct space) "PM")) et)
-;;             (setf (cl-third el) (+ 12 (cl-third el))))
-;;           (when (called-interactively-p 'interactive)
-;;             (message "%s => %s => %s" et el (encode-time el)))
-;;           (encode-time el))))))
+  (unless no-set (textproc-notes-set))
+  (let ((wte (textproc-notes-s-worktime textproc-notes)))
+    (when wte
+      (let ((wtb (textproc-begin-end-s-begin wte))
+            (wte (progn
+                   (goto-char (textproc-begin-end-s-end wte))
+                   (re-search-backward (rx bol ":END:" eol)))))
+        (goto-char wte)
+        (re-search-backward (rx bol "CLOCK: [") wtb)
+        (textproc-pbcopy (concat
+                          (buffer-substring (pos-bol) wte)
+                          (make-string 40 ?/)
+                          (string 10)))
+        (when (called-interactively-p 'interactive)
+          (message "Copied the last worktime entry."))))))
+
+
+;; End Notes Processing
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+
+
+
+
+
+
 
 
 ;; (defun textproc-note-time-sync (note)
@@ -2352,94 +2665,6 @@ WHICH is ?t for top of current"
 ;;          (ets (textproc-note-email-time note)))
 ;;     (unless (time-equal-p etv ets)
 ;;       (textproc-note-time-set ets)))) ; required by textproc-note-time-set
-
-
-;; (defmacro textproc-note-list-accessor (nth note-list)
-;;   "Given a NOTE-LIST, return the NTH note.
-
-;; Return NIL if NTH is out of range.
-
-;; A NOTE-LIST is a list of lists of note item properties.  The first entry of a
-;; note item list is the beginning position of the note.  The final entry of a
-;; note item is the ending position of the note.  The middle entries are
-;; ignored."
-
-;;   `(nth (1- ,nth) ,note-list))
-
-
-;; (defun textproc-note-get-first-note ()
-;;   "Place point on the first note and return it."
-
-;;   (interactive)
-
-;;   (let ((first-note (textproc-note-list-accessor 1 (textproc-note-list-structure))))
-;;     (goto-char (textproc-note-begin first-note))
-;;     (message "%s" first-note)
-;;     first-note))
-
-
-;; (defun textproc-note-current-note ()
-;;   "Return the current note and the index of the current note as a cons."
-
-;;   (interactive)
-
-;;   (save-excursion
-;;     (textproc-note-move-to-top)
-;;     (let* ((pos (point))
-;;            (n 0)
-;;            (cur (seq-find (lambda (note) (and (cl-incf n)
-;;                                               (= pos (cl-first note))))
-;;                           (textproc-note-list-structure))))
-;;       (cons n cur))))
-
-
-;; C-x p C
-;; (defun textproc-note-copy-current ()
-;;   "Place a copy of the current note into the paste buffer."
-
-;;   (interactive)
-
-;;   (save-excursion
-;;     (let ((note (cl-second (textproc-note-current-note))))
-;;       (textproc-pbcopy
-;;        (buffer-substring
-;;         (textproc-note-begin note)
-;;         (textproc-note-end note))))))
-
-;; (defun textproc-note-next-note ()
-;;   "Return the next note.")
-
-
-;; (defun textproc-note-get-last-note ()
-;;   "Place point on the last note and return it."
-
-;;   (interactive)
-
-;;   (let* ((list-struct (textproc-note-list-structure))
-;;          (len (length list-struct))
-;;          (last (textproc-note-list-accessor len list-struct)))
-;;     (goto-char (textproc-note-begin last))
-;;     (message "%s" last)
-;;     last))
-
-
-;; (defun textproc-note-timestamp (note)
-;;   "Return the timestamp string found in the NOTE.
-
-;; Throw an error if a timestamp string is not found in the first line."
-
-;;   (interactive)
-
-;;   (goto-char (textproc-note-begin note))
-;;   (if (re-search-forward (rx textproc-inactive-timestamp) (pos-eol) t)
-;;       (match-string-no-properties 0)
-;;     (error "Failed to find a timestamp in note %s" note)))
-
-
-;; (defmacro textproc-note-timestamp-value (note)
-;;   "Return the value of the timestamp of NOTE."
-
-;;   `(date-to-time (textproc-note-timestamp ,note)))
 
 
 ;; (iter-defun textproc-note-iterator ()
@@ -2479,65 +2704,36 @@ WHICH is ?t for top of current"
 ;;     next))
 
 
-;; (defun textproc-note-sort-by-time ()
-;;   "Given a NOTE, place it into the currect order.
 
-;; The given note will be the last note.  It might already be in order."
+(defun textproc-new-note-ensure-spacing ()
+  "Add a space between notes and remove excess spacing in the note."
 
-;;   (interactive)
-
-;;   (ignore-error iter-end-of-sequence
-;;     (let ((last (textproc-note-last-note))
-;;           (cur (textproc-note-iter-initialize)))
-
-;;       (while (setf cur (textproc-note-next))
-;;         (when (cl-minusp (textproc-note-time-comparison last cur))
-;;           (textproc-note-relocate last cur)
-;;           (setf last (textproc-note-last-note))
-;;           (setf cur (textproc-note-iter-initialize))))))
-
-;;   (textproc-note-begin-or-end-pos :begin :go))
-
-
-;; (defun textproc-note-move (n1 n2)
-;;   "Move note N1 to before note N2."
-
-;;   (interactive)
-
-;;   (let ((s1 (delete-and-extract-region (textproc-note-begin n1)
-;;                                        (textproc-note-end n1))))
-;;     (goto-char (textproc-note-begin n2))
-;;     (insert s1)
-;;     (insert-char 10)))
+  (setq op-pos (point-marker))
+  (search-backward "- Note taken on [")
+  (ensure-empty-lines (prog2
+                          (forward-line -1)
+                          (if (looking-at-p (rx bol ":LOGBOOK:"))
+                              0 1)
+                        (forward-line)))
+  (when (looking-at-p (rx bol (* space) eol)) (delete-line))
+  (search-forward-regexp (rx bol (* space) (+ "-") eol))
+  (forward-line)
+  (when (looking-at-p (rx bol (* space) eol)) (delete-line))
+  (cl-loop until (<= op-pos (point)) do
+           (if (looking-at-p
+                (rx (= 2 (seq bol (zero-or-more space) "\n"))))
+               (delete-line)
+             (forward-line)))
+  (set-marker op-pos nil))
 
 
-;; (defun textproc-note-jump-to-end ()
-;;   "Relocate point to the :END:"
+(add-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-spacing -1)
+(add-hook 'org-after-note-stored-hook 'textproc-note-copy-current 1)
+(add-hook 'org-after-note-stored-hook 'textproc-note-move-note-maybe 2)
 
-;;   (interactive)
-
-;;   (search-forward ":END:")
-;;   (beginning-of-line)
-;;   (ensure-empty-lines 0))
-
-
-;; (defun textproc-note-ensure-empty-line ()
-;;   (search-forward ":END:")
-;;   (ensure-empty-lines 1))
-
-
-(defun textproc-new-note-ensure-empty-line ()
-  "Add a space between notes."
-
-  (beginning-of-line)
-  (while (not (looking-at-p (rx bol "- ")))
-    (forward-line -1))
-  (ensure-empty-lines))
-
-
-(add-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-empty-line)
-;; (remove-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-empty-line)
-
+;; (remove-hook 'org-after-note-stored-hook 'textproc-new-note-ensure-spacing)
+;; (remove-hook 'org-after-note-stored-hook 'textproc-note-copy-current)
+;; (remove-hook 'org-after-note-stored-hook 'textproc-note-move-note-maybe)
 
 (provide 'textproc)
 
