@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-19 22:41:53 lolh-mbp-16>
-;;; Version: 0.0.9
+;;; Time-stamp: <2025-01-20 09:38:26 lolh-mbp-16>
+;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
