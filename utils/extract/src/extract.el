@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;; Time-stamp: <2025-01-19 15:31:01 lolh-mbp-16>
+;; Time-stamp: <2025-01-19 22:44:27 lolh-mbp-16>
 ;; Version: 0.2.1 [2024-11-15 07:35]
 ;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -278,7 +278,7 @@ of that client note."
 (keymap-global-set "C-x p a" #'lolh/court-files-attach)
 (keymap-global-set "C-x p h" #'lolh/extract-pdfs)
 (keymap-global-set "C-x p j" #'lolh/process-dir)
-(keymap-global-set "C-x p m" #'lolh/jump-to-main-client-oc-note)
+(keymap-global-set "C-x p J" #'lolh/jump-to-main-client-oc-note)
 (keymap-global-set "C-x p u" #'lolh/update-pleadings)
 (keymap-global-set "M-A"     #'lolh/note-tree)
 ;; (keymap-global-set "M-C"     #'lolh/pbcopy-cause)
@@ -970,7 +970,7 @@ The associated cons cell is returned."
                  (cl-return b)))))))))
 
 
-;; C-x p m | C-u C-x p m | C-u C-u C-x p m
+;; C-x p J | C-u C-x p J | C-u C-u C-x p J
 (defun lolh/jump-to-main-client-oc-note (which)
   "Jump to the main note from a secondary note."
 
