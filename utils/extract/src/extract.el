@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-20 13:43:33 lolh-mbp-16>
+;;; Time-stamp: <2025-01-21 09:08:28 lolh-mbp-16>
 ;;; Version: 0.3.0 [2025-01-18 13:20]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -106,6 +106,7 @@
 (keymap-global-set "M-H"     #'lolh/add-columns-header)
 (keymap-global-set "M-R"     #'lolh/simple-rename-using-note)
 (keymap-global-set "M-W"     #'lolh/return-cause-plaintiffs-defendants)
+(keymap-global-set "C-x p J" #'lolh/jump-to-main-client-oc-note)
 (keymap-global-set "C-x p a" #'lolh/court-files-attach)
 (keymap-global-set "C-x p h" #'lolh/extract-pdfs)
 (keymap-global-set "C-x p j" #'lolh/process-dir)
@@ -139,8 +140,6 @@ of that client note."
 ;; Constants
 
 
-(setq-local default-directory *lolh/downloads-dir*)
-
 (defconst *lolh/gd* "GOOGLE_DRIVE")
 ;; GOOGLE_DRIVE = $HOME/Google Drive/My Drive"
 ;; GOOGLE_DRIVE_2022|2023|2024 = $GOOGLE_DRIVE/Lincoln Harvey 2022|2023|2024
@@ -155,6 +154,8 @@ of that client note."
 
 (defconst *lolh/downloads-dir*
   (expand-file-name "Downloads" "~"))
+
+(setq-local default-directory *lolh/downloads-dir*)
 
 (defconst *lolh/process-dir*
   (expand-file-name "process" *lolh/downloads-dir*))

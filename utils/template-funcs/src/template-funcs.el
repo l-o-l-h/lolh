@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2025-01-02 10:01:40 lolh-mbp-16>
+;; Time-stamp: <2025-01-21 09:01:23 lolh-mbp-16>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -183,8 +183,9 @@
   - [ ] Study
     - [ ] French (30 minutes)
     - [ ] German (30 minutes)
-    - [ ] Evidence (30 minutes)
+    - [ ] Evidence/Trial (30 minutes)
     - [ ] CLE (30 minutes)
+    - [ ] SICP
   - [ ] Exercise
     - [ ] Bicycling (30 minutes)
     - [ ] Walking/Running (30 minutes)
@@ -193,7 +194,7 @@
     - [ ] No second helpings
     - [ ] No alcohol
   - [ ] House
-    - [ ] Upgrade work
+    - [ ] Upgrade house
     - [ ] Clean room
     - [ ] Books
     - [ ] Eliminate papers")

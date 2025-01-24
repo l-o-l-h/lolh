@@ -1,5 +1,5 @@
-;;; textproc-t.el --- Textproc tests -*- mode: elisp; lexical-binding: t -*-
-;; Time-stamp: <2024-11-16 16:53:10 lolh-mbp-16>
+;;; textproc-t.el --- Textproc tests -*- mode: emacs-lisp; lexical-binding: t -*-
+;; Time-stamp: <2025-01-20 13:48:04 lolh-mbp-16>
 ;; Version: 0.0.1 [2024-11-13 Wed 18:00]
 
 ;; Package-Requires: ((emacs "24.3") extract)
