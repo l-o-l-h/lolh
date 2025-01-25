@@ -1,6 +1,6 @@
 ;;; noteproc.el --- Process Denote notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-24 08:26:13 lolh-mbp-16>
-;;; Version: 0.0.1
+;;; Time-stamp: <2025-01-25 03:44:53 lolh-mbp-16>
+;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib_compat)
 
 ;;; Author:	LOLH
@@ -12,6 +12,29 @@
 ;;  Process Denote notes
 
 ;;; TODO:
+;;  Notes
+;;  - [X] Sync timestamp of note with timestamp of email [2025-01-16T0930]
+;;  - [X] Sort notes and add a blank space between each [2025-01-17T0915]
+;;  - [ ] When adding a document, include option to add to the current note
+;;  - [X] Add a command/key combo to move point to the top of the current note [2025-01-16T0930]
+;;  - [X] Add a command and key combo to walk through the notes in reverse order one by one [2025-01-16T0930]
+;;  - [X] Add a command to place angle brackets around a downloaded file with the date [2025-01-18T1600]
+;;  - [X] Add a command to delete a note [2025-01-18T1700
+;;  - [X] Add a command to copy a Logbook entry to paste buffer [2025-01-16T0930]
+;;  - [X] Add a command to copy a Worklog entry to paste buffer [2025-01-19T1525
+;;  - [X] Be able to copy multiple notes at once instead of having to copy each separately [2025-01-16T2130]
+;;  - [X] Single space a note upon exit from note buffer [2025-01-17T0915
+;;  - [X] Add a command to jump from a secondary note (such as O/C Comm) to the Main [2025-01-19T1525
+;;  - [X] Copy a new note upon completion [2025-01-19T2150
+;;  - [ ] Give a better error message than the debugger when not in a note
+;;  - [ ] Copy of last worktime entry does not work when there are no notes; make work.
+;;  - [ ] [2025-01-22T0855] Add email time to headline in a note
+;;  - [ ] [2025-01-22T0855] Create some procedures for HJP client cases (no case main note)
+;;  - [X] [2025-01-23T0915] When copying a note with an attachment, strip out the Google drive link [2025-01-25T0340]
+;; Emails
+;;  - [ ] Use email program to add email to O/C Communication entry
+;; LegalServer
+;;  - [ ] Create command to place the date with a line into the paste buffer
 
 ;;; Code:
 
@@ -78,6 +101,19 @@
 
 (rx-define noteproc-worktime
   (seq bol ":WORKTIME:" eol))
+
+
+(defconst noteproc-link-name
+  (rx-to-string
+   '(seq
+     bos
+     (+ anychar)
+     (group-n 1
+       "[[" (+ anychar) "]["
+       (group-n 2
+         (+ anychar))
+       "]]")
+     "\n" eos)))
 
 
 ;;;-------------------------------------------------------------------
@@ -652,6 +688,17 @@ Do not set notes when NO-SET is non-nil."
     (message "Note copied")))
 
 
+(defun noteproc-note-copy-filter-link (str)
+  "Filter out of STR the link portion, leaving just the name portion."
+
+  (if
+      (string-match noteproc-link-name
+                    str)
+      (replace-match (format "Attachment: %s" (match-string-no-properties 2 str))
+                     nil t str 1)
+    str))
+
+
 ;; C-x p M
 (defun noteproc-note-copy-multiple (n1 n2 &optional no-set)
   "Copy multiple notes, from N1 to N2 inclusive.
@@ -669,12 +716,14 @@ Do not set notes when NO-SET is non-nil."
           string)
        (setf string
              (concat string
-                     (buffer-substring
-                      (noteproc-note-begin-n cur)
-                      (noteproc-note-end-n cur))
+                     (noteproc-note-copy-filter-link
+                      (buffer-substring-no-properties
+                       (noteproc-note-begin-n cur)
+                       (noteproc-note-end-n cur)))
                      (make-string 40 ?/)
                      (string 10))))))
-  (message "Copied notes %s-%s" n1 n2))
+  (when (called-interactively-p 'interactive)
+    (message "Copied notes %s-%s" n1 n2)))
 
 
 (defmacro noteproc-note-jump-to-timestamp ()

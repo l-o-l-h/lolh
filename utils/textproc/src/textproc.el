@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-24 08:31:13 lolh-mbp-16>
+;;; Time-stamp: <2025-01-25 03:41:29 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -15,29 +15,6 @@
 ;;  Works for both cases and statutes.
 
 ;;; TODO:
-;;  Notes
-;;  - [X] Sync timestamp of note with timestamp of email [2025-01-16T0930]
-;;  - [X] Sort notes and add a blank space between each [2025-01-17T0915]
-;;  - [ ] When adding a document, include option to add to the current note
-;;  - [X] Add a command/key combo to move point to the top of the current note [2025-01-16T0930]
-;;  - [X] Add a command and key combo to walk through the notes in reverse order one by one [2025-01-16T0930]
-;;  - [X] Add a command to place angle brackets around a downloaded file with the date [2025-01-18T1600]
-;;  - [X] Add a command to delete a note [2025-01-18T1700
-;;  - [X] Add a command to copy a Logbook entry to paste buffer [2025-01-16T0930]
-;;  - [X] Add a command to copy a Worklog entry to paste buffer [2025-01-19T1525
-;;  - [X] Be able to copy multiple notes at once instead of having to copy each separately [2025-01-16T2130]
-;;  - [X] Single space a note upon exit from note buffer [2025-01-17T0915
-;;  - [X] Add a command to jump from a secondary note (such as O/C Comm) to the Main [2025-01-19T1525
-;;  - [X] Copy a new note upon completion [2025-01-19T2150
-;;  - [ ] Give a better error message than the debugger when not in a note
-;;  - [ ] Copy of last worktime entry does not work when there are no notes; make work.
-;;  - [ ] [2025-01-22T0855] Add email time to headline in a note
-;;  - [ ] [2025-01-22T0855] Create some procedures for HJP client cases (no case main note)
-;;  - [ ] [2025-01-23T0915] When copying a note with an attachment, strip out the Google drive link
-;; Emails
-;;  - [ ] Use email program to add email to O/C Communication entry
-;; LegalServer
-;;  - [ ] Create command to place the date with a line into the paste buffer
 
 ;;; Code:
 
@@ -525,6 +502,42 @@ The unlocked files are moved into *lolh/downloads-dir*."
         (delete-file locked))))
 
   (message "Files unlocked"))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ImageMagick
+
+
+(defun textproc-move-image-files-to-process ()
+  "Move all JPEG and PNG files into process dir."
+
+  (interactive)
+
+  (mapc
+   (lambda (f) (rename-file
+                f
+                (expand-file-name
+                 (file-name-concat
+                  textproc-process
+                  (file-name-nondirectory f)))))
+   (file-expand-wildcards
+    (rx-to-string '(seq (+ ascii) "." (| "jpg" "jpeg" "png") eos))
+    t t)))
+
+
+(defun textproc-convert-image-files-to-pdf ()
+  "Convert all JPEG and PNG files in process dir into PDF form."
+
+  (interactive)
+
+  (let ((default-directory textproc-process))
+    (mapc
+     (lambda (f) (call-process-shell-command
+                  (format "convert -size 2550x3300 -density 300 %s %s.pdf"
+                          f (file-name-base f))))
+     (file-expand-wildcards
+      (rx-to-string '(seq (+ ascii) "." (| "jpg" "jpeg" "png") eos))
+      t t))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
