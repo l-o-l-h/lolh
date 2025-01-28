@@ -1,5 +1,5 @@
 ;;; noteproc.el --- Process Denote notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-27 13:18:38 lolh-mbp-16>
+;;; Time-stamp: <2025-01-28 14:07:36 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib_compat)
 
@@ -108,14 +108,10 @@
 (defconst noteproc-link-name
   (rx-to-string
    '(seq
-     bos
-     (+ anychar)
-     (group-n 1
-       "[[" (+ anychar) "]["
-       (group-n 2
-         (+ anychar))
-       "]]")
-     "\n" eos)))
+     bol
+     (seq (+? space) "-" space)
+     (group-n 1 "[[" (+? anychar) "][" (group-n 2 (+? anychar)) "]]")
+     eol)))
 
 
 ;;;-------------------------------------------------------------------
@@ -693,12 +689,16 @@ Do not set notes when NO-SET is non-nil."
 (defun noteproc-note-copy-filter-link (str)
   "Filter out of STR the link portion, leaving just the name portion."
 
-  (if
-      (string-match noteproc-link-name
-                    str)
-      (replace-match (format "Attachment: %s" (match-string-no-properties 2 str))
-                     nil t str 1)
-    str))
+  (let ((filtered str)
+        (start 0))
+    (while
+        (string-match noteproc-link-name
+                      filtered start)
+      (setf filtered
+            (replace-match (format "Attachment: %s" (match-string-no-properties 2 filtered))
+                           nil t filtered 1))
+      (setf start (match-beginning 0)))
+    filtered))
 
 
 ;; C-x p M
