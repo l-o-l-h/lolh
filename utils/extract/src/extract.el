@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-21 09:08:28 lolh-mbp-16>
+;;; Time-stamp: <2025-01-28 10:24:51 lolh-mbp-16>
 ;;; Version: 0.3.0 [2025-01-18 13:20]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -163,7 +163,7 @@ of that client note."
 (defconst *lolh/first-middle-last-name-rx*
   (rx bos
       (group (| (1+ word) (seq word "."))) space ; first initial or name
-      (opt (group (1+ (any word "."))) space) ; middle initial or name
+      (opt (group (1+ (any word "." "-"))) space) ; middle initial or name
       (group (1+ (any word "-")))             ; last name
       (opt (seq "," space (group (1+ (any word "."))))) ; suffix Jr., Sr., MD.
       eos))
@@ -201,7 +201,7 @@ of that client note."
       (opt " -- " (group-n 8 (* (any graph space)))) ; document name
       ;; nil if no " -- "
       ;; string-empty-p t if " -- " with no document name
-      (group-n 9 (| ".pdf" ".PDF" ".docx" ".doc" ".jpg" ".JPG"))
+      (group-n 9 (| ".pdf" ".PDF" ".docx" ".doc" ".jpg" ".JPG" ".jpeg" "JPEG" ".png"))
       eos))
 
 
@@ -572,7 +572,7 @@ argument sets BODY-P to 16."
             (lolh/gd-cause-dir) nil t)
            (prefix-numeric-value current-prefix-arg))))
 
-  (lolh/copy-new-files-into-process-dir)
+  (lolh/move-and-rename-files-in-process-dir)
   (lolh/note-tree)
 
   (let ((files (directory-files *lolh/process-dir* nil "^[^.]"))
@@ -1468,25 +1468,27 @@ Then call update."
 
 ;;; TODO Maybe make a version that asks for a list of files in ~/Downloads
 ;;; instead of finding new files automatically.
-(defun lolh/copy-new-files-into-process-dir ()
-  "Copy new documents from `~/Downloads' into `~/Downloads/process'.
+(defun lolh/move-and-rename-files-in-process-dir ()
+  "Move new documents from `~/Downloads' into `~/Downloads/process'.
 
 `New' is defined to be any document placed into `~/Downloads' within the
 last minute.
 
-After copying the files into `process-dir', make sure they can be read by
-`lolh/process-dir' by running `lolh/make-file-name-in-process-dir' next."
+After moving the files into `process-dir', make sure they can be read by
+`lolh/process-dir' by converting image files to pdf and then
+ running `lolh/make-file-name-in-process-dir' next."
 
   (interactive)
 
   (lolh/clean-dirs)
 
   (let ((command
-         (format "find %s -atime -1m -depth 1 -type f \! -name \~\$* -execdir cp {} %s \\;"
+         (format "find %s -atime -1m -depth 1 -type f \! -name \~\$* -execdir mv {} %s \\;"
                  *lolh/downloads-dir*
                  *lolh/process-dir*)))
     (call-process-shell-command command))
 
+  (lolh/convert-image-to-pdf)
   (lolh/make-file-name-in-process-dir))
 
 
@@ -1499,20 +1501,39 @@ If it still cannot be read by *lolh/case-file-name-rx*, then there is
 something seriously wrong with it."
 
   (let ((files (directory-files *lolh/process-dir* nil "^[^~.]"))
-        date party)
+        date party name)
     (dolist (file files)
       (unless (string-match-p *lolh/case-file-name-rx* file)
-        (setq date (read-string (concat file
-                                        ": Date? ")))
-        (setq party (read-string "PL or DEF? "))
+        (setq name (read-string (format "Name: %s ? " (file-name-base file)) nil t
+                                (file-name-base file)))
+        ;; TODO: Make default date use the current file name's date if there is one
+        (setq date (read-string
+                    (format "Date: %s ? " (format-time-string "%F" (current-time))) nil t
+                    (format-time-string "%F" (current-time))))
+        (setq party (read-string (format "Party: PL|DEF|ORDER etc: ? " ) nil t "PL"))
         (rename-file (file-name-concat *lolh/process-dir* (file-name-nondirectory file))
                      (file-name-concat
                       *lolh/process-dir*
                       (format "[%s] -- %s <%s>.%s"
                               date
                               party
-                              (file-name-sans-extension file)
+                              name
                               (file-name-extension file))))))))
+
+
+(defun lolh/convert-image-to-pdf ()
+  "Convert all image files (j[e]pg,png) into a pdf file."
+
+  (interactive)
+
+  (let ((files (directory-files *lolh/process-dir* nil (rx "." (| "jpg" "jpeg" "png") eos)))
+        (default-directory *lolh/process-dir*))
+    (dolist (image files)
+      (call-process-shell-command
+       (format "convert -size 2550x3300 -density 300 %s %s.pdf"
+               (expand-file-name image)
+               (expand-file-name (file-name-base image))))
+      (delete-file (expand-file-name image) t))))
 
 
 
@@ -1656,7 +1677,7 @@ PART must be one of *lolh/file-name-allowed-parts*."
   ;; rename them using note parts
   ;; move them back into directory-dir
 
-  (lolh/copy-new-files-into-process-dir)
+  (lolh/move-and-rename-files-in-process-dir)
   (let ((files (directory-files *lolh/process-dir* nil "^[^.]")))
     (dolist (file files)
       (let ((new-file (lolh/create-file-name-using-note-parts file)))

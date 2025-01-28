@@ -1,5 +1,5 @@
 ;;; noteproc.el --- Process Denote notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-25 03:44:53 lolh-mbp-16>
+;;; Time-stamp: <2025-01-27 13:18:38 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib_compat)
 
@@ -31,6 +31,8 @@
 ;;  - [ ] [2025-01-22T0855] Add email time to headline in a note
 ;;  - [ ] [2025-01-22T0855] Create some procedures for HJP client cases (no case main note)
 ;;  - [X] [2025-01-23T0915] When copying a note with an attachment, strip out the Google drive link [2025-01-25T0340]
+;;  - [ ] [2025-01-27T1250] After creating Word and PDF NOA and Order Appointing, place documens into Google drive automatically
+;;  - [ ] [2025-01-27T1315] Update court documents when a case is closed
 ;; Emails
 ;;  - [ ] Use email program to add email to O/C Communication entry
 ;; LegalServer
