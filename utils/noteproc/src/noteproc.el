@@ -1,5 +1,5 @@
 ;;; noteproc.el --- Process Denote notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-28 14:07:36 lolh-mbp-16>
+;;; Time-stamp: <2025-01-29 09:27:58 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib_compat)
 
@@ -33,6 +33,7 @@
 ;;  - [X] [2025-01-23T0915] When copying a note with an attachment, strip out the Google drive link [2025-01-25T0340]
 ;;  - [ ] [2025-01-27T1250] After creating Word and PDF NOA and Order Appointing, place documens into Google drive automatically
 ;;  - [ ] [2025-01-27T1315] Update court documents when a case is closed
+;;  - [ ] [2025-01-28T1449] With point in a note, add an attachment at that point with some document from Downloads or Process dir
 ;; Emails
 ;;  - [ ] Use email program to add email to O/C Communication entry
 ;; LegalServer
@@ -803,6 +804,30 @@ Use the current note."
 
   `(or (noteproc-current-email-value t)
        (noteproc-current-timestamp-value t)))
+
+
+;; TODO: make better accessors for time values
+(defun noteproc-sync-note-time (&optional no-set)
+  "Sync the note taken time with the email time of the current note.
+
+Do not set notes when NO-SET is non-nil."
+
+  (interactive)
+
+  ;; 1. Update the timestamp value of the note time with the email timestamp
+  ;; 2. Update the timestamp string of the note using the new email timestamp
+  ;; 3. Update the note with the new string
+  (unless no-set (noteproc-notes-set))
+
+  (setf (noteproc-timestamp-s-value (noteproc-notes-s-time noteproc-notes))
+        (noteproc-timestamp-s-value (noteproc-notes-s-email noteproc-notes)))
+  (setf (noteproc-begin-end-s-name (noteproc-timestamp-s-tsbe (noteproc-notes-s-time noteproc-notes)))
+        (format-time-string "[%F %a %R]" (noteproc-current-email-value t)))
+  (goto-char (noteproc-begin-end-s-begin (noteproc-timestamp-s-tsbe (noteproc-notes-s-time noteproc-notes))))
+  (delete-region (noteproc-begin-end-s-begin (noteproc-timestamp-s-tsbe (noteproc-notes-s-time noteproc-notes)))
+                 (noteproc-begin-end-s-end (noteproc-timestamp-s-tsbe (noteproc-notes-s-time noteproc-notes))))
+  (insert (noteproc-begin-end-s-name (noteproc-timestamp-s-tsbe (noteproc-notes-s-time noteproc-notes))))
+  (save-buffer))
 
 
 (defun noteproc-note-move-note-maybe (&optional no-set)
