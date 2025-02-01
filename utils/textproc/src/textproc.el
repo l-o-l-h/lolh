@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-25 03:41:29 lolh-mbp-16>
+;;; Time-stamp: <2025-01-29 14:20:54 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -29,7 +29,7 @@
 
 (keymap-global-set "M-B"     #'textproc-call-bifurcate-dismissal-old)
 (keymap-global-set "M-C"     #'textproc-pbcopy-cause)
-(keymap-global-set "M-D"     #'textproc-note-delete-current)
+;; (keymap-global-set "M-D"     #'textproc-note-delete-current)
 (keymap-global-set "M-E"     #'textproc-pbcopy-client-email)
 ;; (keymap-global-set "M-F"     #'textproc-current-note-index-show)
 (keymap-global-set "M-N"     #'textproc-pbcopy-client-name)
@@ -222,6 +222,18 @@ TODO: But see:
        eol))
   "233VIII(D)Actions for Unlawful Detainer
    92VI(C)2Necessity of Determination")
+
+
+(defconst textproc-west-topic-rx
+  (rx (:
+       (group (+ nonl) lower)
+       (group upper (+ nonl))
+       eol))
+
+  "NOTE: `'case-fold-search' must be set to nil.
+-Matches a topic ending with a lower case letter followed by a topic
+-beginning with an upper case letter (two phrases stuck together).
+-E.g. Landlord and TenantDefenses and grounds of opposition in general")
 
 
 (defconst textproc-cal-date-re
@@ -462,7 +474,7 @@ All documents begin and end in *lolh/process-dir*"
          (dismissal (format "%s -- %s %s%s (unlocked).pdf" first second third fifth))
          (old (format "%s -- %s %s%s (unlocked).pdf" first second fourth fifth))
          (process-file (file-name-concat textproc-process full)))
-    (copy-file file process-file)
+    (copy-file file process-file t)
     (textproc-pdftk-cat full 1 1 dismissal)
     (textproc-pdftk-cat full 2 3 old)
     (delete-file process-file)
@@ -477,7 +489,7 @@ All documents begin and end in *lolh/process-dir*"
   "Unlock DOC, e.g. an OLD or Appointment.
 
 DOC must be in *lolh/process-dir*, and so this command will first call
-`lolh/copy-new-files-into-process-dir'.  It will thereafter work on every
+`lolh/move-and-rename-files-in-process-dir'.  It will thereafter work on every
 file in *lolh/process-dir*.
 UNLOCKED will be the same file name but with (unlocked) added to the end.
 
@@ -486,7 +498,7 @@ The unlocked files are moved into *lolh/downloads-dir*."
 
   (interactive)
 
-  (lolh/copy-new-files-into-process-dir)
+  (lolh/move-and-rename-files-in-process-dir)
 
   (let ((all-locked (directory-files textproc-process t "^[^.]")))
     (dolist (locked all-locked)
@@ -1134,7 +1146,7 @@ Landlord and TenantDefenses and grounds of opposition in general
                   123"
   (interactive)
   (let ((case-fold-search nil))
-    (when (looking-at *helpers-west-topic-rx*)
+    (when (looking-at textproc-west-topic-rx)
       (match-beginning 2))))
 
 

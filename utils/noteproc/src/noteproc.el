@@ -1,5 +1,5 @@
 ;;; noteproc.el --- Process Denote notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-29 09:27:58 lolh-mbp-16>
+;;; Time-stamp: <2025-02-01 10:42:33 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib_compat)
 
@@ -177,7 +177,12 @@
   `(noteproc-notes-s-notes noteproc-notes))
 
 
-;; returns a note
+(defmacro noteproc--notes-len ()
+  "The length (number) of notes."
+
+  `(length (noteproc--notes)))
+
+;; returns the nth note
 (defmacro noteproc--note-n (n &optional no-set)
   "Return the Nth note from the note's list.
 
@@ -188,10 +193,11 @@ Do not set notes when NO-SET is non-nil.
 
   `(progn
      (unless ,no-set (noteproc-notes-set))
-     (let* ((notes (noteproc--notes))
-            (len (length notes)))
-       (if (or (< ,n 1) (> ,n len))
-           (progn (message "Index %s is out of range: 1 <= n <= %s" ,n len)
+     (let* ((notes (noteproc--notes)))
+       (if (or (< ,n 1) (> ,n (noteproc--notes-len)))
+           (progn (message "Index %s is out of range: 1 <= n <= %s"
+                           ,n
+                           (noteproc--notes-len))
                   (throw 'bad-index nil))
          (nth (1- ,n) notes)))))
 
@@ -343,7 +349,7 @@ will be set as current."
          ((>= (point)
               (noteproc-begin-end-s-end (noteproc-notes-s-pllist noteproc-notes)))
           ;; set current to the last note
-          (length (noteproc-notes-s-notes noteproc-notes)))
+          (noteproc--notes-len))
          ;; point as at the bottom of a drawer
          ((= (point)
              (noteproc-begin-end-s-end (noteproc-notes-s-drawer noteproc-notes)))
@@ -672,19 +678,26 @@ Do not set notes when NO-SET is non-nil."
 
 
 
-;; C-x p C
+;; [C-u] C-x p C
 (defun noteproc-note-copy-current (&optional no-set)
   "Copy the current note into the paste buffer.
+When a prefix argument is used, copy all of the notes from the current
+note to the end.
 
 Do not set notes when NO-SET is non-nil."
 
   (interactive)
 
   (unless no-set (noteproc-notes-set))
-  (let ((cur (noteproc-current-note-index t)))
-    (noteproc-note-copy-multiple cur cur t))
-  (when (called-interactively-p 'interactive)
-    (message "Note copied")))
+  (let* ((cur (noteproc-current-note-index t))
+         (cur+ (if current-prefix-arg (noteproc--notes-len)
+                 cur))
+         (s-pl (if current-prefix-arg
+                   (format "s %s-%s" cur cur+)
+                 (format " %s" cur))))
+    (noteproc-note-copy-multiple cur cur+ t)
+    (when (called-interactively-p 'interactive)
+      (message (format "Note%s copied" s-pl)))))
 
 
 (defun noteproc-note-copy-filter-link (str)
@@ -756,7 +769,7 @@ If NO-SET is non-nil, don't run noteproc-notes-set."
   (goto-char (pcase which
                (?b (noteproc-begin-end-s-begin (noteproc-notes-s-drawer noteproc-notes)))
                (?f (noteproc-note-begin-n 1 t))
-               (?l (noteproc-note-begin-n (length (noteproc-notes-s-notes noteproc-notes)) t))
+               (?l (noteproc-note-begin-n (noteproc--notes-len) t))
                (?e (progn ; sometimes the end of the drawer is not at :END:
                      (goto-char (noteproc-begin-end-s-end   (noteproc-notes-s-drawer noteproc-notes)))
                      (while (not (looking-at-p (rx bol ":END:" eol)))
@@ -775,7 +788,7 @@ If NO-SET is non-nil, don't run noteproc-notes-set."
 
 Do not set notes when NO-SET is non-nil."
 
-  (interactive (let* ((len (length (noteproc-notes-s-notes noteproc-notes)))
+  (interactive (let* ((len (noteproc--notes-len))
                       (note (read-from-minibuffer (format "Note (1-%s)? " len) nil nil t)))
                  (list note)))
 
@@ -865,7 +878,7 @@ Do not set notes when NO-SET is non-nil."
      (delete-region
       (noteproc-note-begin-n ,n t)
       (noteproc-note-end-n ,n t))
-     (when (= ,n (length (noteproc--notes)))
+     (when (= ,n (noteproc--notes-len))
        (noteproc-note-jump ?e t)
        (ensure-empty-lines 0))))
 

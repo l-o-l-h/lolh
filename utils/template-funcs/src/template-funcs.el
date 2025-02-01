@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2025-01-21 09:01:23 lolh-mbp-16>
+;; Time-stamp: <2025-01-29 15:16:53 lolh-mbp-16>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -60,13 +60,17 @@
    ":COMPLAINT:\t--\n"
    ":OSC-1:\t--\n"
    ":OSC-2:\t--\n"
-   ":APPOINT:\t--\n"
+   ":ASSIGNED:\t--\n"
+   ":INTERVIEW:\t--\n"
+   ":APPOINTED:\t--\n"
    ":NOA:\t\t--\n"
    ":LEDGER:\t--\n"
    ":OLD:\t\t--\n"
    ":DISMISS:\t--\n"
-   ":WRIT:\t\t--\n"
+   ":SURRENDER:\t--\n"
+   ":WRIT:\t--\n"
    ":JUDGMENT:\t--\n"
+   ":CHECKLIST:\t--\n"
    ":END:\n\n"
 
    "** OSC\n"
@@ -88,6 +92,9 @@
    ":LEDGER-1:\t-- [DATE]\n"
    ":LEDGER-2:\t-- [DATE]\n"
    ":END:\n\n"
+
+   "*** DISMISSAL-OLD\n\n"
+   "*** FINAL ORDERS\n\n"
 
    "* CLIENT\n\n"
    "* O/C\n"
