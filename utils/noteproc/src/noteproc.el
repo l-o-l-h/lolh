@@ -1,5 +1,5 @@
 ;;; noteproc.el --- Process Denote notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-02-01 10:42:33 lolh-mbp-16>
+;;; Time-stamp: <2025-02-06 10:00:26 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib_compat)
 
@@ -34,6 +34,7 @@
 ;;  - [ ] [2025-01-27T1250] After creating Word and PDF NOA and Order Appointing, place documens into Google drive automatically
 ;;  - [ ] [2025-01-27T1315] Update court documents when a case is closed
 ;;  - [ ] [2025-01-28T1449] With point in a note, add an attachment at that point with some document from Downloads or Process dir
+;;  - [ ] [2025-02-06T0955] I made a major mistake by adding WORKTIME entries; now I've had to hack a way to keep the program running.  This needs a major rework; make the drawer a class with two subclasses: LOGBOOK and WORKTIME.
 ;; Emails
 ;;  - [ ] Use email program to add email to O/C Communication entry
 ;; LegalServer
@@ -265,6 +266,9 @@ Do not set notes when NO-SET is non-nil.
        (setf (noteproc-notes-s-headline noteproc-notes) hs))))
 
 
+;; TODO: this does nothing when a LOGBOOK drawer is not found
+;; It now sets a null entry with a name of NOLOGBOOK
+;; HACK
 (defmacro noteproc--drawer ()
   "Find the enclosing drawer (logbook) element within headline HL."
 
@@ -272,51 +276,66 @@ Do not set notes when NO-SET is non-nil.
      (goto-char
       (noteproc-begin-end-s-begin
        (noteproc-notes-s-headline noteproc-notes)))
-     (when (re-search-forward
-            (rx bol ":LOGBOOK:")
-            (noteproc-begin-end-s-end
-             (noteproc-notes-s-headline noteproc-notes))
-            t)
-       (let* ((oe (org-element-at-point))
-              (ls (make-noteproc-begin-end-s :type (org-element-type oe)
-                                             :name (org-element-property :drawer-name oe)
-                                             :begin (org-element-begin oe)
-                                             :end (org-element-end oe))))
+     (if (re-search-forward
+          (rx bol ":LOGBOOK:")
+          (noteproc-begin-end-s-end
+           (noteproc-notes-s-headline noteproc-notes))
+          t)
+         (let* ((oe (org-element-at-point))
+                (ls (make-noteproc-begin-end-s :type (org-element-type oe)
+                                               :name (org-element-property :drawer-name oe)
+                                               :begin (org-element-begin oe)
+                                               :end (org-element-end oe))))
+           (setf (noteproc-notes-s-drawer noteproc-notes) ls))
+       ;; Create a null entry for a LOGBOOK DRAWER
+       ;; Need to check for a null entry.
+       (let ((ls (make-noteproc-begin-end-s :type "drawer"
+                                            :name "NOLOGBOOK"
+                                            :begin nil
+                                            :end nil)))
          (setf (noteproc-notes-s-drawer noteproc-notes) ls)))))
 
 
+;; If there is no LOGBOOK drawer, set pllist to null entry
+;; HACK
 (defmacro noteproc--pllist ()
   "Set the plain list within logbook LS and headline HL into `noteproc-notes'."
 
   `(progn
-     (goto-char
-      (noteproc-begin-end-s-begin
-       (noteproc-notes-s-drawer noteproc-notes)))
-     (forward-line)
-     (let* ((oe (org-element-at-point))
-            (pe (make-noteproc-begin-end-s :type (org-element-type oe)
-                                           :begin (org-element-begin oe)
-                                           :end (org-element-end oe))))
-       (setf (noteproc-notes-s-pllist noteproc-notes) pe ))))
+     (if (string-equal "NOLOGBOOK"
+                       (noteproc-begin-end-s-name (noteproc-notes-s-drawer noteproc-notes)))
+         (setf (noteproc-notes-s-pllist noteproc-notes) nil)
+       (progn
+         (goto-char
+          (noteproc-begin-end-s-begin
+           (noteproc-notes-s-drawer noteproc-notes)))
+         (forward-line)
+         (let* ((oe (org-element-at-point))
+                (pe (make-noteproc-begin-end-s :type (org-element-type oe)
+                                               :begin (org-element-begin oe)
+                                               :end (org-element-end oe))))
+           (setf (noteproc-notes-s-pllist noteproc-notes) pe ))))))
 
 
+;; HACK
 (defun noteproc--notes-filter-structure ()
   "Create the plain list notes structure by going to the plain list.
 
 First, remove list levels higher than 1.
 Then, add an index entry."
 
-  (let ((struct (save-excursion
-                  (progn
-                    (goto-char (noteproc-begin-end-s-begin
-                                (noteproc-notes-s-pllist noteproc-notes)))
-                    (org-element-property :structure
-                                          (org-element-at-point)))))
-        (n 0))
-    (seq-mapn (lambda (i)
-                (cons (cl-incf n) (cons (cl-first i) (last i))))
-              (seq-filter (lambda (i) (zerop (cl-second i)))
-                          struct))))
+  (when (noteproc-notes-s-pllist noteproc-notes)
+    (let ((struct (save-excursion
+                    (progn
+                      (goto-char (noteproc-begin-end-s-begin
+                                  (noteproc-notes-s-pllist noteproc-notes)))
+                      (org-element-property :structure
+                                            (org-element-at-point)))))
+          (n 0))
+      (seq-mapn (lambda (i)
+                  (cons (cl-incf n) (cons (cl-first i) (last i))))
+                (seq-filter (lambda (i) (zerop (cl-second i)))
+                            struct)))))
 
 
 (defmacro noteproc--notes-list ()
@@ -326,76 +345,92 @@ Then, add an index entry."
          (noteproc--notes-filter-structure)))
 
 
+;; TODO: This returns a wrong answer when only a WORKTIME entry is present
+;; Set current note to zero if there is not a LOGBOOK drawer
+;; HACK
 (defun noteproc--note-current ()
   "Set the current note into `noteproc-notes'.
 
 Current note is the index of the note point is in.
-However, the current note will not be set if point is outside of a drawer.
-Instead, an error will result.
+If there is no LOGBOOK of notes, then set current to 0.
 If point is at the borders of a drawer, either the first or the last note
 will be set as current."
 
-  (when (or (< (point) (noteproc-begin-end-s-begin (noteproc-notes-s-drawer noteproc-notes)))
-            (> (point) (noteproc-begin-end-s-end (noteproc-notes-s-drawer noteproc-notes))))
-    (goto-char (noteproc-begin-end-s-begin (noteproc-notes-s-drawer noteproc-notes))))
-  (setf (noteproc-notes-s-current noteproc-notes)
-        ;; point is inside a drawer
-        (cond
-         ;; point is at or before a plain list
-         ((<= (point)
-              (noteproc-begin-end-s-begin (noteproc-notes-s-pllist noteproc-notes)))
-          1)           ; set current note to the first
-         ;; point is at or after the end of a plain list
-         ((>= (point)
-              (noteproc-begin-end-s-end (noteproc-notes-s-pllist noteproc-notes)))
-          ;; set current to the last note
-          (noteproc--notes-len))
-         ;; point as at the bottom of a drawer
-         ((= (point)
-             (noteproc-begin-end-s-end (noteproc-notes-s-drawer noteproc-notes)))
-          ;; set current to the last note
-          (length (noteproc-notes-s-notes noteproc-notes)))
-         ;; point is in a list item
-         (t (let* ((notes (noteproc-notes-s-notes noteproc-notes))
-                   (pos (point))
-                   (index (cl-first (seq-find (lambda (note) (let ((b (noteproc--note-begin note))
-                                                                   (e (noteproc--note-end note)))
-                                                               (and (>= pos b)
-                                                                    (<= pos e))))
-                                              notes))))
-              (if (and
-                   (> index 0)
-                   (< index (length notes))
-                   (= pos (noteproc--note-begin (nth index notes))))
-                  (1+ index)
-                index))))))
+  (if (string-equal "NOLOGBOOK"
+                    (noteproc-begin-end-s-name (noteproc-notes-s-drawer noteproc-notes)))
+      (setf (noteproc-notes-s-current noteproc-notes) 0)
+    (progn
+      (when (or (< (point) (noteproc-begin-end-s-begin (noteproc-notes-s-drawer noteproc-notes)))
+                (> (point) (noteproc-begin-end-s-end (noteproc-notes-s-drawer noteproc-notes))))
+        (goto-char (noteproc-begin-end-s-begin (noteproc-notes-s-drawer noteproc-notes))))
+      (setf (noteproc-notes-s-current noteproc-notes)
+            ;; point is inside a drawer
+            (cond
+             ;; point is at or before a plain list
+             ;; NOTE: this returns 1 when point is in a WORKTIME drawer; that is an error
+             ((<= (point)
+                  (noteproc-begin-end-s-begin (noteproc-notes-s-pllist noteproc-notes)))
+              1)       ; set current note to the first
+             ;; point is at or after the end of a plain list
+             ((>= (point)
+                  (noteproc-begin-end-s-end (noteproc-notes-s-pllist noteproc-notes)))
+              ;; set current to the last note
+              (noteproc--notes-len))
+             ;; point as at the bottom of a drawer
+             ((= (point)
+                 (noteproc-begin-end-s-end (noteproc-notes-s-drawer noteproc-notes)))
+              ;; set current to the last note
+              (length (noteproc-notes-s-notes noteproc-notes)))
+             ;; point is in a list item
+             (t (let* ((notes (noteproc-notes-s-notes noteproc-notes))
+                       (pos (point))
+                       (index (cl-first (seq-find (lambda (note) (let ((b (noteproc--note-begin note))
+                                                                       (e (noteproc--note-end note)))
+                                                                   (and (>= pos b)
+                                                                        (<= pos e))))
+                                                  notes))))
+                  (if (and
+                       (> index 0)
+                       (< index (length notes))
+                       (= pos (noteproc--note-begin (nth index notes))))
+                      (1+ index)
+                    index))))))))
 
 
+;; TODO: notes is nil without a timestamp
+;; When there is not a LOGBOOK drawer, cur comes back with a number of a note in a WORKTIME drawer
+;; notes returns a list of entries in a WORKTIME drawer
+;; (when notes ...) does not work in this situation
+;; (noteproc-notes-s-drawer noteproc-notes) returns the type of drawer, which is LOGBOOK; this is incorrect
 (defmacro noteproc--note-timestamp ()
   "Set the timestamp value of the current note into `noteproc-notes'."
 
   `(save-excursion
      (progn
-       (let ((cur (noteproc-notes-s-current noteproc-notes))  ; cur index
-             (notes (noteproc-notes-s-notes noteproc-notes))) ; notes
-         (goto-char (cl-second (nth (1- cur) notes)))
-         (re-search-forward
-          (rx noteproc-inactive-timestamp)
-          (cl-third (nth (1- cur) notes)))
-         (backward-char))
-       (let* ((tsv (org-element-context))
-              (type (org-element-type tsv))
-              (beg (org-element-begin tsv))
-              (end (org-element-end tsv))
-              (name (org-element-property :raw-value tsv))
-              (value (date-to-time name))
-              (be (make-noteproc-begin-end-s :type type
-                                             :name name
-                                             :begin beg
-                                             :end end))
-              (tss (make-noteproc-timestamp-s :tsbe be
-                                              :value value)))
-         (setf (noteproc-notes-s-time noteproc-notes) tss)))))
+       (unless (= (noteproc-notes-s-current noteproc-notes) 0)
+         (let ((cur (noteproc-notes-s-current noteproc-notes)) ; cur index
+               (notes (noteproc-notes-s-notes noteproc-notes)) ; notes
+               (tss (make-noteproc-timestamp-s))) ; null timestamp
+           (when notes               ; don't process if notes is nil
+             (goto-char (cl-second (nth (1- cur) notes)))
+             (re-search-forward
+              (rx noteproc-inactive-timestamp)
+              (cl-third (nth (1- cur) notes)))
+             (backward-char)
+             (let* ((tsv (org-element-context))
+                    (type (org-element-type tsv))
+                    (beg (org-element-begin tsv))
+                    (end (org-element-end tsv))
+                    (name (org-element-property :raw-value tsv))
+                    (value (date-to-time name))
+                    (be (make-noteproc-begin-end-s :type type
+                                                   :name name
+                                                   :begin beg
+                                                   :end end)))
+               (setf tss (make-noteproc-timestamp-s :tsbe be
+                                                    :value value))))
+           ;; tss will be null when the heading does not have a logbook drawer yet
+           (setf (noteproc-notes-s-time noteproc-notes) tss))))))
 
 
 (defun noteproc--update-email-time (dts ampm)
@@ -472,24 +507,25 @@ The macro returns a cons cell with an updated string and its timestamp value:
      (progn
        (let ((cur (noteproc-notes-s-current noteproc-notes))
              (notes (noteproc-notes-s-notes noteproc-notes)))
-         (goto-char (cl-second (nth (1- cur) notes)))
-         (if (re-search-forward (rx noteproc-email-time)
-                                (cl-third (nth (1- cur) notes)) t)
-             (let* ((name-value (noteproc--update-email (match-data)))
-                    (name (cl-first name-value))
-                    (value (cl-second name-value))      ; a string time
-                    (type 'email-ts)                    ; a timestamp
-                    (beg (match-beginning 1))
-                    (end (progn (goto-char beg) (pos-eol)))
-                    (be (make-noteproc-begin-end-s :type type
-                                                   :name name
-                                                   :begin beg
-                                                   :end end))
-                    (ets (make-noteproc-timestamp-s :tsbe be
-                                                    :value value)))
-               (setf (noteproc-notes-s-email noteproc-notes) ets))
-           (setf (noteproc-notes-s-email noteproc-notes)
-                 (make-noteproc-timestamp-s)))))))
+         (when notes
+           (goto-char (cl-second (nth (1- cur) notes)))
+           (if (re-search-forward (rx noteproc-email-time)
+                                  (cl-third (nth (1- cur) notes)) t)
+               (let* ((name-value (noteproc--update-email (match-data)))
+                      (name (cl-first name-value))
+                      (value (cl-second name-value)) ; a string time
+                      (type 'email-ts)               ; a timestamp
+                      (beg (match-beginning 1))
+                      (end (progn (goto-char beg) (pos-eol)))
+                      (be (make-noteproc-begin-end-s :type type
+                                                     :name name
+                                                     :begin beg
+                                                     :end end))
+                      (ets (make-noteproc-timestamp-s :tsbe be
+                                                      :value value)))
+                 (setf (noteproc-notes-s-email noteproc-notes) ets))
+             (setf (noteproc-notes-s-email noteproc-notes)
+                   (make-noteproc-timestamp-s))))))))
 
 
 (defmacro noteproc--worktime-set ()
@@ -679,6 +715,7 @@ Do not set notes when NO-SET is non-nil."
 
 
 ;; [C-u] C-x p C
+;; HACK
 (defun noteproc-note-copy-current (&optional no-set)
   "Copy the current note into the paste buffer.
 When a prefix argument is used, copy all of the notes from the current
@@ -689,15 +726,16 @@ Do not set notes when NO-SET is non-nil."
   (interactive)
 
   (unless no-set (noteproc-notes-set))
-  (let* ((cur (noteproc-current-note-index t))
-         (cur+ (if current-prefix-arg (noteproc--notes-len)
-                 cur))
-         (s-pl (if current-prefix-arg
-                   (format "s %s-%s" cur cur+)
-                 (format " %s" cur))))
-    (noteproc-note-copy-multiple cur cur+ t)
-    (when (called-interactively-p 'interactive)
-      (message (format "Note%s copied" s-pl)))))
+  (unless (= (noteproc-notes-s-current noteproc-notes) 0)
+    (let* ((cur (noteproc-current-note-index t))
+           (cur+ (if current-prefix-arg (noteproc--notes-len)
+                   cur))
+           (s-pl (if current-prefix-arg
+                     (format "s %s-%s" cur cur+)
+                   (format " %s" cur))))
+      (noteproc-note-copy-multiple cur cur+ t)
+      (when (called-interactively-p 'interactive)
+        (message (format "Note%s copied" s-pl))))))
 
 
 (defun noteproc-note-copy-filter-link (str)
@@ -920,6 +958,28 @@ Do not set notes when NO-SET is non-nil."
           (message "Copied the last worktime entry."))))))
 
 
+;; (defun noteproc-note-worklog-last-entry (&optional no-set)
+;;   "Find the last worklog entry and copy it.
+
+;; Do not set notes when NO-SET is non-nil."
+
+;;   (interactive)
+
+;;   (unless no-set (noteproc-notes-set))
+
+;;   (let* ((wte (noteproc-notes-s-worktime noteproc-notes)))
+;;     (when wte
+;;       (let ((wlbeg (noteproc-begin-end-s-begin wte))
+;;             (wlend (noteproc-begin-end-s-end wte)))
+;;         (goto-char wlend)
+;;         (re-search-backward (rx bol "CLOCK: [") wlbeg)
+;;         (textproc-pbcopy (concat
+;;                           (buffer-substring (point) wlend)
+;;                           (make-string 40 ?/)
+;;                           (string 10)))
+;;         (when (called-interactively-p 'interactive)
+;;           (message "Copied the last worktime entry."))))))
+
 ;; End Notes Processing
 ;;;-------------------------------------------------------------------
 ;; Note Hook Functions
@@ -927,23 +987,30 @@ Do not set notes when NO-SET is non-nil."
 (defun noteproc-new-note-ensure-spacing ()
   "Add a space between notes and remove excess spacing in the note."
 
-  (setq op-pos (point-marker))
-  (search-backward "- Note taken on [")
-  (ensure-empty-lines (prog2
-                          (forward-line -1)
-                          (if (looking-at-p (rx bol ":LOGBOOK:"))
-                              0 1)
-                        (forward-line)))
-  (when (looking-at-p (rx bol (* space) eol)) (delete-line))
-  (search-forward-regexp (rx bol (* space) (+ "-") eol))
-  (forward-line)
-  (when (looking-at-p (rx bol (* space) eol)) (delete-line))
-  (cl-loop until (<= op-pos (point)) do
-           (if (looking-at-p
-                (rx (= 2 (seq bol (zero-or-more space) "\n"))))
-               (delete-line)
-             (forward-line)))
-  (set-marker op-pos nil))
+  (unless (string-equal
+           "WORKTIME"
+           (car (org-element-lineage-map
+                    (org-element-at-point)
+                    (lambda (d) (when
+                                    (eq 'drawer (org-element-type d))
+                                  (org-element-property :drawer-name d))))))
+    (setq op-pos (point-marker))
+    (search-backward "- Note taken on [")
+    (ensure-empty-lines (prog2
+                            (forward-line -1)
+                            (if (looking-at-p (rx bol ":LOGBOOK:"))
+                                0 1)
+                          (forward-line)))
+    (when (looking-at-p (rx bol (* space) eol)) (delete-line))
+    (search-forward-regexp (rx bol (* space) (+ "-") eol))
+    (forward-line)
+    (when (looking-at-p (rx bol (* space) eol)) (delete-line))
+    (cl-loop until (<= op-pos (point)) do
+             (if (looking-at-p
+                  (rx (= 2 (seq bol (zero-or-more space) "\n"))))
+                 (delete-line)
+               (forward-line)))
+    (set-marker op-pos nil)))
 
 
 (add-hook 'org-after-note-stored-hook 'noteproc-new-note-ensure-spacing -1)
