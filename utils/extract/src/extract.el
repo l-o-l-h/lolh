@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-28 10:24:51 lolh-mbp-16>
+;;; Time-stamp: <2025-02-05 21:49:50 lolh-mbp-16>
 ;;; Version: 0.3.0 [2025-01-18 13:20]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -121,7 +121,7 @@
   "Process BODY with the MAIN note active."
 
   `(save-excursion
-     (with-current-buffer (get-file-buffer (lolh/main-note))
+     (with-current-buffer (find-file-noselect (lolh/main-note))
        ,@body)))
 
 
@@ -902,7 +902,7 @@ Return an error if a main note cannot be found."
 
 
 (defun lolh/client-note ()
-  "Return a client notes.
+  "Return a client note.
 
 If the current note is a client note, return it.
 Otherwise, provide a list of client notes for the user to pick one from.
@@ -919,10 +919,12 @@ The associated cons cell is returned."
     buffer-file-name)
    (t (let* ((client-notes (lolh/client-names-from-notes (lolh/client-notes)))
              (client-names (mapcar #'car client-notes)))
-        (cdr
-         (assoc
-          (completing-read "Pick a Client: " client-names nil t nil nil client-names)
-          client-notes))))))
+        (if (= 1 (length client-names))
+            (cdar client-notes)
+          (cdr
+           (assoc
+            (completing-read "Pick a Client: " client-names nil t nil nil client-names)
+            client-notes)))))))
 
 
 (defun lolh/oc-note ()
@@ -1492,6 +1494,12 @@ After moving the files into `process-dir', make sure they can be read by
   (lolh/make-file-name-in-process-dir))
 
 
+;; TODO: Add function to open the PDF in a window to show what it is
+;; 1. Close all windows but the current
+;; 2. Open new window
+;; 3. Display a PDF
+;; 4. Do this for all files in the loop
+;; 5. Restore the prior setup
 (defun lolh/make-file-name-in-process-dir ()
   "Make sure every file in `process-dir' can be read by `*lolh/case-file-name-rx*'.
 
