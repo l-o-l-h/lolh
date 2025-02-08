@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-29 14:20:54 lolh-mbp-16>
+;;; Time-stamp: <2025-02-04 10:56:52 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -462,8 +462,8 @@ All documents begin and end in *lolh/process-dir*"
       (read-file-name "File to split? "nil nil t (car initial)))))
 
   (textproc-clean-dirs)
-
-  (let* ((bn-file (file-name-nondirectory file))
+  (let* ((default-directory textproc-downloads)
+         (bn-file (file-name-nondirectory file))
          (full (and (string-match textproc-dismissal-old-re bn-file)
                     (match-string 0 bn-file)))
          (first (match-string 1 bn-file))
