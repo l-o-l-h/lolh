@@ -1,0 +1,31 @@
+#+title:      24-2-03597-06 CR Silver Oak Communities, LLC v. Joseph Marquez and Melissa Marquez Checklist
+#+date:       [2024-11-12 Tue 17:15]
+#+filetags:   :checklist:rtc:
+#+identifier: 20241112T171512
+
+[[denote:20241112T171426][24=2=03597=06=0  Link to Main Case Note]]
+
+* New RTC Case Checklist
+- [X] New GMail Label in RTC Active Cases
+- [X] New GDrive folder in My Drive/Lincoln Harvey 2024
+- [X] RTC Interview Label in Appointments/Clients
+- [X] OSC Hearing Label in Appointments/UD Hearings
+- [X] Add labels to messages for Appointments
+- [X] Download OnBase documents and place into ~/Downloads/process
+- [X] Create main Case Note
+  - [X] Update Properties
+  - [X] Update and attach Court File documents
+  - [X] Extract and attach Exhibits
+- [X] Create or find main Client Note(s);
+  - [X] Update Properties
+  - [X] Add backlink to Case
+  - [X] Cross-link multiple Clients or N/A
+- [X] Create or find Attorney Note
+  - [X] Update list of cases
+- [X] Update Notes
+  - [X] RTC Cases
+  - [X] OSC Cases
+- [-] Draft Documents
+  - [X] NOA
+  - [X] Appointment-Fee Waiver
+  - [ ] OLD

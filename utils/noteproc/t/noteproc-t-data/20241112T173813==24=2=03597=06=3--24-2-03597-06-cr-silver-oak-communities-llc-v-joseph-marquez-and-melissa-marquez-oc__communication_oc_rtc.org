@@ -1,0 +1,153 @@
+#+title:      24-2-03597-06 CR Silver Oak Communities, LLC v. Joseph Marquez and Melissa Marquez O/C
+#+date:       [2024-11-12 Tue 17:38]
+#+filetags:   :communication:oc:rtc:
+#+identifier: 20241112T173813
+
+* Appearance
+:LOGBOOK:
+- Note taken on [2024-11-12 Tue 12:42] \\
+  NOA TO O/C:
+  -----------
+  Lincoln Harvey <lincoln@ccvlp.org>
+  Attachments
+  Tue, Nov 12, 5:56 PM (3 days ago)
+  to Bradley, Jonathan, Janel
+
+  Brad-Jonathan,
+  I am appearing for the Marquezes.  Please itemize your court costs.
+
+- Note taken on [2024-11-19 Tue 11:22] \\
+  COURT COSTS FROM O/C:
+  ---------------------
+  Jonathan Riffey
+  11:22 AM (3 hours ago)
+  to Craig, Jasmine, Bradley, me, Janel
+
+  Good morning Lincoln,
+
+  Costs:
+
+  - $88 Filing
+  - $112 Answer
+  - $55 Service of Summons/Complaint
+  - $115 SC related
+
+  Craig will be handling the hearing on Thursday and any negotiations through that point. I have added him to this email so he can respond to any future requests/emails.
+:END:
+
+* Ledger
+:LOGBOOK:
+- Note taken on [2024-11-15 Fri 12:42] \\
+  LEDGER ATTACHED TO COMPLAINT:
+  -----------------------------
+  - Ledger attached to complaint;
+  - Did not request a new ledger.
+:END:
+
+* Checklist
+
+* Communication
+
+* Offers
+:LOGBOOK:
+- Note taken on [2024-11-19 Tue 15:00] \\
+  OFFER OF REPAYMENT PLAN TO O/C:
+  -------------------------------
+  Lincoln Harvey <lincoln@ccvlp.org>
+  2:58 PM (4 minutes ago)
+  to Jonathan, Janel, Craig, Jasmine, Bradley
+
+  Craig,
+  The Marquez's are obtaining an emergency 401(k) disbursement to pay the arrears.  Will the landlord stipulate to a .410(3) repayment plan which includes all outstanding rent, court costs as provided in the previous email, attorney fees of $750, and a late fee of $75?
+
+- Note taken on [2024-11-20 Wed 10:06] \\
+  EMAIL FROM O/C:
+  ---------------
+  Craig Wagner
+  Wed, Nov 20, 10:06 AM (2 days ago)
+  to me, Jonathan, Janel, Jasmine, Bradley
+
+  Good morning Lincoln,
+  Nice to meet you (albeit via email).
+  My client is in general agreement to the proposal, but the attorney fee amount offered is a little lower than the actual amount. Can the tenants pay $1,100.00 in attorney fees?
+
+- Note taken on [2024-11-20 Wed 10:42] \\
+  RESPONSE TO O/C:
+  ----------------
+  Lincoln Harvey <lincoln@ccvlp.org>
+  Wed, Nov 20, 10:42 AM (2 days ago)
+  to Craig, Jonathan, Janel, Jasmine, Bradley
+
+  Hello Craig,
+  Welcome to Clark County.  Good to meet you.
+
+  The Marquez's agree to $1100 as attorney fees and $370 in court costs, and a 90-day repayment order to be entered tomorrow.  As I am technically not working today, would you be able to prepare that order and send a proposal for review?
+
+- Note taken on [2024-11-20 Wed 10:57] \\
+  EMAIL FROM O/C ABOUT PLAN:
+  --------------------------
+  Craig Wagner
+  Wed, Nov 20, 10:57 AM (2 days ago)
+  to me, Jonathan, Janel, Jasmine, Bradley
+
+  Thank you, Lincoln, I appreciate the welcome.
+  I will draft the repayment plan and send it over to you this afternoon.
+
+- Note taken on [2024-11-21 Thu 12:33] \\
+  EMAIL TO O/C:
+  -------------
+  Lincoln Harvey <lincoln@ccvlp.org>
+  Thu, Nov 21, 12:33 PM (1 day ago)
+  to Craig, Jonathan, Janel, Jasmine, Bradley
+
+  Craig,
+  I did not see a draft come through.  What are we doing at today's hearing?
+
+- Note taken on [2024-11-21 Thu 12:38] \\
+  EMAIL FROM O/C BK:
+  ------------------
+  Bradley Kraus
+  Attachments
+  Thu, Nov 21, 12:38 PM (1 day ago)
+  to me, Craig, Jonathan, Janel, Jasmine
+
+  Hi Lincoln,
+  Craig is on his way up now. You can chat with him about what’s happening at court, but he may have a copy of that .410(3) in hand (I know he was printing some off).
+  I’m merely providing what I see in the file; I don’t know what has been agreed upon.
+
+- Note taken on [2024-11-21 Thu 15:39] \\
+  EMAIL TO O/C:
+  -------------
+  Lincoln Harvey <lincoln@ccvlp.org>
+  Thu, Nov 21, 3:39 PM (1 day ago)
+  to Morgan, Bradley, Craig, Jonathan, Janel, Jasmine
+
+  Craig,
+  If you want, send me your proposed orders, and I can send you signed copies.  I will do the same.
+
+- Note taken on [2024-11-22 Fri 16:27] \\
+  EMAIL WITH NEW PROPOSED ORDERS FROM O/C:
+  ----------------------------------------
+  Craig Wagner
+  Attachments
+  4:27 PM (25 minutes ago)
+  to Bradley, Jasmine, Morgan, me, Jonathan, Janel
+
+  Good afternoon Lincoln,
+  It was nice visiting with you today.
+  I changed the $1450 in Paragraph 2 to $1411.00 in the repayment plan, and I have attached the judgment.
+  I wish you a good weekend!
+
+  - [[~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/PROPOSED ORDERS/24-2-03597-06 \[2024-11-22\] MARQUEZ,Joseph-MARQUEZ,Melissa -- PL DRAFT Judgment_Marquez (1).pdf][PL DRAFT Judgment_Marquez (1)]]
+  - [[~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/PROPOSED ORDERS/24-2-03597-06 \[2024-11-22\] MARQUEZ,Joseph-MARQUEZ,Melissa -- PL 410(3) Agreed Repayment Plan_Marquez.pdf][PL 410(3) Agreed Repayment Plan_Marquez]]
+
+- Note taken on [2024-11-22 Fri 16:28] \\
+  EMAIL TO O/C:
+  -------------
+  Lincoln Harvey <lincoln@ccvlp.org>
+  4:28 PM (26 minutes ago)
+  to Craig, Bradley, Jonathan, Janel, Jasmine, Morgan
+
+  Craig,
+  Likewise.  Received and I will sign and return.
+:END:

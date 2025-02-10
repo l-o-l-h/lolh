@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-25 17:06:39 lolh-mbp-16>
+;;; Time-stamp: <2025-01-25 17:37:45 lolh-mbp-16>
 ;;; Version: 0.0.9_2025-01-25T0830
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -531,6 +531,12 @@ The values will be of the required type, and of the allowed number."
   "Ask for and return a judicial dept."
 
   (read-from-minibuffer "Give me a `judicial' "))
+
+
+(defun helpers-read-string ()
+  "Read in a string."
+
+  (read-string "Read string"))
 
 
 ;;;-------------------------------------------------------------------

@@ -1,0 +1,240 @@
+#+title:      24-2-03597-06 CR Silver Oak Communities, LLC v. Joseph Marquez and Melissa Marquez
+#+date:       [2024-11-12 Tue 17:14]
+#+filetags:   :4103:case:judgment:main:pending:rtc:
+#+identifier: 20241112T171426
+
+#+columns: %35item %10todo %22scheduled %22deadline %clocksum{:} %20tags
+
+* RTC CASE
+:PROPERTIES:
+:O/C:		-- Warren Allen -- Bradley Kraus
+:CAUSE:	-- 24-2-03597-06
+:DEPT:	--
+:PL-1:	-- Silver Oak Communities, LLC
+:PL-2:	--
+:APRTMNT:	--
+:DEF-1:	-- Joseph Marquez
+:DEF-2:	-- Melissa Marquez
+:LEASE:	-- [2023-05-07 Sun]-[2024-05-06 Mon]->MtM | [2024-04-24 Wed] BASE RENT :: $1410
+:NOTICE:	-- [2024-09-12 Thu] 30-DAY POV | BASE :: JUL-AUG-SEP $4095 | UTILS :: JUL-AUG-SEP $261.26 | OTHER :: JUL-AUG-SEP $138 | TOTAL :: $4494.26
+:SUMMONS:	-- [2024-10-23 Wed]->[2024-11-07 Thu] | [2024-10-23 Wed] (PERSONAL) 14-DAYS
+:COMPLAINT:	-- [2024-10-23 Wed] 30-DAY POV | $6421.37
+:OSC-1:	-- [2024-11-08 Fri 13:30] T APPEARED | SETOVER => [2024-11-21 Thu 13:30]
+:OSC-2:	-- [2024-11-21 Thu 13:30]
+:APPOINT:	-- [2024-11-12 Tue]
+:NOA:		-- [2024-11-12 Tue]
+:LEDGER:	--
+:OLD:		--
+:DISMISS:	--
+:WRIT:	--
+:JUDGMENT:	--
+:END:
+:LOGBOOK:
+- Note taken on [2024-11-12 Tue 17:48] \\
+  NEW RTC CASE:
+  -------------
+  Set up new RTC case.
+  Reviewed pleadings.
+  Made notes.
+:END:
+:WORKTIME:
+CLOCK: [2024-11-12 Tue 17:00]--[2024-11-12 Tue 17:48] =>  0:48
+CLOCK: [2024-11-15 Fri 12:42]--[2024-11-15 Fri 12:54] =>  0:12
+- Updated case notes
+CLOCK: [2024-12-16 Mon 11:24]--[2024-12-16 Mon 11:36] =>  0:12
+- Updated case documents.  Sent judgment and order to CLs.
+:END:
+
+** OSC
+*** OSC-1 <2024-11-08 Fri 13:30>
+:LOGBOOK:
+- Note taken on [2024-11-12 Tue 17:30] \\
+  INITIAL OSC:
+  ------------
+  - T appeared
+  - Setover => [2024-11-21 Thu 13:30]
+:END:
+
+*** OSC-2 <2024-11-21 Thu 13:30>
+:LOGBOOK:
+- Note taken on [2024-11-21 Thu 13:30] \\
+  OSC HEARING:
+  ------------
+  - Appeared at OSC hearing
+  - Confirmed repayment plan.
+  - Need to review documents first.
+:END:
+
+** DOCUMENTS
+*** NOA-APPT
+:WORKTIME:
+CLOCK: [2024-11-12 Tue 17:50]--[2024-11-12 Tue 18:02] =>  0:12
+- DRAFTED-SERVED-PRESENTED:
+  -------------------------
+  - NOA
+  - Order for Apppointment of Attorney
+:END:
+
+*** COURT FILES                                                               :ATTACH:
+:PROPERTIES:
+:DIR:      ~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/Court File/
+:END:
+:WORKTIME:
+CLOCK: [2024-12-02 Mon 08:48]--[2024-12-02 Mon 08:54] =>  0:06
+- Updated court documents.
+:END:
+
+*** EXHIBITS                                                                  :EXTRACT:ATTACH:
+:PROPERTIES:
+:SOURCE:		-- Complaint
+:EXHIBIT-A:	-- Lease [2023-05-07] 4 12
+:EXHIBIT-B:	-- Notice [2024-09-12] 13 13
+:EXHIBIT-C:	-- Ledger [2024-10-15] 14 21
+:DIR:      ~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/Notices & Lease/
+:END:
+
+*** LEDGERS
+:PROPERTIES:
+:LEDGER-1:	-- [DATE]
+:LEDGER-2:	-- [DATE]
+:END:
+
+*** PROPOSED ORDERS                                                           :ATTACH:
+:PROPERTIES:
+:DIR:      ~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/PROPOSED ORDERS/
+:END:
+:LOGBOOK:
+- Note taken on [2024-12-02 Mon 16:42] \\
+  ORDERS TO J/A:
+  --------------
+  Craig Wagner
+  Attachments
+  4:17 PM (24 minutes ago)
+  to Jennifer, me
+
+  Good afternoon Jennifer,
+  Here is one more repayment plan and Judgment from the 11/21 UD 1:30pm docket. I have cc’d opposing counsel.
+
+- Note taken on [2024-12-03 Tue 10:36] \\
+  RESPONSE FROM J/A:
+  ------------------
+  Jennifer Gibson-Smith
+  Attachments
+  10:04 AM (29 minutes ago)
+  to Craig, me
+
+  Judge Banfield has electronically signed and filed your proposed order(s). I have attached a conformed copy/copies for your record.
+:END:
+:WORKTIME:
+CLOCK: [2024-12-02 Mon 08:24]--[2024-12-02 Mon 08:42] =>  0:18
+- Reviewed and signed proposed judgment and repayment order.  Sent to O/C.  Called CL to discuss the repayment order.
+:END:
+
+- [[~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/PROPOSED ORDERS/24-2-03597-06 \[2024-11-22\] MARQUEZ,Joseph-MARQUEZ,Melissa -- PL 410(3) Agreed Repayment Plan_Marquez.pdf][PL 410(3) Agreed Repayment Plan_Marquez]]
+- [[~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/PROPOSED ORDERS/24-2-03597-06 \[2024-11-22\] MARQUEZ,Joseph-MARQUEZ,Melissa -- PL DRAFT Judgment_Marquez.pdf][PL DRAFT Judgment_Marquez]]
+
+- [[~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/PROPOSED ORDERS/24-2-03597-06 \[2024-12-03\] MARQUEZ,Joseph-MARQUEZ,Melissa -- ORDER <Order Establishing Repayment Plan>.pdf][ORDER <Order Establishing Repayment Plan>]]
+- [[~/.local/share/notes/ccvlp/cases/data/24-2-03597-06 Joseph Marquez/PROPOSED ORDERS/24-2-03597-06 \[2024-12-03\] MARQUEZ,Joseph-MARQUEZ,Melissa -- ORDER <Judgment>.pdf][ORDER <Judgment>]]
+*** ORDERS
+
+* CLIENT
+[[denote:20240429T192203][24=0036808  Joseph Ryan Marquez]]
+[[denote:20240429T192244][24=0036901  Melissa Gale Marquez]]
+
+* O/C
+** O/C INFO
+[[denote:20231222T165048][wsb=56804  Bradley S. Kraus]]
+
+** O/C COMMUNICATION
+[[denote:20241112T173813][24=2=03597=06=3  24-2-03597-06 CR Silver Oak Communities, LLC v. Joseph Marquez and Melissa Marquez O/C]]
+
+* PLAN [6/8]
+:LOGBOOK:
+- Note taken on [2024-11-15 Fri 12:48] \\
+  CASE PLAN:
+  ----------
+  - CL will pay partial rent using emergency load from 401(k) account
+  - Hoping for receipt of the funds prior to the next OSC hearing=>[2024-11-21 Thu]
+  - CL will pay rest of rent using savings.
+  - Waiting for 401(k) funds
+
+- Note taken on [2024-12-02 Mon 08:48] \\
+  UPDATED CASE PLAN:
+  ------------------
+  - Repayment order and judgment to be entered. I have sent my signatures to O/C
+  - CL has made initial month's rent payment
+  - CL will made additional month's rent payment tomorrow.
+  - CL will make first repayment Dec 23
+  - I have sent CL the repayment order for him to review and follow.
+  - Follow-up with CL come Dec 20.
+
+- Note taken on [2024-12-16 Mon 11:42] \\
+  - Judgment and Order for Repayment entered
+  - Following payments
+  - Enter Satisfaction and OLD at the conclusion.
+:END:
+
+- [X] [[denote:20241112T171512][Checklist]]
+- [X] Engagement Agreement
+- [X] Initial RTC Interview [2/2]
+  - [X] Proper Notice Service
+  - [X] Proper Summons/Complaint Service
+- [X] NOA [2/2]
+  - [X] Served on O/C
+  - [X] Filed with Clerk
+- [X] Appointment [1/1]
+  - [X] Presented
+- [X] Lease [1/1]
+  - [X] Reviewed
+- [-] Ledger [2/3]
+  - [X] Requested
+  - [X] Received
+  - [ ] Reviewed
+- [ ] Checklist [0/3]
+  - [ ] Requested
+  - [ ] Received
+  - [ ] Reviewed
+
+* ISSUES [0/1]
+** Balance Calculation
+
+|       DATE | DESCRIPTION  |  AMOUNT | SUBTOTAL | RUNNING TOTAL | COMMENTS   |
+|------------+--------------+---------+----------+---------------+------------|
+| 2024-06-01 | BEGINNING    |         |          |      -1014.74 | CREDIT BAL |
+| 2024-06-01 | JUN RENT     | 1365.00 |          |        350.26 |            |
+| 2024-07-01 | JUL RENT     | 1365.00 |          |       1715.26 |            |
+| 2024-08-01 | AUG RENT     | 1365.00 |          |       3080.26 |            |
+| 2024-09-01 | SEP RENT     | 1365.00 |          |       4445.26 |            |
+| 2024-10-01 | OCT RENT     | 1365.00 |          |       5810.26 |            |
+| 2024-11-01 | NOV RENT     | 1365.00 |          |       7175.26 |            |
+|            | SUBTOTAL     |         |  8190.00 |       7175.26 |            |
+|------------+--------------+---------+----------+---------------+------------|
+| 2024-06-01 | JUN CARPORT  |   45.00 |          |       7220.26 |            |
+| 2024-07-01 | JUL CARPORT  |   45.00 |          |       7265.26 |            |
+| 2024-08-01 | AUG CARPORT  |   45.00 |          |       7310.26 |            |
+| 2024-09-01 | SEP CARPORT  |   45.00 |          |       7355.26 |            |
+| 2024-10-01 | OCT CARPORT  |   45.00 |          |       7400.26 |            |
+| 2024-11-01 | NOV CARPORT  |   45.00 |          |       7445.26 |            |
+|            | SUBTOTAL     |         |   270.00 |       7445.26 |            |
+|------------+--------------+---------+----------+---------------+------------|
+| 2024-06-01 | JUN UTILS    |   11.51 |          |       7456.77 |            |
+| 2024-07-01 | JUL UTILS    |   86.20 |          |       7542.97 |            |
+| 2024-08-01 | AUG UTILS    |   89.30 |          |       7632.27 |            |
+| 2024-09-01 | SEP UTILS    |   90.00 |          |       7722.27 |            |
+| 2024-10-01 | OCT UTILS    |   90.00 |          |       7812.27 |            |
+| 2024-11-01 | NOV UTILS    |   90.00 |          |       7902.27 |            |
+|            | SUBTOTAL     |         |   457.01 |       7902.27 |            |
+|------------+--------------+---------+----------+---------------+------------|
+| 2024-07-01 | JUL LATE FEE |   75.00 |          |       7977.27 |            |
+| 2024-07-01 | COURT COSTS  |  370.00 |          |       8347.27 |            |
+| 2024-11-21 | ATTY FEES    | 1100.00 |          |       9447.27 |            |
+|            | SUBTOTAL     |         |  1545.00 |       9447.27 |            |
+|------------+--------------+---------+----------+---------------+------------|
+|            |              |         | 10462.01 |       9447.27 |            |
+#+TBLFM: $5=$-2+@-1;f2::@2$5=-1014.74::@9$4=vsum(@-I$-1..@-1$-1);f2::@16$4=vsum(@-I$-1..@-1$-1);f2::@23$4=vsum(@-I$-1..@-1$-1);f2::@27$4=vsum(@-I$-1..@-1$-1);f2::@28$4=vsum(@<<..@>>);f2::@28$5=@-1;f2
+** TODO Repayment Follow-up
+SCHEDULED: <2024-12-20 Fri 08:30>
+:LOGBOOK:
+- State "TODO"       from              [2024-12-02 Mon 08:48] \\
+  Follow-up with CL Dec 20 about Dec 23 payment requirement.
+:END:

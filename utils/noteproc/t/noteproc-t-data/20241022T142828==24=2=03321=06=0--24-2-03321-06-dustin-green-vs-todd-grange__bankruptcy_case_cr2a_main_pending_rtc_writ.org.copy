@@ -1,0 +1,220 @@
+#+title:      24-2-03321-06 Dustin Green vs Todd Grange
+#+date:       [2024-10-22 Tue 14:28]
+#+filetags:   :bankruptcy:case:cr2a:main:pending:rtc:writ:
+#+identifier: 20241022T142828
+#+signature:  24=2=03321=06=0
+
+#+columns: %35item %10todo %22scheduled %22deadline %clocksum{:} %20tags
+
+[[denote:20241022T143105][Checklist]]
+
+* WAIT RTC CASE
+SCHEDULED: <2025-01-10 Fri>
+:PROPERTIES:
+:O/C:		-- Warren Allen -- Jonathan Riffey
+:CAUSE:	-- 24-2-03321-06
+:DEPT:	-- 3 Vanderwood
+:PL-1:	-- Dustin Green
+:PL-2:	--
+:APRTMNT:	--
+:DEF-1:	-- Todd Grange
+:DEF-2:	--
+:LEASE:	-- [2021-07-01 Thu] $1950
+:NOTICE:	-- [2024-09-11 Wed] 14-DAY RENT MAY-SEP '24 = $9750
+:SUMMONS:	-- [2024-10-02 Wed]->[2024-10-14 Mon] | [2024-10-02 Wed] (PERSONAL) 12 DAYS
+:COMPLAINT:	-- [2024-10-02 Wed] 14-DAY RENT $11,700
+:OSC-1:	-- [2024-10-18 Fri 13:30] T APPEARED | CONTINUED
+:OSC-2:	-- [2024-10-31 Thu 13:30] T FILED FOR BANKRUPTCY | CASE STRUCK
+:OSC-3:       -- [2024-12-05 Thu 13:30] O/C FILED NEW OSC | STRUCK RE BANKRUPCTY CASE REINSTATED
+:APPOINT:	-- [2024-10-23 Wed]
+:NOA:		-- [2024-10-23 Wed]
+:LEDGER:	--
+:OLD:		--
+:DISMISS:	--
+:WRIT:	--
+:JUDGMENT:	--
+:END:
+:LOGBOOK:
+- State "WAIT"       from              [2025-01-10 Fri 13:54] \\
+  CL agreed to surrender by Feb9,'25
+:END:
+:WORKTIME:
+CLOCK: [2024-10-22 Tue 14:18]--[2024-10-22 Tue 14:36] =>  0:18
+- Started creating CL's case file.
+CLOCK: [2024-10-22 Tue 16:30]--[2024-10-22 Tue 17:30] =>  1:00
+- Prepared new RTC case file.  Obtained all documents.  Updated case file notes.
+:END:
+
+** OSC
+*** OSC-1<2024-10-18 Fri 13:30>
+:LOGBOOK:
+- Note taken on [2024-10-31 Thu 15:48] \\
+  INITIAL OSC HEARING:
+  --------------------
+  - T appeared
+  - Qualified for services
+  - OSC continued
+:END:
+
+*** OSC-2<2024-10-31 Thu 13:30>
+:LOGBOOK:
+- Note taken on [2024-10-31 Thu 15:48] \\
+  OSC HEARING:
+  ------------
+  - Hearing struck on account of T filing for bankruptcy
+:END:
+
+*** OSC-3 <2024-12-05 Thu 13:30>
+:LOGBOOK:
+- Note taken on [2024-12-02 Mon 13:00] \\
+  OSC STRUCK:
+  -----------
+  Bankruptcy case reinstated Nov21'24
+:END:
+
+** DOCUMENTS
+*** NOA-APPT
+:LOGBOOK:
+- Note taken on [2024-10-23 Wed 16:42] \\
+  APPEARANCE-APPOINTMENT:
+  -----------------------
+  - Served NOA
+  - Filed NOA
+  - Presented Appointment
+:END:
+
+*** COURT FILES                                                               :ATTACH:
+:PROPERTIES:
+:DIR:      ~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/Court File/
+:END:
+
+*** EXHIBITS                                                                  :EXTRACT:ATTACH:
+:PROPERTIES:
+:SOURCE:		-- Complaint
+:EXHIBIT-1:	-- Lease [2021-07-01] 4 13
+:EXHIBIT-2:	-- Notice [2024-09-11] 14 15
+:DIR:      ~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/Notices & Lease/
+:END:
+
+*** LEDGERS                                                                   :ATTACH:
+:PROPERTIES:
+:LEDGER-1:      -- [[file:~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/LEDGERS/24-2-03321-06 \[2024-10-23\] GRANGE,Todd -- PL CURRENT OCT LEDGER.pdf][2024-10-23]]
+:LEDGER-2:	-- [DATE]
+:DIR:      ~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/LEDGERS/
+:END:
+- [[file:~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/LEDGERS/24-2-03321-06 \[2024-10-23\] GRANGE,Todd -- PL CURRENT OCT LEDGER.pdf][PL CURRENT OCT LEDGER]]
+
+*** BANKRUPTCY                                                                :ATTACH:
+:PROPERTIES:
+:DIR:      ~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/BANKRUPTCY/
+:END:
+- [[file:~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/BANKRUPTCY/24-2-03321-06 \[2024-10-29\] GRANGE,Todd -- DEF Bankruptcy filed 10-29-2024.pdf][DEF Bankruptcy filed 10-29-2024]]
+
+- [[~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/BANKRUPTCY/24-2-03321-06 \[2024-11-21\] GRANGE,Todd -- DEF Grange,T Order Vacating Dismissal.pdf][DEF Grange,T Order Vacating Dismissal]]
+- [[~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/BANKRUPTCY/24-2-03321-06 \[2024-11-21\] GRANGE,Todd -- DEF Grange,T  Notice of Vacation 24-42461-MJH-22.pdf][DEF Grange,T  Notice of Vacation 24-42461-MJH-22]]
+- [[~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/BANKRUPTCY/24-2-03321-06 \[2024-11-21\] GRANGE,Todd -- DEF Grante,T Certificate of Notice 24-42461-MJH-28.pdf][DEF Grante,T Certificate of Notice 24-42461-MJH-28]]
+
+*** Motion to Strike OSC Hearing
+:WORKTIME:
+CLOCK: [2025-01-08 Wed 13:48]--[2025-01-08 Wed 14:18] =>  0:30
+- Began drafting motion to strike.
+  Cancelled when I was shown a refutation to the argument.
+:END:
+
+*** Stipulated Writ and OLD                                                   :ATTACH:
+:PROPERTIES:
+:DIR:      ~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/Stipulated Writ and OLD/
+:END:
+:LOGBOOK:
+- Note taken on [2025-01-09 Thu 12:54] \\
+  SIGNED:
+  -------
+  - Stipulated writ not to execute until on or after Feb 10'25
+  - Stipulated OLD
+  - Presented stipulated OLD ex parte
+:END:
+
+- [[~/.local/share/notes/ccvlp/cases/data/24-2-03321-06 Todd Grange/Stipulated Writ and OLD/24-2-03321-06 \[2025-01-09\] GRANGE,Todd -- Stipulated Order for Writ.pdf][Stipulated Order for Writ]]
+* CLIENT
+[[denote:20240716T074445][24=0039574  Todd Grange]]
+
+* O/C
+** O/C INFO
+[[denote:20240214T085954][wsb=55792  Jonathan Patrick Riffey]]
+
+** O/C COMMUNICATION
+[[denote:20241023T182304][24=2=03321=06=3  24-2-03321-06 Dustin Green vs Todd Grange O/C]]
+
+* PLAN [7/9]
+SCHEDULED: <2024-10-28 Mon 16:00>
+:LOGBOOK:
+- Note taken on [2024-10-23 Wed 16:48] \\
+  INITIAL PLAN:
+  -------------
+  - CL might be able to pay prior to the hearing
+  - CL will let me know early next prior prior to the hearing
+  - CL might be filing for bankruptcy; will determine next week
+  - CL might offer prepaid Nov-Dec-Jan rent
+
+- Note taken on [2024-10-29 Tue 13:24] \\
+  UPDATED PLAN:
+  -------------
+  - CL filed for bankruptcy
+  - Waiting for confirmation of filing
+
+- Note taken on [2024-10-29 Tue 16:30] \\
+  BANKRUPTCY FILED:
+  -----------------
+  - CL provided Notice of Bankruptcy
+  - Drafted cover page
+  - Filed Notice
+  - Served Notice on O/C
+  - Filed CertService
+  - Updated case file
+  - CL intends to try to pay monthly rent while waiting for funds to pay for the arrears
+
+- Note taken on [2024-12-04 Wed 10:00] \\
+  BANKRUPTCY REINSTATED:
+  ----------------------
+  - Bankruptcy case had been dismissed 11/20, but then reinstated 11/21.
+  - O/C filed an OSC for hearing 12/5 on 11/21.  Did not strike the hearing after the reinstatement.
+  - O/C struck hearing after being notified of reinstatement.  He said he knew about the reinstatement, but did not strike voluntarily.
+  - CL has filed a motion for sanctions in Bankruptcy court.
+
+- Note taken on [2025-01-10 Fri 13:48] \\
+  AGREEMENT REACHED:
+  ------------------
+  - CL to surrender by Feb9,'25
+  - Writ to be executed on or after Feb10,'25
+  - OLD stipulated to and entered
+:END:
+
+- [X] Engagement Agreement
+- [X] Initial RTC Interview [2/2]
+  - [X] Proper Notice Service
+  - [X] Proper Summons/Complaint Service
+- [X] NOA [2/2]
+  - [X] Served on O/C
+  - [X] Filed with Clerk
+- [X] Appointment [1/1]
+  - [X] Presented
+- [X] Lease [1/1]
+  - [X] Reviewed
+- [X] Ledger [3/3]
+  - [X] Requested
+  - [X] Received
+  - [X] Reviewed
+- [ ] Checklist [0/3]
+  - [ ] Requested
+  - [ ] Received
+  - [ ] Reviewed
+- [X] Obtain CL's Directions
+- [ ] Wait for Stay to be Lifted
+
+* ISSUES [0/0]
+
+** Balance Calculation
+
+| DATE | DESCRIPTION | AMOUNT | SUBTOTAL | RUNNING TOTAL | COMMENTS |
+|------+-------------+--------+----------+---------------+----------|
+|      |             |        |          |               |          |
