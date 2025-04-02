@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-02-04 10:56:52 lolh-mbp-16>
-;;; Version: 0.1.0
+;;; Time-stamp: <2025-04-01 22:38:54 lolh-mbp-16>
+;;; Version: 0.1.1
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -15,6 +15,8 @@
 ;;  Works for both cases and statutes.
 
 ;;; TODO:
+;;;  - Try to fix creation of outline headings algorithm
+;;;  - Pop a buffer to allow picking a footnote marker when multiple options exist
 
 ;;; Code:
 
@@ -1028,7 +1030,6 @@ Return the name of the processed FILE."
         (when (re-search-forward (rx bol "keycite:") nil t)
           (beginning-of-line) (insert "** ") (forward-line 2)
           (textproc-create-list-items)
-          (debug)
           (delete-region (point) (and (re-search-forward textproc-citation-re) (1- (pos-bol))))
           (beginning-of-line))
         ;; delete an inline KeyCite section
@@ -1323,7 +1324,7 @@ number or a space or a [ or <."
              (textproc-find-possible-footnote-ids)
              ;; don't ask User to verify if there is only one option
              (if (= 1 textproc-fn-id-num)
-                 (textproc-footnote-link)
+                 (textproc-footnote-link 2)
                ;; ask the User to pick the correct footnote
                (call-interactively 'textproc-footnote-create-link))
 
@@ -1381,7 +1382,10 @@ Return `nil' when there are no more footnotes to process."
 (defun textproc-footnote-create-link (id)
   "Create the link for the current footnote at #ID.
 
-The User will pick the ID# of the correct footnote position."
+The User will pick the ID# of the correct footnote position.
+
+TODO: This does not work unless the case is manually opened first. Fix
+this so the buffer opens up when this function is called."
 
   ;; (interactive "nID? ")
 
@@ -1406,19 +1410,23 @@ The User will pick the ID# of the correct footnote position."
   (goto-char tp-bop)
   (cl-loop
    with num = 1
-   while (textproc-find-next-footnote-marker textproc-fn-num num)
+   while (textproc-find-next-footnote-marker textproc-fn-num (number-to-string num))
    do
    (let ((fn-id (string-to-number (match-string-no-properties 1))))
      (if (= id fn-id)
-         (textproc-footnote-link)
+         (textproc-footnote-link 0)
        (replace-match (format "%s" textproc-fn-num))))
    (cl-incf num)))
 
 
-(defun textproc-footnote-link ()
-  "Create the footnote link."
+(defun textproc-footnote-link (m)
+  "Create the footnote link.
 
-  (replace-match (format "[fn:%s]" textproc-fn-num) nil nil nil 2)
+M must be 2 when called from a paragraph with only 1 possible footnote;
+M must be 0 when called from a paragraph with more than 1 possible footnote.
+This is due to the match that is in effect when this function is called."
+
+  (replace-match (format "[fn:%s]" textproc-fn-num) nil nil nil m)
   (save-excursion
     (goto-char tp-fn)
     (insert "[fn:") (end-of-line) (insert "] ") (delete-char 2)))
