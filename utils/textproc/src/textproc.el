@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-04-01 22:38:54 lolh-mbp-16>
-;;; Version: 0.1.1
+;;; Time-stamp: <2025-04-02 08:17:44 lolh-mbp-16>
+;;; Version: 0.1.2
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -802,11 +802,11 @@ real one.  It is equal to the first one (I think)."
 (defun textproc-text-to-denote (file)
   "Convert the `rtf' FILE into an `org' file and save as a Denote note.
 
-- NFN :: org-file
+- NFN :: org-file (`new-file-name')
 - CITATION :: title
 - KWS :: list of keywords
 - SIGNATURE :: the signature to use
-- DATE :: date of the case or nil (use todays date)"
+- DATE :: date of the case or nil (use today's date)"
 
   (interactive (list
                 (read-file-name "Enter an .rtf case file: "
@@ -827,7 +827,9 @@ real one.  It is equal to the first one (I think)."
              (date (textproc-case-date))
              (denote-rename-confirmations nil)
              (denote-save-buffers t))
+
         (write-file nfn nil)
+
         (let ((denote-file
                (denote-rename-file  nfn
                                     citation
@@ -1022,9 +1024,11 @@ Return the name of the processed FILE."
                  finally (goto-char c) (insert-char 10)
                  (set-marker cap-pos (point)))
 
-        ;; Add a Brief subheading here
-        (ensure-empty-lines 3)
-        (backward-char 2) (insert "** Brief") (forward-line 2)
+        ;; Add a Brief subheading and subsection headings here
+        (ensure-empty-lines 3) (backward-char 1)
+        (insert "** Brief\n:PROPERTIES:\n:VISIBILITY: all\n:END:\n\n")
+        (insert "*** Issues\n\n*** Holdings\n\n*** History\n\n*** Facts\n\n*** Law\n\n*** Analysis\n")
+        (forward-line 2)
 
         ;; if there is a KeyCite section, create it as a section with a list
         (when (re-search-forward (rx bol "keycite:") nil t)
@@ -1101,7 +1105,8 @@ Return the name of the processed FILE."
 
           ;; process footnote links and outline headlines after finding the Opinion section
           (textproc-process-footnotes)
-          (textproc-add-stars-to-headline-levels1-4))
+          ;; (textproc-add-stars-to-headline-levels1-4)
+          )
 
         ;; turn possible concurring and dissenting sections into level 2 headlines
         (goto-char op-pos)
@@ -1116,7 +1121,11 @@ Return the name of the processed FILE."
         (goto-char (point-max))
         (search-backward "All Citations")
         (forward-line -1)
-        (delete-region (point) (point-max)))
+        (insert "\n** End\n")
+        (delete-region (point) (point-max))
+
+        ;; insert STARTUP visibility property at the end of the document
+        (insert "#+STARTUP: show2levels"))
 
       ;; Link the outline into the case
       (textproc-outline-links)
