@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-04-02 08:17:44 lolh-mbp-16>
-;;; Version: 0.1.2
+;;; Time-stamp: <2025-04-02 23:55:43 lolh-mbp-16>
+;;; Version: 0.1.3
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -16,7 +16,6 @@
 
 ;;; TODO:
 ;;;  - Try to fix creation of outline headings algorithm
-;;;  - Pop a buffer to allow picking a footnote marker when multiple options exist
 
 ;;; Code:
 
@@ -1329,17 +1328,29 @@ number or a space or a [ or <."
   (interactive)
 
   (save-excursion
-    (cl-loop while (textproc-find-next-footnote) do
-             (textproc-find-possible-footnote-ids)
-             ;; don't ask User to verify if there is only one option
-             (if (= 1 textproc-fn-id-num)
-                 (textproc-footnote-link 2)
-               ;; ask the User to pick the correct footnote
-               (call-interactively 'textproc-footnote-create-link))
+    (cl-loop
+     with cur-buf = (current-buffer)
+     with fn-buf = (generate-new-buffer "*fn-buf*")
+     while (textproc-find-next-footnote) do
+     (textproc-find-possible-footnote-ids)
+     ;; don't ask User to verify if there is only one option
+     (if (= 1 textproc-fn-id-num)
+         (textproc-footnote-link 2)
+       ;; ask the User to pick the correct footnote;
+       ;; copy the current paragraph into a dedicated buffer named *fn-buf* to show the possible choices;
+       ;; tp-bop and tp-eop mark the beginning and ending of the paragraph;
+       (progn
+         (with-current-buffer fn-buf
+           (insert-buffer-substring cur-buf tp-bop tp-eop) (insert 10 10))
+         (let ((fn-win (split-root-window-below)))
+           (set-window-buffer fn-win fn-buf)
+           (call-interactively 'textproc-footnote-create-link)
+           (delete-window fn-win))))
 
-             ;; Jump to the line following the footnote id and repeat
-             (goto-char tp-fn)
-             (forward-line)))
+     ;; Jump to the line following the footnote id and repeat
+     (goto-char tp-fn)
+     (forward-line)
+     finally (kill-buffer fn-buf)))
   (textproc-clear-footnote-markers))
 
 
@@ -1366,7 +1377,7 @@ Return `nil' when there are no more footnotes to process."
              (forward-line -1)
              (textproc-linked-footnote-p)))
 
-    (set-marker tp-bop (point)) ; end-of-paragraph marker
+    (set-marker tp-bop (point))    ; end-of-paragraph marker
     (set-marker tp-eop (pos-eol))  ; beginning of paragraph marker
     t))
 
