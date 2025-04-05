@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-04-02 23:55:43 lolh-mbp-16>
-;;; Version: 0.1.3
+;;; Time-stamp: <2025-04-05 13:01:05 lolh-mbp-16>
+;;; Version: 0.1.4
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -16,6 +16,9 @@
 
 ;;; TODO:
 ;;;  - Try to fix creation of outline headings algorithm
+;;;  - [2025-04-05] Process a federal District Court case;
+;;;    time for object-oriented solution with eieio?
+;;;    This would require a complete re-write.
 
 ;;; Code:
 
@@ -30,9 +33,10 @@
 
 (keymap-global-set "M-B"     #'textproc-call-bifurcate-dismissal-old)
 (keymap-global-set "M-C"     #'textproc-pbcopy-cause)
-;; (keymap-global-set "M-D"     #'textproc-note-delete-current)
+(keymap-global-set "M-D"     #'textproc-pbcopy-citation-wa)
 (keymap-global-set "M-E"     #'textproc-pbcopy-client-email)
 ;; (keymap-global-set "M-F"     #'textproc-current-note-index-show)
+(keymap-global-set "M-J"     #'textproc-convert-image-file)
 (keymap-global-set "M-N"     #'textproc-pbcopy-client-name)
 (keymap-global-set "M-P"     #'textproc-pbcopy-client-phone)
 (keymap-global-set "M-T"     #'textproc-pbcopy-title)
@@ -426,6 +430,15 @@ this function will ask for a client."
      (textproc-pbcopy property-value))))
 
 
+;; M-D
+(defun textproc-pbcopy-citation-wa ()
+  "Copy a WA citation."
+
+  (interactive)
+
+  (textproc-pbcopy (or (textproc-citation-wa) "")))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; pdftk
 
@@ -519,6 +532,16 @@ The unlocked files are moved into *lolh/downloads-dir*."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ImageMagick
+
+
+
+(defun textproc-convert-image-file ()
+  "Move image files from Downloads directory to process and then convert."
+
+  (interactive)
+
+  (textproc-move-image-files-to-process)
+  (textproc-convert-image-files-to-pdf))
 
 
 (defun textproc-move-image-files-to-process ()
@@ -816,7 +839,8 @@ real one.  It is equal to the first one (I think)."
                                   (rx bos (not ".") (+ nonl) ".rtf" eos)))
                                 t)))
 
-  (let* ((org-file (textproc-text-to-org file)))
+  (let* ((org-file (textproc-text-to-org file))
+         denote-file)
     (with-current-buffer (find-file-noselect org-file)
       (let* ((citation (textproc-case-citation))
              (nfn (file-name-concat (denote-directory) "law"
@@ -829,14 +853,19 @@ real one.  It is equal to the first one (I think)."
 
         (write-file nfn nil)
 
-        (let ((denote-file
+        (let ((df
                (denote-rename-file  nfn
                                     citation
                                     kws
                                     signature
                                     date)))
-          (textproc-bkup-file denote-file textproc-save-org 'link))))
-    (delete-file org-file)))
+          (textproc-bkup-file df textproc-save-org 'link)
+          (setf denote-file df))))
+    (delete-file org-file)
+
+    ;; Open the denote file in a new frame
+    (select-frame-set-input-focus (make-frame))
+    (switch-to-buffer (find-file-noselect denote-file) nil t)))
 
 
 (defun textproc-text-to-org (file)
@@ -1455,6 +1484,8 @@ This is due to the match that is in effect when this function is called."
 (defun textproc-outline-links ()
   "Link the Document Details items to their matching outline headings."
 
+  ;; TODO: fix spacing issues when search fails
+
   (rx-let ((realhl (x) (seq bol (+ "*") space (group (literal x)))))
     (save-excursion
       (goto-char (point-min))
@@ -1465,11 +1496,13 @@ This is due to the match that is in effect when this function is called."
                  do
                  (setf hl (buffer-substring-no-properties (+ 2 (pos-bol)) (pos-eol)))
                  (save-excursion
-                   (re-search-forward (rx (realhl hl)))
-                   (setf link (buffer-substring-no-properties (match-beginning 1) (pos-eol))))
-                 (forward-char 2)
-                 (insert "[[*" link "][" hl "]]")
-                 (delete-region (point) (pos-eol))
+                   ;; A failed search should be ignored and not raise an error
+                   (when (re-search-forward (rx (realhl hl)) nil t)
+                     (setf link (buffer-substring-no-properties (match-beginning 1) (pos-eol)))))
+                 (when link
+                   (forward-char 2)
+                   (insert "[[*" link "][" hl "]]")
+                   (delete-region (point) (pos-eol)))
                  (forward-line))))))
 
 
@@ -1504,6 +1537,14 @@ This is due to the match that is in effect when this function is called."
   (seq textproc-headline-word
        (0+ space textproc-headline-word)
        eol))
+
+
+;; Outline
+;; Level 1
+;;   I|II i.e. Roman Numerals (upper-case) See Munden v. Hazelrigg
+;;      No higher levels
+;;   FACTS|ANALYSIS i.e. single word upper-case See OTR v. Flakey Jake’s, Inc., 112 Wn.2d 243, 770 P.2d 629 (1989)
+;;      No higher levels
 
 
 ;; Opinion Headline Level 1
@@ -1896,6 +1937,17 @@ For an RCW txt file."
       (org-next-visible-heading 1)
       (org-fold-show-branches))))
 
+
+(defun textproc-citation-wa ()
+  "Return WA citation, if found."
+
+  (interactive)
+
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward (rx bol (0+ space) "- All Citations :: ") nil t)
+      (when (re-search-forward (rx (+ (not ","))) nil (pos-eol))
+        (princ (format "%s" (match-string-no-properties 0)))))))
 
 
 
