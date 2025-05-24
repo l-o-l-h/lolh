@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-02-05 21:49:50 lolh-mbp-16>
+;;; Time-stamp: <2025-05-09 11:39:24 lolh-mbp-16>
 ;;; Version: 0.3.0 [2025-01-18 13:20]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -37,6 +37,11 @@
 ;;      - Need to study opening a new window below
 ;;      - Need to study opening dired to a particular directory
 ;;      - There is already a linking command C-c L which is basically usable.
+;; -[ ] [2025-05-05T09:00] When extracting exhibits, if one of the documents
+;;        being extracted is a ledger, add it to the ledger heading as well.
+;; -[ ] [2025-05-06T1650] Command to open a dired buffer to the Google Drive
+;;        of the current case.
+;; -[ ] [2025-05-09T11:30] Fix 2025 Closed Cases Google Drive directory
 
 
 ;;; Denote Commands Used
@@ -188,7 +193,7 @@ of that client note."
 
 (defconst *lolh/case-file-name-rx*
   (rx bos
-      (opt (group-n 1 (** 3 4 (any digit "*)")))) ; docket no. or nil
+      (opt (group-n 1 (** 3 5 (any digit "*)")))) ; docket no. or nil
       (opt (0+ space) (group-n 2 (= 13 (any digit "-")))) ; cause no. or nil
       (opt (0+ space) (group-n 3        ; bracketed date or nil
                         "["
@@ -1461,7 +1466,7 @@ Then call update."
 
   (interactive)
 
-  (let ((files (directory-files *lolh/downloads-dir* t "^[[:digit:]]\\{2\\}[*)]\\{1,2\\}")))
+  (let ((files (directory-files *lolh/downloads-dir* t "^[[:digit:]]\\{2,3\\}[*)]\\{1,2\\}")))
     (dolist (file files)
       (rename-file file
                    (file-name-concat *lolh/process-dir*

@@ -2,7 +2,16 @@
 ;;; This format is meant to be slightly human-readable;
 ;;; nevertheless, you probably don't want to edit it.
 ;;; -*- End Of Bookmark File Format Version Stamp -*-
-(("src" (filename . "~/.local/src/")
+(("Lincoln Harvey 2025"
+ (filename
+  . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/My Drive/Lincoln Harvey 2025/")
+ (front-context-string . ".DS_Store\n  drwx")
+ (rear-context-string . "40 Feb 25 11:02 ") (position . 267)
+ (last-modified 26558 27899 833883 0))
+("finances" (filename . "~/.local/share/finances/")
+ (front-context-string) (rear-context-string . "28 Feb 24 22:49 ")
+ (position . 203) (last-modified 26557 26949 221123 0))
+("src" (filename . "~/.local/src/")
  (front-context-string . ".DS_Store\n  drwx")
  (rear-context-string . "96 Nov  5 07:09 ") (position . 195)
  (last-modified 26488 1341 782013 0))
@@ -34,7 +43,7 @@
 ("denote" (filename . "~/.local/src/emacs/denote/")
  (front-context-string . ".dir-locals.el\n ")
  (rear-context-string . "46 Jan 25 13:18 ") (position . 202)
- (last-modified 26148 31761 968303 0))
+ (last-modified 26625 12951 468001 0) (annotation . ""))
 ("Lincoln Harvey 2023"
  (filename
   . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/My Drive/2023 UD Case Prep/Lincoln Harvey 2023/")

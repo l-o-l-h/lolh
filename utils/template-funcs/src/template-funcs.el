@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2025-03-14 08:16:48 lolh-mbp-16>
+;; Time-stamp: <2025-04-09 12:00:59 lolh-mbp-16>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -126,9 +126,9 @@
    "** Balance Calculation\n\n"
    "|DATE|DESCRIPTION|AMOUNT|SUBTOTAL|RUNNING TOTAL|COMMENTS|\n"
    "|-\t"
-   "|\t\n\n")
+   "|\t\n\n"
 
-  "* TASKS [0/0]\n\n")
+   "* TASKS [0/0]\n\n"))
 
 (defun checklist ()
   "New RTC Case Checklist Note"
@@ -169,13 +169,13 @@
    "* Comments\n\n"
    "* Accompanied\n\n"))
 
-(defun newcase-with-newclient (cause pl def cl cl-id)
-  (interactive
-   "sCause: \nsPlaintiff: \nsDefendants: \nsClient: \nsClient ID: ")
-  (denote
-   (concat
-    cause
-    )))
+;; (defun newcase-with-newclient (cause pl def cl cl-id)
+;;   (interactive
+;;    "sCause: \nsPlaintiff: \nsDefendants: \nsClient: \nsClient ID: ")
+;;   (denote
+;;    (concat
+;;     cause
+;;     )))
 
 ;; Denote Last Name
 

@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-04-05 13:01:05 lolh-mbp-16>
+;;; Time-stamp: <2025-04-18 09:20:38 lolh-mbp-16>
 ;;; Version: 0.1.4
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -19,6 +19,11 @@
 ;;;  - [2025-04-05] Process a federal District Court case;
 ;;;    time for object-oriented solution with eieio?
 ;;;    This would require a complete re-write.
+;;;  - [2025-04-08] When adding an email with an attachment, find a way
+;;;    to include the attachment in the new note as well as adding the
+;;;    the attachment to the documents section.  This might require a
+;;;    dialog asking under what heading to save the attachment in the
+;;;    the documents section.
 
 ;;; Code:
 
@@ -35,7 +40,7 @@
 (keymap-global-set "M-C"     #'textproc-pbcopy-cause)
 (keymap-global-set "M-D"     #'textproc-pbcopy-citation-wa)
 (keymap-global-set "M-E"     #'textproc-pbcopy-client-email)
-;; (keymap-global-set "M-F"     #'textproc-current-note-index-show)
+(keymap-global-set "M-L"     #'textproc-pbcopy-law-title)
 (keymap-global-set "M-J"     #'textproc-convert-image-file)
 (keymap-global-set "M-N"     #'textproc-pbcopy-client-name)
 (keymap-global-set "M-P"     #'textproc-pbcopy-client-phone)
@@ -369,6 +374,17 @@ Used by pdftk-split-dismissal-old.")
         ts2)))
 
 
+(defun textproc-final-date-p ()
+  "Predicate function for finding the final date when there might be multiple.
+
+Check two lines ahead for another date."
+
+  (save-excursion
+    (and
+     (textproc-date-p)
+     (not (and (forward-line 2)
+               (textproc-date-p))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; pbcopy
 
@@ -437,6 +453,21 @@ this function will ask for a client."
   (interactive)
 
   (textproc-pbcopy (or (textproc-citation-wa) "")))
+
+
+;; M-L
+(defun textproc-pbcopy-law-title ()
+  "Return the value of the note's title property."
+
+  (interactive)
+
+  (let (title)
+    (save-excursion
+      (goto-char (point-min))
+      (when (looking-at (rx (seq bol "#+title:" (+ space) (group (+ nonl)) eol)))
+        (setf title (format "%s" (match-string 1)))))
+    (princ (format "Title: %s" title))
+    (textproc-pbcopy title)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -646,7 +677,7 @@ Mark all page numbers as {{ **123 }}."
 
 
 (defmacro textproc-create-list-items ()
-  "Add list item dashes to the following lines."
+  "Add list item dashes to the following lines and link to existing headlines."
 
   `(cl-loop until (eolp) do
             (when (looking-at-p "outline")
@@ -655,7 +686,25 @@ Mark all page numbers as {{ **123 }}."
               (delete-line)
               (cl-return))
             (insert "- ")
+            (textproc-link-detail-headline (thing-at-point 'word t))
             (forward-line)))
+
+
+(defun textproc-link-detail-headline (word)
+  "Find the corresponding headline containing WORD and link this line to it."
+
+  (let ((link-string (save-excursion
+                       (while (not (looking-at-p (rx (seq bol eol))))
+                         (forward-line))
+                       (when (search-forward word nil t)
+                         (beginning-of-line)
+                         (insert "** ")
+                         (buffer-substring-no-properties (point) (pos-eol)))))
+        link)
+    (when link-string
+      (beginning-of-line) (forward-char 2)
+      (setf link (delete-and-extract-region (point) (pos-eol)))
+      (insert (format "[[**%s][%s]]" link-string link)))))
 
 
 ;;; TODO: This does not work with a newly published case which does
@@ -1073,11 +1122,15 @@ Return the name of the processed FILE."
         ;; center and then relocate the caption
         (set-marker cap-pos-begin (point))
         (cl-loop
-         until (textproc-date-p)
+         ;; Some cases (e.g., Supreme Court cases) have two dates, one for argued, and one for filed or decided)
+         ;; separated by a line containing |
+         ;; Process through the final date.
+         until (textproc-final-date-p)
          do
          (cond
           ((looking-at-p "|") (delete-line))
           ((looking-at-p "No.") (open-line 1) (forward-line) (center-line) (forward-line))
+          ((looking-at-p "Editor’s Note:") (delete-line))
           ((looking-at-p "Only the Westlaw citation") (delete-line))
           ((looking-at-p "\n") (forward-line))
           (t (center-line) (insert-char 10) (forward-line)))
@@ -1088,7 +1141,7 @@ Return the name of the processed FILE."
         (insert (delete-and-extract-region cap-pos-begin cap-pos-end))
         (goto-char cap-pos-end)
         (textproc-clear-cap-markers)
-
+        (debug)
         ;; Add list items until either the Synopsis or Option section is encountered
         (cl-loop
          until (looking-at (rx bol (opt (* (any word blank))) (group (| "synopsis" "opinion"))))
@@ -1108,6 +1161,8 @@ Return the name of the processed FILE."
          (when (string-equal-ignore-case
                 (match-string-no-properties 1) "opinion")
            (set-marker op-pos (point)))
+         (debug)
+
          (when l (insert-char 10))
          (insert "** ")
          (end-of-line) (unless (looking-at-p "\n\n") (insert-char ?\n)))
@@ -1308,7 +1363,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
          ;; word.1
          (fn-id1 (n) (seq
                       ;; this is the character preceding the number
-                      (group (not (in digit space "[<")))
+                      (group (not (in digit space "[<*¶")))
                       ;; this is the number itself
                       (group (literal n))
                       eow))
@@ -1330,7 +1385,7 @@ A footnote is a number at the left margin surrounded by empty lines."
     "Locate the next footnote for NUM in a paragraph.
 
 A footnote number that usually follows a period, but will not follow a
-number or a space or a [ or <."
+number or a space or a [ or < or * or ¶."
     (re-search-forward (rx (fn-id1 num)) (pos-eol) t))
 
   (defun textproc-find-next-footnote-marker (num id)
@@ -1525,6 +1580,14 @@ This is due to the match that is in effect when this function is called."
 (rx-define textproc-upper-arabic
   (seq (in "A-H") "."))
 
+;; Upper Word
+(rx-define textproc-upper-word
+  (seq bow (1+ upper) eow))
+
+;; Upper Words
+(rx-define textproc-upper-words
+  (seq bol (1+ (seq textproc-upper-word (? space))) eol))
+
 ;; Word | word
 (rx-define textproc-headline-word
   (seq bow
@@ -1543,14 +1606,46 @@ This is due to the match that is in effect when this function is called."
 ;; Level 1
 ;;   I|II i.e. Roman Numerals (upper-case) See Munden v. Hazelrigg
 ;;      No higher levels
+;;   I. FACTS
+;;      Upper Roman numerals, period, uppercase words, no punctuation
+;;      See Young v. Young, 164 Wn.2d 477, 191 P.3d 1258 (2008)
 ;;   FACTS|ANALYSIS i.e. single word upper-case See OTR v. Flakey Jake’s, Inc., 112 Wn.2d 243, 770 P.2d 629 (1989)
 ;;      No higher levels
+;;   AFFIRMATIVE DEFENSES
+;;      2 words; all capitals; no punctuation
+;;
+;;      False Find:
+;;      A paragraph begins with the abbreviated name: IRM; false Level 1:
+;;        See Port of Longview v. Int’l Raw Materials, Ltd., 96 Wn. App. 431, 979 P.2d 917 (1999)
+;;        Possible solution is that it is more than a single word in length
+;;   Facts|Discussion|Disability Discrimination|Defenses in Unlawful Detainer Actions|Kahli’s Case
+;;      i.e., Capitalized lowercase title; may contain apostrophe
+;;      A sentence beginning with `A' triggered Upper Arabic headline incorrectly.
+
+;; Level 2
+;;   A | B
+;;      See Young v. Young, 164 Wn.2d 477, 191 P.3d 1258 (2008)
+;;   Unlawful Detainer and Retaliatory Eviction
+;;      Each word capitalized except `and'
+;;      No end punctuation
+;;   Subject Matter Jurisdiction (Assignment of Error 1)
+;;   Stock Foreclosure Sale (Assignments of Error 2, 3, 4, 5, 8, 10, 13, 14)
+;;      Capitalized words, numbers, parentheses, commas, no ending punctuation
+;;   STANDARD OF REVIEW
+;;      All-capitals, but at left margin (Level 1 was all-capitals but centered in the original)
+;;      The text conversion lost the centering of the Level 1
+;;      See Hous. Auth. of City of Pasco & Franklin Cnty. v. Pleasant, 126 Wn. App. 382, 109 P.3d 422 (2005)
 
 
 ;; Opinion Headline Level 1
-;; "\nANALYSIS\n" (but only one word)
+;; "\nANALYSIS\n" (but only one word); this is not correct, as there may be many words
+;; This makes a false positive for an abbreviation at the beginning of a sentence
 (rx-define textproc-op-headline-level1
   (seq (one-or-more upper) eow))
+
+
+(rx-define textproc-op-headline-level1a
+  (seq (one-or-more textproc-upper-words)))
 
 ;; Opinion Headline Level 2
 ;; "\nI. Title\n" (up to 4) | Title...
@@ -1948,8 +2043,6 @@ For an RCW txt file."
     (when (re-search-forward (rx bol (0+ space) "- All Citations :: ") nil t)
       (when (re-search-forward (rx (+ (not ","))) nil (pos-eol))
         (princ (format "%s" (match-string-no-properties 0)))))))
-
-
 
 
 
