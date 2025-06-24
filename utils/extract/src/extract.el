@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-05-09 11:39:24 lolh-mbp-16>
+;;; Time-stamp: <2025-05-29 10:33:33 lolh-mbp-16>
 ;;; Version: 0.3.0 [2025-01-18 13:20]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -42,6 +42,8 @@
 ;; -[ ] [2025-05-06T1650] Command to open a dired buffer to the Google Drive
 ;;        of the current case.
 ;; -[ ] [2025-05-09T11:30] Fix 2025 Closed Cases Google Drive directory
+;; -[ ] [2025-05-29T10:30] Sometimes an attachment directory has `nil-nil' as one
+;;        of the directory components; figure out why and fix.
 
 
 ;;; Denote Commands Used
@@ -145,9 +147,17 @@ of that client note."
 ;; Constants
 
 
-(defconst *lolh/gd* "GOOGLE_DRIVE")
-;; GOOGLE_DRIVE = $HOME/Google Drive/My Drive"
-;; GOOGLE_DRIVE_2022|2023|2024 = $GOOGLE_DRIVE/Lincoln Harvey 2022|2023|2024
+(defconst *lolh/gd* "RTC")
+;; GOOGLE_DRIVE = $HOME/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org
+;; GD = $HOME/Google\ Drive
+
+;; MY_DRIVE = ${GOOGLE_DRIVE}/My\ Drive
+;; MY_GD = ${GD}/My\ Drive
+
+;; SHARED_DRIVES = ${GOOGLE_DRIVE}/Shared\ drives
+;; RTC = ${SHARED_DRIVES}/Right\ to\ Counsel
+;; RTC_2022|2023|2024|2025 = ${RTC}/2022\ UD\ Case\ Prep/Lincoln\ Harvey\ 2022|2023|2024|2025
+
 ;; Those values must be properly set in ~/.oh_my_zsh/custom/envvars.zsh
 
 (defconst *lolh/cause-re*
@@ -155,7 +165,11 @@ of that client note."
   "Regexp for a Clark Co cause number for years 2022-2026.")
 
 (defconst *lolh/gd-closed* "Closed_Cases")
-;; Closed Cases takes the form: 00_YEAR_Closed_Cases, where YEAR tracks GOOGLE_DRIVE
+;; Closed Cases takes the form: ${RTC_2022|2023|2024|2025}/00_Closed\ Cases
+;; RTC_2022_CLOSED=${RTC_2022}/00_Closed\ Cases
+;; RTC_2023_CLOSED=${RTC_2023}/00_Closed\ Cases
+;; export RTC_2024_CLOSED=${RTC_2024}/00_Closed\ Cases
+;; export RTC_2025_CLOSED=${RTC_2025}/00_Closed\ Cases
 
 (defconst *lolh/downloads-dir*
   (expand-file-name "Downloads" "~"))
