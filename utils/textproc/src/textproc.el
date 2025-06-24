@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-04-18 09:20:38 lolh-mbp-16>
-;;; Version: 0.1.4
+;;; Time-stamp: <2025-06-24 09:41:15 lolh-mbp-16>
+;;; Version: 0.1.5
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -16,6 +16,24 @@
 
 ;;; TODO:
 ;;;  - Try to fix creation of outline headings algorithm
+;;;    [2025-06-17]: A new case uses just I, II, A, B, etc.
+;;;      Create a command to find these easy headlines.
+;;;  - [2025-06-17] Footnotes did not get processed correctly; figure
+;;;       out why not.  See Arthur Skinner III
+;;;  - [2025-06-17] A new case citation of No. 86151-4-I was split into
+;;;       6 lines; it should be on one line.  Figure out a fix.  See
+;;;       Arthur Skinner III.
+;;;  - [2025-06-17] Arthur Skinner III did not get placed into the Law
+;;;       directory; maybe because the name is so convoluted.  Figure
+;;;       out a fix.  Note: After simplifying the name (removing extra
+;;;       party identifications, such as cross-appellant and multiple
+;;;       appellants) the ~denote~ function worked.
+;;;  - [2025-06-17] Arthur Skinner III Document Details leaves a lot of
+;;;       empty lines after - Opinion; figure how to remove those empty
+;;;       lines (or not generate them).
+;;;  - [2025-06-17] When a new frame was created, it took up the entire
+;;;       screen, instead of being the same size as the current frame.
+;;;       Make it open up using the same size.
 ;;;  - [2025-04-05] Process a federal District Court case;
 ;;;    time for object-oriented solution with eieio?
 ;;;    This would require a complete re-write.
@@ -24,6 +42,8 @@
 ;;;    the attachment to the documents section.  This might require a
 ;;;    dialog asking under what heading to save the attachment in the
 ;;;    the documents section.
+;;;  - [2025-06-21] Rewrite Westlaw headnotes so all headnotes get placed
+;;;      - into their respective lines.
 
 ;;; Code:
 
@@ -676,6 +696,16 @@ Mark all page numbers as {{ **123 }}."
       "unpub")))
 
 
+(defmacro textproc-add-list-markers ()
+  "Add a list marker `-' to each line and create a space.
+
+`textproc-create-list-items' used to be called, but it was changed to insert
+ links, and is no longer the correct macro to use to simply create list items."
+
+  `(cl-loop until (eolp) do
+            (insert "- ") (end-of-line) (insert-byte 10 1) (forward-char)))
+
+
 (defmacro textproc-create-list-items ()
   "Add list item dashes to the following lines and link to existing headlines."
 
@@ -690,6 +720,9 @@ Mark all page numbers as {{ **123 }}."
             (forward-line)))
 
 
+;;; FIX: This is receiving `nil' as thing-at-point and then causing an error when it searches for `nil'
+;;; See In re Marriage of Logg
+;;; It is called from `textproc-create-list-items' which is in `textproc-process-case'
 (defun textproc-link-detail-headline (word)
   "Find the corresponding headline containing WORD and link this line to it."
 
@@ -1059,8 +1092,9 @@ The region describing the Search Details is also deleted."
 
 
 (defun textproc-process-case (file)
-  "Process a case found in FILE.
+  "Process FILE (a scrubbed `'txt' file).
 
+If the foregoing functions worked, this FILE will be in the process dir.
 Return the name of the processed FILE."
 
   (interactive
@@ -1078,6 +1112,8 @@ Return the name of the processed FILE."
 
         ;; join the first and second lines to create the main heading
         (insert "* ") (end-of-line) (insert " -- ") (delete-char 1)
+        (forward-line)
+        (insert ":PROPERTIES:\n:VISIBILITY: children\n:END:\n")
 
         ;; locate Document Details; create a table of contents
         ;; TODO: link the contents to the document structure
@@ -1085,7 +1121,8 @@ Return the name of the processed FILE."
         (set-marker-insertion-type c t)
         (beginning-of-line) (insert "** ") (set-marker c (pos-bol))
         (forward-line 2)
-        (textproc-create-list-items)
+        (textproc-create-list-items) ;; This is returning `nil' and causing an error
+        ;; see Marriage of Logg
 
         ;; combine citations and move underneath the main headline
         (cl-loop with m1 = (make-marker) with m2 = (make-marker)
@@ -1102,8 +1139,9 @@ Return the name of the processed FILE."
                  (set-marker cap-pos (point)))
 
         ;; Add a Brief subheading and subsection headings here
-        (ensure-empty-lines 3) (backward-char 1)
+        (ensure-empty-lines 2) (backward-char 1)
         (insert "** Brief\n:PROPERTIES:\n:VISIBILITY: all\n:END:\n\n")
+        ;; (insert "** Brief\n\n")
         (insert "*** Issues\n\n*** Holdings\n\n*** History\n\n*** Facts\n\n*** Law\n\n*** Analysis\n")
         (forward-line 2)
 
@@ -1113,9 +1151,10 @@ Return the name of the processed FILE."
           (textproc-create-list-items)
           (delete-region (point) (and (re-search-forward textproc-citation-re) (1- (pos-bol))))
           (beginning-of-line))
+
         ;; delete an inline KeyCite section
         (when (re-search-forward (rx bol "inline keycite:") nil t)
-          (beginning-of-line)
+          (beginning-of-line) (backward-char)
           (delete-region (point) (and (re-search-forward textproc-citation-re) (1- (pos-bol))))
           (beginning-of-line))
 
@@ -1141,10 +1180,10 @@ Return the name of the processed FILE."
         (insert (delete-and-extract-region cap-pos-begin cap-pos-end))
         (goto-char cap-pos-end)
         (textproc-clear-cap-markers)
-        (debug)
+
         ;; Add list items until either the Synopsis or Option section is encountered
         (cl-loop
-         until (looking-at (rx bol (opt (* (any word blank))) (group (| "synopsis" "opinion"))))
+         until (looking-at (rx bol (opt (* (any word "*" blank))) (group (| "synopsis" "opinion"))))
          with l = nil
          do
          (if (looking-at-p (rx nonl))
@@ -1157,14 +1196,15 @@ Return the name of the processed FILE."
            (forward-line))
 
          ;; turn Synopsis or Opinion into a level 2 heading
+         ;; Synopsis or Opinion are now turned into level 2 headings in a prior section
+         ;; so can skip this insertion.
          finally
          (when (string-equal-ignore-case
                 (match-string-no-properties 1) "opinion")
            (set-marker op-pos (point)))
-         (debug)
 
          (when l (insert-char 10))
-         (insert "** ")
+         ;; (insert "** ")
          (end-of-line) (unless (looking-at-p "\n\n") (insert-char ?\n)))
 
         ;; unless this is an unpublished case,
@@ -1173,17 +1213,20 @@ Return the name of the processed FILE."
           ;; A newly published case will not yet have headnotes
           (when (search-forward "West Headnotes" nil t)
             (beginning-of-line)
-            (insert "** ")
+            ;; (insert "** ")
             (textproc-process-headnotes))
 
           ;; find the Attorneys Section; turn into a level 2 headline
           ;; a newly published case will not yet have an attorneys section
           (when (search-forward "Attorneys and Law Firms" nil t)
-            (beginning-of-line) (insert "** ") (forward-line) (ensure-empty-lines)
-            (textproc-create-list-items))
+            (beginning-of-line) (unless (looking-at "** ") (insert "** "))
+            (forward-line) (ensure-empty-lines)
+            ;; (textproc-create-list-items))
+            (textproc-add-list-markers))
 
           ;; turn Opinion section into level 2 headline
-          (re-search-forward "Opinion") (beginning-of-line) (insert "** ")
+          (re-search-forward "Opinion") (beginning-of-line) (ensure-empty-lines)
+          (unless (looking-at "** ") (insert "** "))
           (set-marker op-pos (point))
 
           ;; process footnote links and outline headlines after finding the Opinion section
@@ -1258,7 +1301,7 @@ TODO: In one instance, a headnote links to a West Key Number Outline
           num1 num2 item)
 
       (cl-loop
-       until (looking-at-p "^Attorneys and Law Firms")
+       until (looking-at-p "^** Attorneys and Law Firms")
        do
        (forward-line)
 
