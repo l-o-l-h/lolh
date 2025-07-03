@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-05-29 10:33:33 lolh-mbp-16>
+;;; Time-stamp: <2025-07-03 09:10:34 lolh-mbp-16>
 ;;; Version: 0.3.0 [2025-01-18 13:20]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -44,7 +44,10 @@
 ;; -[ ] [2025-05-09T11:30] Fix 2025 Closed Cases Google Drive directory
 ;; -[ ] [2025-05-29T10:30] Sometimes an attachment directory has `nil-nil' as one
 ;;        of the directory components; figure out why and fix.
-
+;; - [ ] [2025-07-03T09:10] It is not possible to attach documents from the
+;;         Downloads directory to an HJP Client note because there is no Main
+;;         note.  Make a new or better process so that a Main note is not
+;;         needed.
 
 ;;; Denote Commands Used
 ;; denote-after-new-note-hook
