@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-06-24 09:41:15 lolh-mbp-16>
+;;; Time-stamp: <2025-07-28 14:19:09 lolh-mbp-16>
 ;;; Version: 0.1.5
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -600,16 +600,17 @@ The unlocked files are moved into *lolh/downloads-dir*."
 
   (interactive)
 
-  (mapc
-   (lambda (f) (rename-file
-                f
-                (expand-file-name
-                 (file-name-concat
-                  textproc-process
-                  (file-name-nondirectory f)))))
-   (file-expand-wildcards
-    (rx-to-string '(seq (+ ascii) "." (| "jpg" "jpeg" "png") eos))
-    t t)))
+  (let ((default-directory textproc-downloads))
+    (mapc
+     (lambda (f) (rename-file
+                  f
+                  (expand-file-name
+                   (file-name-concat
+                    textproc-process
+                    (file-name-nondirectory f)))))
+     (file-expand-wildcards
+      (rx-to-string '(seq (+ ascii) "." (| "jpg" "jpeg" "png") eos))
+      t t))))
 
 
 (defun textproc-convert-image-files-to-pdf ()
@@ -620,7 +621,7 @@ The unlocked files are moved into *lolh/downloads-dir*."
   (let ((default-directory textproc-process))
     (mapc
      (lambda (f) (call-process-shell-command
-                  (format "convert -size 2550x3300 -density 300 %s %s.pdf"
+                  (format "convert -size 2550x3300 -density 300 -rotate \"90>\" %s %s.pdf"
                           f (file-name-base f))))
      (file-expand-wildcards
       (rx-to-string '(seq (+ ascii) "." (| "jpg" "jpeg" "png") eos))
