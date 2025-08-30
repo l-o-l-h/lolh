@@ -1,5 +1,5 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-07-03 09:10:34 lolh-mbp-16>
+;;; Time-stamp: <2025-08-30 12:01:06 lolh-mbp-16>
 ;;; Version: 0.3.0 [2025-01-18 13:20]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
@@ -48,6 +48,46 @@
 ;;         Downloads directory to an HJP Client note because there is no Main
 ;;         note.  Make a new or better process so that a Main note is not
 ;;         needed.
+;; - [ ] [2025-08-24T11:30] Make a 'close' routine that will change the file
+;;         keyword 'active or 'pending into 'closed, and then move the case
+;;         notes into the 'closed directory and update links to the data files.
+;;
+;;         '(denote-retrieve-filename-keywords FILE) produces a single string of keywords;
+;;
+;;         '(denote-retrieve-filename-keywords-as-list ARG1) produces a list of keyword strings;
+;;           (alias for the following function):
+;;
+;;         '(denote-extract-keywords-from-path PATH) produces a list of strings by
+;;         splitting the string of keywords from the 'retrieve' function on the underscore.
+;;
+;;         '(denote-keywords remove) and '(denote-keywords-add) are obsolete
+;;         use of '(denote-rename-file-keywords) is for interactive use only
+;;
+;;         '(denote-keywords-sort KEYWORDS)
+;;
+;;         Use the following command and its hook to rename and move the file upon being closed.
+;;         -------------------------------------------------------------------------------------
+;;         '(denote-rename-file FILE TITLE KEYWORDS SIGNATURE DATE)
+;;         When called from Lisp, the special symbol ‘keep-current’ can be
+;;         used for the TITLE, KEYWORDS, SIGNATURE and DATE parameters to
+;;         keep them as-is.  Do not ask for confirmation if
+;;         the user option ‘denote-rename-confirmations’ does not contain
+;;         the symbol ‘modify-file-name’.  When ‘denote-kill-buffers’ is t or ‘on-rename’,
+;;         kill the buffer if it was not already being visited before the rename operation.
+;;         Run the ‘denote-after-rename-file-hook’ after renaming FILE.
+;;         Denote does not move note files into different directories.
+;;
+;;         1) Change the keyword from 'active or 'pending to 'closed using 'denote-rename-file'
+;;            use 'seq-difference' case-note-keywords+closed '(active,pending)
+;;         2) Move the files into 'closed' directory using 'denote-rename-file hook
+;;         ‘denote-after-rename-file-hook’;
+;;         3) Update the links to the data directory.
+
+;; - [ ] [2025-08-25T22:00] There should be a command to fix broken links in the data dir
+;; - [ ] [2025-08-28T09:20] List and update Google Drive environment variables in envvars.zsh
+;;        - use grep for example
+;; - [ ] [2025-08-28T09:30] Create a command to calculate and add a client's age in their DOB property upon creation
+;; - [ ] [2025-08-28T10:20] Create a command that will take a Client name, Client ID, and start a new Client note
 
 ;;; Denote Commands Used
 ;; denote-after-new-note-hook
@@ -61,7 +101,7 @@
 
 ;; (denote-retrieve-filename-title client-note) -- includes dashes
 ;; (denote-retrieve-title-or-filename (buffer-file-name) 'org)) -- string without dashes
-;; (denote-retrieve-filename-keywords (file)) -- includes underscores
+;; (denote-retrieve-filename-keywords (file)) -- a single string that includes underscores
 
 ;; (denote-extract-keywords-from-path (path)) -- returns a list
 ;; (denote-rewrite-keywords (file keywords file-type &optional save-buffer))
@@ -124,55 +164,30 @@
 
 
 ;;;-------------------------------------------------------------------
-;;; Macro lolh/with-main-note, lolh/with-client-note
+;; Global Variables
 
 
-(defmacro lolh/with-main-note (&rest body)
-  "Process BODY with the MAIN note active."
+;; TODO: create a buffer-local variable that resets to nil when a buffer
+;; stops being current; function lolh/note-tree can check this variable
+;; and run when it is nil, then set it.
+;; OR a hook is run when a buffer becomes current that runs this.
+(defvar *lolh/note-tree*)
 
-  `(save-excursion
-     (with-current-buffer (find-file-noselect (lolh/main-note))
-       ,@body)))
+
+(defvar *lolh/process-dir-hl* nil
+  "Process Dir history list.")
 
 
-(defmacro lolh/with-client-note (&rest body)
-  "Process BODY with the CLIENT note active.
-
-CLIENT is the full string name of the client as found in the title
-of that client note."
-
-  `(save-excursion
-     (with-current-buffer (find-file-noselect (lolh/client-note))
-       ,@body)))
+(defvar *lolh/client-pick-hl* nil
+  "Client Pick history list.")
 
 
 ;;;-------------------------------------------------------------------
 ;; Constants
 
-
-(defconst *lolh/gd* "RTC")
-;; GOOGLE_DRIVE = $HOME/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org
-;; GD = $HOME/Google\ Drive
-
-;; MY_DRIVE = ${GOOGLE_DRIVE}/My\ Drive
-;; MY_GD = ${GD}/My\ Drive
-
-;; SHARED_DRIVES = ${GOOGLE_DRIVE}/Shared\ drives
-;; RTC = ${SHARED_DRIVES}/Right\ to\ Counsel
-;; RTC_2022|2023|2024|2025 = ${RTC}/2022\ UD\ Case\ Prep/Lincoln\ Harvey\ 2022|2023|2024|2025
-
-;; Those values must be properly set in ~/.oh_my_zsh/custom/envvars.zsh
-
 (defconst *lolh/cause-re*
-  "^2[2-6][-]2[-][[:digit:]]\\{5\\}[-]06$"
-  "Regexp for a Clark Co cause number for years 2022-2026.")
-
-(defconst *lolh/gd-closed* "Closed_Cases")
-;; Closed Cases takes the form: ${RTC_2022|2023|2024|2025}/00_Closed\ Cases
-;; RTC_2022_CLOSED=${RTC_2022}/00_Closed\ Cases
-;; RTC_2023_CLOSED=${RTC_2023}/00_Closed\ Cases
-;; export RTC_2024_CLOSED=${RTC_2024}/00_Closed\ Cases
-;; export RTC_2025_CLOSED=${RTC_2025}/00_Closed\ Cases
+  "^2[2-8][-]2[-][[:digit:]]\\{5\\}[-]06$"
+  "Regexp for a Clark Co cause number for years 2022-2028.")
 
 (defconst *lolh/downloads-dir*
   (expand-file-name "Downloads" "~"))
@@ -267,20 +282,156 @@ of that client note."
 
 
 ;;;-------------------------------------------------------------------
-;; Global Variables
+;; The Google Drive
+
+;; NOTE: SHARED DRIVES includes
+;;       - Right to Counsel
+;;         - 2022|3|4|5 UD Case Prep
+;;           - Lincoln Harvey 2022|3|4|5
+;;       - Housing Justice Project
+;;       - HJP Extended Services
+
+;;       MY_DRIVE holds an alias directly to
+;;         - Lincoln Harvey 2022|3|4|5
+;;       bypassing the intermediate directories.
+
+;;       I think it is more prudent to use the SHARED_DRIVE pathways than
+;;       the MY_DRIVE shortcut pathway to find my UD Case Prep files.
+;;       This means the YEAR must be calculated by the macro based upon
+;;       the current main note.
+
+;; These values must be properly set in ~/.oh_my_zsh/custom/envvars.zsh
+
+;; GOOGLE_DRIVE  = $HOME/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org
+;; MY_DRIVE      = ${GOOGLE_DRIVE}/My\ Drive
+;; SHARED_DRIVES = ${GOOGLE_DRIVE}/Shared\ drives
+;; RTC           = ${SHARED_DRIVES}/Right\ to\ Counsel
+
+;; These values to be calculated anc created based upon the current case year
+
+;; CASE_PREP     = ${RTC}/2022|3|4|5\ UD\ Case\ Prep
+;; LH_YEAR       = ${CASE_PREP}/Lincoln\ Harvey\ 2022|3|4|5
+;; CLOSED        = {LH_YEAR}/00_2022|3|4|5_Closed_cases
+
+;; Alternate (Shorter) Versions
+
+;; GD = $HOME/Google\ Drive
+;; MY = ${GD}/My\ Drive
+;; SH = ${MY_GD}\Shared\ drives
+;; R2C = ${SH}/Right\ to\ Counsel
 
 
-;; TODO: create a buffer-local variable that resets to nil when a buffer
-;; stops being current; function lolh/note-tree can check this variable
-;; and run when it is nil, then set it.
-;; OR a hook is run when a buffer becomes current that runs this.
-(defvar *lolh/note-tree*)
+;; The following environment variables must be set in Oh-My-Zsh `envars.zsh'.
+(defconst *lolh/gd* "GOOGLE_DRIVE"
+  "The name of the environment variable that returns the GOOGLE_DRIVE path.
 
-(defvar *lolh/process-dir-hl* nil
-  "Process Dir history list.")
+GOOGLE_DRIVE  : $HOME/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org")
 
-(defvar *lolh/client-pick-hl* nil
-  "Client Pick history list.")
+
+(defconst *lolh/gd-my-drive* "MY_DRIVE"
+  "The name of the environment variable that returns the MY_DRIVE path.
+
+MY_DRIVE      : ${GOOGLE_DRIVE}/My\ Drive")
+
+
+(defconst *lolh/gd-shared-drives* "SHARED_DRIVES"
+  "The name of the environemtn variable that returns the SHARE_DRIVES path.
+
+SHARED_DRIVES : ${GOOGLE_DRIVE}/Shared\ drives")
+
+
+(defconst *lolh/gd-rtc* "RTC"
+  "This is the name of the environment variable that returns the RTC path.
+
+RTC          : ${SHARED_DRIVES}/Right\ to\ Counsel")
+
+
+(defmacro lolh/gd-rtc ()
+  "Return the value of the environment variable `'RTC'.
+
+
+Return nil if this variable is not set."
+
+  `(getenv ,*lolh/gd-rtc*))
+
+
+(defconst *lolh/gd-case-prep* "%s UD Case Prep"
+  "Format string for the UD Case Prep portion of a file path.")
+
+
+(defconst *lolh/gd-lh-year* "Lincoln Harvey %s"
+  "Format string for the LH Year portion of the file path.")
+
+
+(defconst *lolh/gd-closed* "00_%s_Closed_Cases")
+;; Closed Cases takes the form: LH_YEAR}/00_2022|3|4|5_Closed_cases
+
+
+(defun lolh/year-from-cause (cause)
+  "Return the full year of a CAUSE.
+
+E.g. 24-2-01234-06 => 2024"
+  (format "20%s" (substring cause 0 2)))
+
+
+(defun lolh/gd-case-prep (year)
+  "Given an RTC value and a YEAR, return the value for the CASE-PREP varible.
+
+E.g. ${RTC}/2022|3|4|5\ UD\ Case\ Prep"
+
+  (format *lolh/gd-case-prep* year))
+
+
+(defun lolh/gd-lh-year (year)
+  "Given a year, return the string for Lincoln Harvey YEAR."
+
+  (format *lolh/gd-lh-year* year))
+
+
+(defun lolh/gd-closed (year)
+  "Return the string for a closed path for YEAR."
+
+  (format *lolh/gd-closed* year))
+
+
+(defun lolh/gd-year ()
+  "Return local path to the Google Drive for the Main Note's year.
+
+E.g., ${CASE_PREP}/Lincoln\ Harvey\ 2022|3|4|5
+The GOOGLE_DRIVE environment variables must be set and named correctly."
+
+  (condition-case nil
+      (and-let* ((gd (lolh/gd-rtc)))
+        (message "Google Drive RTC is set to: %s" gd))
+    (error "Google Drive RTC env var is nil"))
+  (let ((year (lolh/year-from-cause
+               (lolh/return-cause-plaintiffs-defendants ?c))))
+    (file-name-concat (lolh/gd-rtc)
+                      (lolh/gd-case-prep year)
+                      (lolh/gd-lh-year year))))
+
+
+;;;-------------------------------------------------------------------
+;;; Macro lolh/with-main-note, lolh/with-client-note
+
+
+(defmacro lolh/with-main-note (&rest body)
+  "Process BODY with the MAIN note active."
+
+  `(save-excursion
+     (with-current-buffer (find-file-noselect (lolh/main-note))
+       ,@body)))
+
+
+(defmacro lolh/with-client-note (&rest body)
+  "Process BODY with the CLIENT note active.
+
+CLIENT is the full string name of the client as found in the title
+of that client note."
+
+  `(save-excursion
+     (with-current-buffer (find-file-noselect (lolh/client-note))
+       ,@body)))
 
 
 ;;;-------------------------------------------------------------------
@@ -628,7 +779,7 @@ argument sets BODY-P to 16."
 
 
 ;; TODO: Finish this one
-(defun lolh/close-case ()
+(defun lolh/close-case0 ()
   "Close a CASE, updating any data directory references.
 
 First, move the Google_Drive folder into the 00_YEAR_Closed_Cases directory.
@@ -714,13 +865,13 @@ and move the notes into the /closed Denote directory."
                        "closed/"))
           (buffer-file-to-close (find-buffer-visiting file-to-close)))
       (if (string-match-p "_main" file-to-close)
-          (let ((new-file-to-close (lolh/close-case-add-closed-keyword file-to-close)))
+          (let ((new-file-to-close (lolh/close-case-add-closed-keyword0 file-to-close)))
             (rename-file new-file-to-close closed-dir))
         (rename-file file-to-close closed-dir))
       (kill-buffer buffer-file-to-close))))
 
 
-(defun lolh/close-case-add-closed-keyword (file-to-close)
+(defun lolh/close-case-add-closed-keyword0 (file-to-close)
   "Given a FILE-TO-CLOSE, change the `_active' or `_pending' keyword to `_closed'."
 
   (let* ((kws (denote-extract-keywords-from-path file-to-close))
@@ -763,30 +914,6 @@ and move the notes into the /closed Denote directory."
 ;;; GD
 
 
-(defun lolh/year-from-cause (cause)
-  "Return the full year of a CAUSE.
-
-E.g. 24-2-01234-06 => 2024"
-  (format "20%s" (substring cause 0 2)))
-
-
-(defun lolh/gd-year (year)
-  "Given a YEAR ('2024'), return local path to the Google Drive for that YEAR.
-
-The GOOGLE_DRIVE environment variables must be set and named correctly."
-
-  (let ((gd-year (format "%s_%s" *lolh/gd* year)))
-    (or (getenv gd-year)
-        (error "Year %s did not return a Google Drive value" year))))
-
-
-(defun lolh/gd-closed (year)
-  "Return the directory portion of the closed dir for YEAR.
-
-E.g. 00_2024_Closed_Cases"
-  (format "00_%s_%s" year *lolh/gd-closed*))
-
-
 (defun lolh/number-dirs (dir)
   "Given a DIR, return the number of its components."
   (if (string= "/" dir)
@@ -800,9 +927,9 @@ E.g. 00_2024_Closed_Cases"
   "Given a YEAR and a DIR, make the DIR closed."
 
   (file-name-concat
-   (lolh/gd-year year)
+   (lolh/gd-year)
    (lolh/gd-closed year)
-   (string-join (nthcdr (lolh/number-dirs (lolh/gd-year year))
+   (string-join (nthcdr (lolh/number-dirs (lolh/gd-year))
                         (file-name-split dir))
                 "/")))
 
@@ -815,7 +942,7 @@ If optional argument CLOSED is non-nil, check the closed subdirectory."
 
   (let* ((cause (lolh/cause))
          (cause-year (format "20%s" (substring cause 0 2)))
-         (gd-url (let ((tmp (lolh/gd-year cause-year)))
+         (gd-url (let ((tmp (lolh/gd-year)))
                    (if closed
                        (file-name-concat
                         tmp
@@ -914,7 +1041,7 @@ Return an error if a main note cannot be found."
   (let ((bfn (buffer-file-name))) ; watch out for (buffer-file-name) returning NIL
     (if (lolh/note-p bfn 'main)
         bfn
-      (let ((blb (denote-link-return-backlinks)))
+      (let ((blb (denote-get-backlinks)))
         (or (cl-dolist (b blb) ; returns 'nil' if no Main note is found
               (when (lolh/note-p b 'main)
                 (cl-return b)))         ; returns a found Main note
@@ -956,7 +1083,7 @@ The associated cons cell is returned."
    ((lolh/note-p buffer-file-name 'oc)
     buffer-file-name)
    (t (lolh/with-main-note
-       (let ((blb (denote-link-return-links)))
+       (let ((blb (denote-get-links)))
          (or (cl-dolist (b blb)
                (when (lolh/note-p b 'oc)
                  (cl-return b)))))))))
@@ -986,7 +1113,7 @@ These notes contain the names and client information for the clients."
 ;;; ==> _client.*_main.*_rtc
 
   (lolh/with-main-note
-   (let ((linked-notes (denote-link-return-links))
+   (let ((linked-notes (denote-get-links))
          client-notes) ; client-notes will be returned
 
      (cl-dolist (note linked-notes client-notes)
@@ -1806,7 +1933,30 @@ headline properties."
 
 
 ;;;-------------------------------------------------------------------
+;; Close a Case
 
+(defun lolh/close-case-add-closed-keyword ()
+  "Close the current main case.
+Must be in the main case.
+1) Change keyword `active' or `pending' into `closed';
+2) Move case files into `'closed' directory;
+3) Update links to attachments and documents so they continue to work."
+
+  (interactive)
+
+  (let ((denote-rename-confirmations nil))
+    (denote-rename-file (buffer-file-name)
+                        'keep-current
+                        (cons "closed"
+                              (seq-difference
+                               (denote-extract-keywords-from-path (buffer-file-name))
+                               '("active" "pending")))
+                        'keep-current
+                        'keep-current)))
+
+
+
+;;;-------------------------------------------------------------------
 
 (provide 'extract)
 

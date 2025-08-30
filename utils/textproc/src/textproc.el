@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-07-28 14:19:09 lolh-mbp-16>
+;;; Time-stamp: <2025-08-28 11:17:22 lolh-mbp-16>
 ;;; Version: 0.1.5
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -61,7 +61,7 @@
 (keymap-global-set "M-D"     #'textproc-pbcopy-citation-wa)
 (keymap-global-set "M-E"     #'textproc-pbcopy-client-email)
 (keymap-global-set "M-L"     #'textproc-pbcopy-law-title)
-(keymap-global-set "M-J"     #'textproc-convert-image-file)
+(keymap-global-set "M-J"     #'textproc-convert-image-files)
 (keymap-global-set "M-N"     #'textproc-pbcopy-client-name)
 (keymap-global-set "M-P"     #'textproc-pbcopy-client-phone)
 (keymap-global-set "M-T"     #'textproc-pbcopy-title)
@@ -585,8 +585,8 @@ The unlocked files are moved into *lolh/downloads-dir*."
 ;;; ImageMagick
 
 
-
-(defun textproc-convert-image-file ()
+;; M-J
+(defun textproc-convert-image-files ()
   "Move image files from Downloads directory to process and then convert."
 
   (interactive)
