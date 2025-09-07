@@ -1,5 +1,5 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-08-28 11:17:22 lolh-mbp-16>
+;;; Time-stamp: <2025-09-05 17:03:35 lolh-mbp-16>
 ;;; Version: 0.1.5
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
@@ -2088,6 +2088,20 @@ For an RCW txt file."
       (when (re-search-forward (rx (+ (not ","))) nil (pos-eol))
         (princ (format "%s" (match-string-no-properties 0)))))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Update Downloaded Court Documents with Case No. and CL name
+
+(defun textproc-update-court-document-file-name (caseno clname)
+  "Given a downloaded court document, update its name with CASENO and CLNAME.
+
+EX:
+02*) [2025-09-05] -- DEF NOA.pdf =>
+02*) 25-2-012345-06 [2025-09-05] LAST,First -- DEF NOA.pdf"
+
+  (interactive)
+
+  )
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

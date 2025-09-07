@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-08-30 12:01:06 lolh-mbp-16>
-;;; Version: 0.3.0 [2025-01-18 13:20]
+;;; Time-stamp: <2025-09-07 10:38:12 lolh-mbp-16>
+;;; Version: 0.4.0 [2025-09-07 10:30]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;;; Author: LOLH <lolh@lolh.com>
@@ -89,6 +89,14 @@
 ;; - [ ] [2025-08-28T09:30] Create a command to calculate and add a client's age in their DOB property upon creation
 ;; - [ ] [2025-08-28T10:20] Create a command that will take a Client name, Client ID, and start a new Client note
 
+;; - [ ] [2025-09-04T08:21] lolh/process-dir (dest &optional body-p) =>
+;;       Allow a new GD directory to be created; when attaching, the path needs to include the level 166hierarchy above.
+;;       When moving documents from the process dir, do not move Word documents into the data dir or add as attachments.
+;;       The move procedure moves only PDF documents from Downloads into Process.  Also move Word documents, but do not
+;;       attachment then in the data dir; just move them into the Google drive folder with the others.
+
+;; - [ ] [2025-09-04T08:22] Factor `denote-directory' into `denote-directories' instead.
+
 ;;; Denote Commands Used
 ;; denote-after-new-note-hook
 ;; denote-after-rename-file-hook
@@ -155,6 +163,7 @@
 (keymap-global-set "M-A"     #'lolh/note-tree)
 (keymap-global-set "M-H"     #'lolh/add-columns-header)
 (keymap-global-set "M-R"     #'lolh/simple-rename-using-note)
+;;                 "C-u M-R" #'lolh/simple-rename-all-files
 (keymap-global-set "M-W"     #'lolh/return-cause-plaintiffs-defendants)
 (keymap-global-set "C-x p J" #'lolh/jump-to-main-client-oc-note)
 (keymap-global-set "C-x p a" #'lolh/court-files-attach)
@@ -239,6 +248,16 @@
       ;; nil if no " -- "
       ;; string-empty-p t if " -- " with no document name
       (group-n 9 (| ".pdf" ".PDF" ".docx" ".doc" ".jpg" ".JPG" ".jpeg" "JPEG" ".png"))
+      eos))
+
+(defconst *lolh/case-file-name-absolute-rx*
+  (rx bos
+      (= 2 digit)
+      (opt "*")
+      ") " "["
+      (= 4 digit) "-" (= 2 digit) "-" (= 2 digit)
+      "]" " -- "
+      (+ alnum) ".pdf"
       eos))
 
 
@@ -1545,23 +1564,34 @@ TODO: Implement getter for the middle name and suffix."
 
   (save-excursion
     (with-current-buffer (get-file-buffer (lolh/main-note))
-      (let (defs fl)
+      (let (defs)
         (dolist (def '("DEF-1" "DEF-2") defs)
           (let ((name (lolh/note-property def)))
-            (if (string= "--" name)
-                (setf fl nil)
-              (if (string-match *lolh/first-middle-last-name-rx* name)
-                  (setf fl (list :first
-                                 (match-string 1 name)
-                                 :middle
-                                 (match-string 2 name)
-                                 :last
-                                 (match-string 3 name)
-                                 :suffix
-                                 (match-string 4 name)))
-                (error "Name %s from %s appears to be malformed" name def)))
-            (setf defs (append defs (list def fl)))))
-        defs))))
+            (setf defs (append defs (lolh/split-name def name)))))))))
+
+
+(defun lolh/split-name (def name)
+  "Given a NAME and its DEF number, return the def-name list.
+
+NAME: First|Optional Middle|Last|Optional Suffix
+DEF: DEF-1|DEF-2
+def-name list: (:first First :middle Middle :last Last :suffix Jr.|Sr.|MD
+RETURN VAL: (DEF-1|2 (:first First :middle Middle :last Lasst :suffice Jr.|Sr.))
+
+An error will result if the name cannot be parsed."
+
+  (if (string= "--" name)
+      (list def nil)
+    (if (string-match *lolh/first-middle-last-name-rx* name)
+        (list def (list :first
+                        (match-string 1 name)
+                        :middle
+                        (match-string 2 name)
+                        :last
+                        (match-string 3 name)
+                        :suffix
+                        (match-string 4 name)))
+      (error "Name %s for %s appears to be malformed" name def))))
 
 
 (defun lolh/def-name (def)
@@ -1599,6 +1629,17 @@ If a name does not exist, return nil."
     (format "%s%s" def1 (if def2 (concat "-" def2) ""))))
 
 
+(defun lolh/names-last-first-reversed (def names)
+  "Extract names for DEF from NAMES then return the LAST,First name.
+
+NAMES: list of plist values with split name parts."
+
+  (when-let ((pl (plist-get names def #'string=)))
+    (let ((f (plist-get pl :first))
+          (l (plist-get pl :last)))
+      (format "%s,%s" (upcase l) (capitalize f)))))
+
+
 ;;;-------------------------------------------------------------------
 ;;; Process-Dir Files
 
@@ -1610,7 +1651,7 @@ Then call update."
 
   (interactive)
 
-  (let ((files (directory-files *lolh/downloads-dir* t "^[[:digit:]]\\{2,3\\}[*)]\\{1,2\\}")))
+  (let ((files (directory-files *lolh/downloads-dir* t *lolh/case-file-name-rx*)))
     (dolist (file files)
       (rename-file file
                    (file-name-concat *lolh/process-dir*
@@ -1826,20 +1867,66 @@ PART must be one of *lolh/file-name-allowed-parts*."
 
 
 ;; M-R
-(defun lolh/simple-rename-using-note ()
+(defun lolh/simple-rename-using-note (opt)
+  "Move docket files from Downloads into Process and then rename them.
 
-  (interactive)
+With a prefix argument OPT, call lolh/simple-rename-all-files instead.
+
+The procedure  uses the current note's information to do the renaming."
+
+  (interactive "p")
 
   ;; move new files into process-dir
   ;; rename them using note parts
   ;; move them back into directory-dir
+  ;; with an OPTional arg will call lolh/simple-rename-all-files instead
 
-  (lolh/move-and-rename-files-in-process-dir)
-  (let ((files (directory-files *lolh/process-dir* nil "^[^.]")))
-    (dolist (file files)
-      (let ((new-file (lolh/create-file-name-using-note-parts file)))
-        (rename-file (file-name-concat *lolh/process-dir* file)
-                     (file-name-concat *lolh/downloads-dir* new-file))))))
+  (pcase opt
+    (1 (lolh/move-update-files-into-process-dir)
+       (let ((files (directory-files *lolh/process-dir* nil "^[^.]")))
+         (dolist (file files)
+           (let ((new-file (lolh/create-file-name-using-note-parts file)))
+             (rename-file (file-name-concat *lolh/process-dir* file)
+                          (file-name-concat *lolh/downloads-dir* new-file))))))
+    (4 (call-interactively #'lolh/simple-rename-all-files))))
+
+
+;; C-u M-R
+(defun lolh/simple-rename-all-files (cause pri sec)
+  "Rename all files in downloads dir by adding CAUSE, PRI name, and SEC name.
+
+SEC name can be empty.
+
+This is similar to simple-rename-using-note, but asks first for the cause
+and the names, then adds those to the current file names instead of using
+note parts."
+
+  (interactive (let (names)
+                 (reverse (dolist (name (list 'Cause 'Primary 'Secondary) names)
+                            (setf names (cons (read-string (format "%s: " name) nil nil "--") names))))))
+
+  (let* ((def-names (append
+                     (lolh/split-name "DEF-1" pri)
+                     (lolh/split-name "DEF-2" sec)))
+         (def1 (lolh/names-last-first-reversed "DEF-1" def-names))
+         (def2 (lolh/names-last-first-reversed "DEF-2" def-names)))
+
+    (lolh/move-update-files-into-process-dir)
+
+    (dolist (file (directory-files *lolh/process-dir* nil
+                                   *lolh/case-file-name-rx*))
+      (let ((extracted (lolh/extract-file-name-parts file))
+            (default-directory *lolh/process-dir*))
+        (let ((new-file
+               (lolh/create-file-name
+                (lolh/get-extracted extracted :docket)
+                cause
+                (lolh/get-extracted extracted :date)
+                def1
+                def2
+                (lolh/get-extracted extracted :document)
+                (lolh/get-extracted extracted :ext))))
+          (rename-file file (file-name-concat *lolh/downloads-dir* new-file)))))))
 
 
 (defun lolh/main-property (property)

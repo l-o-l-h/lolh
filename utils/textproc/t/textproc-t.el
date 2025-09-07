@@ -1,5 +1,5 @@
 ;;; textproc-t.el --- Textproc tests -*- mode: emacs-lisp; lexical-binding: t -*-
-;; Time-stamp: <2025-01-20 13:48:04 lolh-mbp-16>
+;; Time-stamp: <2025-09-07 10:38:41 lolh-mbp-16>
 ;; Version: 0.0.1 [2024-11-13 Wed 18:00]
 
 ;; Package-Requires: ((emacs "24.3") extract)
@@ -15,7 +15,7 @@
 ;;; Code:
 
 (require 'ert)
-(require 'textproc "../src/textproc.el")
+(require 'textproc)
 (require 'extract)
 
 ;;; 1
@@ -98,6 +98,23 @@
     (should (string= (textproc-case-signature) "coadiv1")))
   (with-current-buffer (find-file-noselect "./data/ca-app.txt")
     (should (string= (textproc-case-signature) "calappdiv"))))
+
+;;; textproc-update-court-document-file-name
+(ert-deftest textproc-t-update-court-document-file-name ()
+  (let ((filenames (ntake 5 (directory-files "data" nil *lolh/case-file-name-rx*))))
+    (cl-dolist (filename filenames newfilenames)
+      (let ((ext (lolh/extract-file-name-parts filename))
+            (cause "25-2-99999-06")
+            (def1 "SMITH,John"))
+        (add-to-list newfilenames
+                     (lolh/create-file-name
+                      (lolh/get-extracted ext :docket)
+                      cause
+                      (lolh/get-extracted ext :date)
+                      def1
+                      nil
+                      (lolh/get-extracted ext :document)
+                      (lolh/get-extracted ext :ext)))))))
 
 (provide 'textproc-t)
 ;;; textproc-t.el ends here

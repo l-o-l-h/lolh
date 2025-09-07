@@ -1,5 +1,5 @@
 ;;; template-funcs.el --- Template Functions -*- mode: elisp; lexical-binding:t -*-
-;; Time-stamp: <2025-04-09 12:00:59 lolh-mbp-16>
+;; Time-stamp: <2025-06-18 15:15:39 lolh-mbp-16>
 ;; Version: 0.1.0 [2024-04-06 Sat 22:00]
 
 ;; Author: LOLH <lolh@lolh.com>
@@ -160,6 +160,12 @@
   - [ ] Appointment-Fee Waiver
   - [ ] OLD
 "))
+
+(defun new-hjpcase ()
+  "Create a new Denote note for a new RTC case."
+  (concat
+   "* HJP CASE\n"
+   ))
 
 (defun recipe ()
   "Recipe template"
