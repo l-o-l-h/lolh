@@ -1,6 +1,6 @@
 ;;; textproc.el --- Process text files like cases, statutes, notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-09-05 17:03:35 lolh-mbp-16>
-;;; Version: 0.1.5
+;;; Time-stamp: <2025-10-13 21:33:08 lolh-mbp-16>
+;;; Version: 0.1.6
 ;;; Package-Requires: ((emacs "29.1") cl-lib compat)
 
 ;;; Author:   LOLH
@@ -76,6 +76,7 @@
 (keymap-global-set "C-x p T" #'textproc-text-to-denote)
 ;; (keymap-global-set "C-x p W" #'textproc-note-worklog-last-entry)
 (keymap-global-set "C-c N"   #'textproc-display-rcw-next-level)
+(keymap-global-set "C-x C-a" #'textproc-insert-age)
 
 
 ;; org-target is used to identify West headnote links and page numbers
@@ -2102,6 +2103,33 @@ EX:
   (interactive)
 
   )
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Age
+
+
+;;; C-x C-a
+(defun textproc-insert-age ()
+  "Calculate and insert an age from a timestamp found at the end of a line.
+
+In effect, this calculates the age of a person and inserts the age at
+the end of the line."
+
+  (interactive)
+
+  (end-of-line)
+
+  (if-let ((date (and (org-at-timestamp-p 'lax)
+                      (match-string-no-properties 0))))
+      (insert
+       (format " (%s y/o)"
+               (/
+                (abs
+                 ;; returns the number of days from the date to now
+                 (org-timestamp-to-now date))
+                365)))
+    (error "No date found")))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
