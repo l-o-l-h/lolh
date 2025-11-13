@@ -1,5 +1,5 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-01-25 17:37:45 lolh-mbp-16>
+;;; Time-stamp: <2025-11-13 10:18:09 lolh-mbp-16>
 ;;; Version: 0.0.9_2025-01-25T0830
 ;;; Package-Requires: ((emacs "24.3"))
 
@@ -30,6 +30,14 @@
 (defvar helpers-type-fn #'helpers-type)
 (defvar helpers-judicial-fn #'helpers-judicial)
 
+
+;;;-------------------------------------------------------------------
+;; CUSTOM KEYBINDINGS
+
+;; C-c s => §
+(keymap-global-set "C-c s" (lambda () (interactive) (insert "§")))
+;; C-c w => ¶
+(keymap-global-set "C-c w" (lambda () (interactive) (insert "¶")))
 
 ;;;-------------------------------------------------------------------
 ;; CONSTANTS
