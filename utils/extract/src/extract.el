@@ -1,6 +1,6 @@
 ;;; extract.el --- Attach files -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-09-07 10:38:12 lolh-mbp-16>
-;;; Version: 0.4.0 [2025-09-07 10:30]
+;;; Time-stamp: <2026-03-13 08:27:21 lolh-mbp-16>
+;;; Version: 0.4.1 [2025-10-19 14:22]
 ;;; Package-Requires: ((emacs "29.1") org-attach)
 
 ;;; Author: LOLH <lolh@lolh.com>
@@ -97,6 +97,25 @@
 
 ;; - [ ] [2025-09-04T08:22] Factor `denote-directory' into `denote-directories' instead.
 
+;; - [ ] [2025-09-09T13:45] Scenario: A client emails some pdf, jpg, png document; I want to add the document
+;;          to the Google drive and a symlink in the Notes dir, and add File link and a note link in the notes.
+;;          There might or might not be a client folder in the Google drive yet.  There might or might not be a
+;;          main case note.  What to do?
+;;          1. Move the document into Process dir
+;;          2. Convert document into pdf if not already
+;;          3. Rename the document appropriately:
+;;             [DATE] LAST,First -- Doc Name (notes) <original>.pdf
+;;          4. Find and if necessary create the Google drive folder
+;;          5. Move the files (original image and converted pdf) into the Google drive folder
+;;          6. Find the appropriate Note directory (create if necessary)
+;;          7. Add a symlink to the note as a PROPERTY
+;;          8. Add a link in the note to the Note directory location (not the Google drive location)
+
+;; - [ ] [2025-09-10T08:35] I have an HJP case that is technically a UD but was done wrong by a pro se person;
+;;          The Google case file is in the HJP drive, not the RTC drive.  The extract and update procedures cannot
+;;          find that drive.  There needs to be a class procedure that finds the correct drive based upon the type
+;;          of case (RTC vs. HJP) and status (open vs. closed).
+
 ;;; Denote Commands Used
 ;; denote-after-new-note-hook
 ;; denote-after-rename-file-hook
@@ -180,6 +199,11 @@
 ;; stops being current; function lolh/note-tree can check this variable
 ;; and run when it is nil, then set it.
 ;; OR a hook is run when a buffer becomes current that runs this.
+;; 2025-09-28T1000: (elisp)Watching Variables
+;;   It is sometimes useful to take some action when a variable
+;;   changes its value.  The “variable watchpoint” facility provides
+;;   the means to do so. Some possible uses for this feature include
+;;   keeping display in sync with variable settings...
 (defvar *lolh/note-tree*)
 
 
@@ -858,6 +882,40 @@ it finds and modify the sym-link to include this new directory entry."
     (lolh/update-dir-properties cause)))
 
 
+(defun lolh/close-case-add-closed-keyword0 (file-to-close)
+  "Given a FILE-TO-CLOSE, change the `_active' or `_pending' keyword to `_closed'."
+
+  (let* ((kws (denote-extract-keywords-from-path file-to-close))
+         (new-kws-1 (seq-filter
+                     (lambda (elt) (not (or (equal elt "active")
+                                            (equal elt "pending"))))
+                     kws))
+         (new-kws-2 (push "closed" new-kws-1))
+         (denote-rename-confirmations nil)
+         (denote-save-buffers nil))
+
+    ;; (denote-rename-file (file title keywords signature date identifier)
+    ;; Use 'keep-current for `file', `title', `signature', `date' and `identifier'
+    (denote-rename-file
+     file-to-close
+     'keep-current
+     new-kws-2
+     'keep-current 'keep-current 'keep-current)))
+
+
+(defun lolh/close-case-archive-note ()
+  "Archive the current note.
+
+1. Change the keyword from \='active or \='pending to \='closed first.
+2. Archive the note into the `'./archived subdirectory'."
+
+  (interactive)
+
+  (lolh/close-case-add-closed-keyword0 (buffer-file-name))
+  (save-buffer)
+  (org-archive-subtree-default))
+
+
 ;;; Called by lolh/close-case
 
 (defun lolh/update-dir-properties (cause)
@@ -888,25 +946,6 @@ and move the notes into the /closed Denote directory."
             (rename-file new-file-to-close closed-dir))
         (rename-file file-to-close closed-dir))
       (kill-buffer buffer-file-to-close))))
-
-
-(defun lolh/close-case-add-closed-keyword0 (file-to-close)
-  "Given a FILE-TO-CLOSE, change the `_active' or `_pending' keyword to `_closed'."
-
-  (let* ((kws (denote-extract-keywords-from-path file-to-close))
-         (new-kws-1 (seq-filter
-                     (lambda (elt) (not (or (equal elt "active")
-                                            (equal elt "pending"))))
-                     kws))
-         (new-kws-2 (push "closed" new-kws-1))
-         (denote-rename-confirmations nil)
-         (denote-save-buffers t))
-
-    ;; (denote--rename-file (file title keywords signature date))
-    ;; Use 'keep-current for `file', `title', `signature', and `date'
-    (denote--rename-file
-     file-to-close
-     'keep-current new-kws-2 'keep-current 'keep-current)))
 
 
 (defun lolh/close-dir-file (file-to-close cause)
@@ -1050,6 +1089,15 @@ This returns all directories rooted in the gd-cause-dir for the current note."
 
 
 
+;;; [2025-10-04T09:00]
+;;; TODO: This does not return an error when the case has been closed,
+;;;       moved into the `closed/' directory, and then this command is
+;;;       run.  Instead, it returns `nil' and a `wrong-argument-type'
+;;;       error occurs in the next function.
+;;;
+;;; `buffer-file-name' returns a complete file path that includes the
+;;; `closed/' portion of the directory, as well as a `_closed' keyword.
+;;; `lolh/note-p' returns `t' and returns the `buffer-file-name'
 (defun lolh/main-note ()
   "Find and return the path to the main note of the current note.
 
@@ -1525,6 +1573,15 @@ If FILTER is set to a regexp, attach the matched files."
          (push def-val defs))))))
 
 
+
+;;; Nothing calls this function.
+;;; It appeaers to be a `find' shell operation intended to find a file
+;;; named for a defendant.  However, it will not work because there
+;;; is no directory named `defs` and the file names have dashes `-', not
+;;; starts `*'.
+;;; What was the intended purpose of this function?
+;;; It appears to be just intended to return a defendant's denote file.
+;;; Is there a different function that will do this? I believe so.
 (defun lolh/def-pick ()
   "Pick a defendant and return the associated Note file."
 
@@ -1929,6 +1986,10 @@ note parts."
           (rename-file file (file-name-concat *lolh/downloads-dir* new-file)))))))
 
 
+;;; [2025-10-04T09:20]
+;;; TODO:
+;;; When a main note has been closed and moved into the `closed/' directory,
+;;; this command returns `nil' for "CAUSE".  See `lolh/cause', below.
 (defun lolh/main-property (property)
   "Return the value of PROPERTY from a main note."
 
