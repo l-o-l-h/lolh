@@ -1,6 +1,6 @@
 ;;; helpers.el --- Helper utilities -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-11-13 10:18:09 lolh-mbp-16>
-;;; Version: 0.0.9_2025-01-25T0830
+;;; Time-stamp: <2026-03-13 08:22:37 lolh-mbp-16>
+;;; Version: 0.0.11_2026-03-03T13:15
 ;;; Package-Requires: ((emacs "24.3"))
 
 ;;; Author: LOLH
@@ -20,6 +20,12 @@
 
 
 ;;;-------------------------------------------------------------------
+;; ORG SETTING FOR FUZZY MATCHING
+
+(setq org-link-search-must-match-exact-headline nil)
+
+
+;;;-------------------------------------------------------------------
 ;; GLOBAL VARIABLES
 
 
@@ -34,10 +40,18 @@
 ;;;-------------------------------------------------------------------
 ;; CUSTOM KEYBINDINGS
 
-;; C-c s => §
-(keymap-global-set "C-c s" (lambda () (interactive) (insert "§")))
-;; C-c w => ¶
-(keymap-global-set "C-c w" (lambda () (interactive) (insert "¶")))
+;; § => OPTION-6
+;; ¶ => OPTION-7
+;; J => helpers dired-follow-link
+;; C-c L => helpers-org-link-from-other-window-dired
+;; C-S-t => helpers-org-jump-to-latest-timestamp
+
+(define-key dired-mode-map (kbd "J") #'helpers-dired-follow-link)
+
+(with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-c L") #'helpers-org-link-from-other-window-dired)
+  (define-key org-mode-map (kbd "C-S-t") #'helpers-org-jump-to-latest-timestamp))
+
 
 ;;;-------------------------------------------------------------------
 ;; CONSTANTS
@@ -282,6 +296,48 @@ and divides it into two sections.")
 
 ;;;-------------------------------------------------------------------
 ;; COMMANDS
+
+;; "J"
+(defun helpers-dired-follow-link ()
+  "Open the true directory of the symbolic link at point."
+  (interactive)
+
+  (let ((target (dired-get-file-for-visit)))
+    (if (file-symlink-p target)
+        (dired (file-name-directory (file-truename target)))
+      (message "Not a symbolic link"))))
+
+
+(defun helpers-org-link-from-other-window-dired ()
+  "Get marked file from Dired in the other window and insert a properly escaped Org link."
+  (interactive)
+  (let* ((other-win (next-window))
+         (other-buf (window-buffer other-win))
+         filename raw-headline escaped-headline)
+
+    ;; 1. Identify the Dired buffer and the file
+    (with-current-buffer other-buf
+      (if (derived-mode-p 'dired-mode)
+          (setq filename (dired-get-filename))
+        (error "The other window is not a Dired buffer!")))
+
+    ;; 2. Extract headline from the target file
+    (with-current-buffer (find-file-noselect filename)
+      (setq raw-headline (condition-case nil
+                             (org-get-heading t t t t)
+                           (error nil))))
+
+    ;; 3. Use Org's internal escaping for the link path
+    ;; This allows [brackets] to stay in the search string safely.
+    (setq escaped-headline (when raw-headline (org-link-escape raw-headline)))
+
+    ;; 4. Insert the link
+    (if escaped-headline
+        (insert (format "[[file:%s::*%s][%s]]"
+                        filename
+                        escaped-headline
+                        (or raw-headline filename)))
+      (insert (format "[[file:%s]]" filename)))))
 
 
 (defun helpers-all-case-vars0 ()
@@ -617,6 +673,41 @@ in the *Help* buffer."
                      (called-interactively-p 'interactive))
     (with-help-window (help-buffer)
       (mapcar describe-func (sort sym-list 'string<)))))
+
+
+;;;-------------------------------------------------------------------
+;; helpers-org-jump-to-latest-timestamp
+;; "C-S-t"
+
+(defun helpers-org-jump-to-latest-timestamp ()
+  "Find the chronologically latest note and jump to it simply."
+  (interactive)
+
+  (let* ((timestamp-regexp "- Note taken on \\[\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\} [A-Za-z]\\{3\\} [0-9]\\{2\\}:[0-9]\\{2\\}\\)\\][^\\].*\\\\$")
+         (latest-time nil)
+         (target-pos nil))
+    (save-restriction
+      (widen)
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward timestamp-regexp nil t)
+          (let* ((ts-string (match-string-no-properties 1))
+                 (current-time (org-time-string-to-time ts-string)))
+            (when (or (null latest-time)
+                      (time-less-p latest-time current-time))
+              (setq latest-time current-time)
+              ;; Use your fix: capture the beginning of the line
+              (setq target-pos (pos-bol)))))))
+    (if target-pos
+        (progn
+          (push-mark)
+          (goto-char target-pos)
+          ;; Open the outline so you can see the note
+          (org-fold-show-context)
+          (org-fold-show-entry)
+          (recenter)
+          (message "Jumped to latest: %s" (format-time-string "%Y-%m-%d %H:%M" latest-time)))
+      (message "No timestamps found."))))
 
 
 ;;;-------------------------------------------------------------------
