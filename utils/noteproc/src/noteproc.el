@@ -1,5 +1,5 @@
 ;;; noteproc.el --- Process Denote notes -*- mode:emacs-lisp; lexical-binding:t -*-
-;;; Time-stamp: <2025-02-06 10:00:26 lolh-mbp-16>
+;;; Time-stamp: <2025-11-05 08:50:50 lolh-mbp-16>
 ;;; Version: 0.1.0
 ;;; Package-Requires: ((emacs "29.1") cl-lib_compat)
 
@@ -35,6 +35,7 @@
 ;;  - [ ] [2025-01-27T1315] Update court documents when a case is closed
 ;;  - [ ] [2025-01-28T1449] With point in a note, add an attachment at that point with some document from Downloads or Process dir
 ;;  - [ ] [2025-02-06T0955] I made a major mistake by adding WORKTIME entries; now I've had to hack a way to keep the program running.  This needs a major rework; make the drawer a class with two subclasses: LOGBOOK and WORKTIME.
+;;  - [ ] [2025-11-05T0849] When adding a note from a copied email, format the paragraphs with full justification with a space between paragraphs.
 ;; Emails
 ;;  - [ ] Use email program to add email to O/C Communication entry
 ;; LegalServer
