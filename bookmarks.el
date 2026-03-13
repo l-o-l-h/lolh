@@ -2,7 +2,13 @@
 ;;; This format is meant to be slightly human-readable;
 ;;; nevertheless, you probably don't want to edit it.
 ;;; -*- End Of Bookmark File Format Version Stamp -*-
-(("share"
+(("Lincoln Harvey 2026"
+ (filename . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/My Drive/Lincoln Harvey 2026/")
+ (front-context-string . ".DS_Store\n  drwx")
+ (rear-context-string . "24 Mar  2 13:04 ")
+ (position . 267)
+ (last-modified 27047 13971 702260 0))
+("share"
  (filename . "~/.local/share/")
  (front-context-string . "emacs\n  drwxr-xr")
  (rear-context-string . "60 Aug 27 22:38 ")
@@ -15,11 +21,11 @@
  (position . 200)
  (last-modified 26768 54731 827113 0))
 ("Lincoln's HJP Cases"
- (filename . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/Shared drives/Housing Justice Project/Case Files - Lincoln/")
+ (filename . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/Shared drives/Housing Justice Project/HJP Case Files - Lincoln/")
  (front-context-string)
  (rear-context-string . "60 Jul 14 17:01 ")
  (position . 475)
- (last-modified 26742 60452 672311 0))
+ (last-modified 26883 63102 685731 0))
 ("Housing Justice Project"
  (filename . "~/Library/CloudStorage/GoogleDrive-lincoln@ccvlp.org/Shared drives/Housing Justice Project/")
  (front-context-string . "Case Files - Lin")
@@ -106,11 +112,12 @@
  (position . 282)
  (last-modified 26356 6625 50650 0))
 ("org-refile-last-stored"
- (filename . "~/.local/share/notes/ccvlp/cases/20240212T130111==24=2=00265=06=0--anderson-legacy-properties-v-kyrstyn-baillie__active_case_main_osc_rtc.org")
- (front-context-string . "**** OSC Goal\n:P")
- (rear-context-string . "ce\n\n*** OSC-2\n\n\n")
- (position . 1093)
- (last-modified 26058 39614 49256 0))
+ (filename . "~/.local/share/notes/ccvlp/cases/20250905T111820==25=2=03192=06=0--25-2-03192-06-julian-a-escobar-rodriguez-v-ma-elena-rodriguez-barboza__active_case_hjp_main.org")
+ (front-context-string . "** DRAFT-DOC Mot")
+ (rear-context-string . "\n\n* TASKS [0/0]\n")
+ (position . 2302)
+ (last-modified 26998 43022 726857 0)
+ (annotation . ""))
 ("org-capture-last-stored"
  (filename . "~/.local/share/notes/captured.org")
  (front-context-string . "* TODO New Case ")
@@ -123,12 +130,6 @@
  (rear-context-string . "78 Jan  5 08:30 ")
  (position . 200)
  (last-modified 26316 37829 394294 0))
-("legal"
- (filename . "~/.local/share/notes/legal/")
- (front-context-string . ".dir-locals.el\n ")
- (rear-context-string . "75 Feb  4 08:35 ")
- (position . 197)
- (last-modified 26047 50261 776656 0))
 ("cases"
  (filename . "~/.local/share/notes/ccvlp/cases/")
  (front-context-string . "20231205T110129=")
